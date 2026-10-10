@@ -1,4 +1,4 @@
-﻿// <copyright file="SettingsWindow.cs" company="None">
+// <copyright file="SettingsWindow.cs" company="None">
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
@@ -31,8 +31,10 @@ namespace GameHelper.Settings
         private static bool isSettingsWindowVisible = true;
         private const string GeneralPageId = "core:general";
         private const string PluginManagerPageId = "core:plugins";
+        private const string UpdatesPageId = "core:updates";
         private static string selectedSettingsPage = PluginManagerPageId;
         private static string pluginReloadStatus = string.Empty;
+        private static string settingsPluginFilter = string.Empty;
 
         private static EntityFilterType efilterType = EntityFilterType.PATH;
         private static string filterText = string.Empty;
@@ -79,6 +81,20 @@ namespace GameHelper.Settings
             ImGui.TextDisabled("|");
             ImGui.SameLine();
             ImGui.TextDisabled(L.F("settings.menu.hide_show", "Hide/show menu: {0}", Core.GHSettings.MainMenuHotKey));
+            var saveLabel = L.T("settings.menu.save", "Save settings");
+            var saveWidth = ImGui.CalcTextSize(saveLabel).X + ImGui.GetStyle().FramePadding.X * 2f;
+            var updateLabel = L.T("updates.short", "Update");
+            var actionsWidth = saveWidth + (LocalUpdates.IsAvailable ? ImGui.CalcTextSize(updateLabel).X + ImGui.GetStyle().FramePadding.X * 2f + 8f : 0f);
+            if (ImGui.GetWindowWidth() - actionsWidth - 24f > ImGui.GetCursorPosX())
+                ImGui.SameLine(ImGui.GetWindowWidth() - actionsWidth - 24f);
+            else ImGui.SameLine();
+            if (ImGui.SmallButton(saveLabel + "##SaveSettingsNow"))
+                CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
+            if (LocalUpdates.IsAvailable)
+            {
+                ImGui.SameLine();
+                if (ImGui.SmallButton(updateLabel + "##OpenLocalUpdates")) selectedSettingsPage = UpdatesPageId;
+            }
 
 #if DEBUG
             ImGui.SameLine();
@@ -98,7 +114,7 @@ namespace GameHelper.Settings
             EnsureSelectedSettingsPage(enabledPlugins);
 
             var availableWidth = ImGui.GetContentRegionAvail().X;
-            var sidebarWidth = Math.Clamp(availableWidth * 0.24f, 190f, 280f);
+            var sidebarWidth = Math.Clamp(availableWidth * 0.22f, 200f, 246f);
 
             if (ImGui.BeginChild("SettingsSidebar", new Vector2(sidebarWidth, 0), ImGuiChildFlags.Borders))
             {
@@ -110,7 +126,9 @@ namespace GameHelper.Settings
 
             if (ImGui.BeginChild("SettingsContent", Vector2.Zero, ImGuiChildFlags.Borders))
             {
+                ImGui.PushItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X * 0.4f, 160f, 300f));
                 DrawSelectedSettingsPage(enabledPlugins);
+                ImGui.PopItemWidth();
             }
 
             ImGui.EndChild();
@@ -127,6 +145,7 @@ namespace GameHelper.Settings
 
             DrawNavigationItem(GeneralPageId, L.T("settings.tabs.general", "General"));
             DrawNavigationItem(PluginManagerPageId, L.T("settings.tabs.plugins", "Plugins"));
+            DrawNavigationItem(UpdatesPageId, L.T("updates.title", "Local updates") + (LocalUpdates.IsAvailable ? " (1)" : string.Empty));
 
             ImGui.Separator();
             ImGui.Spacing();
@@ -140,10 +159,21 @@ namespace GameHelper.Settings
                 return;
             }
 
-            foreach (var container in enabledPlugins)
+            ImGui.SetNextItemWidth(-1f);
+            ImGui.InputTextWithHint("##SettingsPluginFilter", L.T("settings.navigation.filter", "Find a plugin..."), ref settingsPluginFilter, 96);
+            var filteredPlugins = enabledPlugins.Where(plugin => plugin.Name.Contains(settingsPluginFilter.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+            var listHeight = Math.Max(80f, ImGui.GetContentRegionAvail().Y - ImGui.GetTextLineHeightWithSpacing() * 2f - 16f);
+            if (ImGui.BeginChild("SettingsPluginList", new Vector2(0, listHeight)))
             {
-                DrawNavigationItem(PluginPageId(container.Name), container.Name);
+                if (filteredPlugins.Count == 0) ImGui.TextWrapped(L.T("settings.navigation.no_results", "No matching plugin."));
+                foreach (var container in filteredPlugins)
+                    DrawNavigationItem(PluginPageId(container.Name), container.Name);
             }
+            ImGui.EndChild();
+            ImGui.Separator();
+            ImGui.PushStyleColor(ImGuiCol.Text, ImGuiTheme.TextMuted);
+            ImGui.TextWrapped(L.F("settings.navigation.save_hint", "{0} · Close and save", Core.GHSettings.MainMenuHotKey));
+            ImGui.PopStyleColor();
         }
 
         private static void DrawNavigationItem(string pageId, string label)
@@ -155,19 +185,28 @@ namespace GameHelper.Settings
                 ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.98f, 0.99f, 1f, 1f));
             }
 
-            if (ImGui.Selectable($"{label}##nav_{pageId}", selected))
+            var rowPosition = ImGui.GetCursorScreenPos();
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 8f);
+            if (ImGui.Selectable($"{label}##nav_{pageId}", selected, ImGuiSelectableFlags.None, new Vector2(0, 30f)))
             {
                 selectedSettingsPage = pageId;
             }
 
             if (selected)
             {
+                ImGui.GetWindowDrawList().AddRectFilled(rowPosition + new Vector2(0, 3), rowPosition + new Vector2(3, 27), ImGui.GetColorU32(ImGuiTheme.Accent), 2f);
                 ImGui.PopStyleColor(2);
             }
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(label);
         }
 
         private static void DrawSelectedSettingsPage(IReadOnlyCollection<PluginContainer> enabledPlugins)
         {
+            if (selectedSettingsPage == UpdatesPageId)
+            {
+                LocalUpdates.DrawSettings();
+                return;
+            }
             if (selectedSettingsPage == GeneralPageId)
             {
                 DrawCoreSettings();
@@ -198,7 +237,7 @@ namespace GameHelper.Settings
 
         private static void EnsureSelectedSettingsPage(IReadOnlyCollection<PluginContainer> enabledPlugins)
         {
-            if (selectedSettingsPage == GeneralPageId || selectedSettingsPage == PluginManagerPageId)
+            if (selectedSettingsPage == GeneralPageId || selectedSettingsPage == PluginManagerPageId || selectedSettingsPage == UpdatesPageId)
             {
                 return;
             }
@@ -255,7 +294,7 @@ namespace GameHelper.Settings
             return hovered && ImGui.IsMouseClicked(ImGuiMouseButton.Left);
         }
 
-        private static void HideSettingsWindow()
+        internal static void HideSettingsWindow()
         {
             isSettingsWindowVisible = false;
             Core.IsSettingsMenuOpen = false;
@@ -276,7 +315,6 @@ namespace GameHelper.Settings
 
             var enabledCount = PManager.Plugins.Count(p => p.Metadata.Enable);
             ImGui.TextDisabled(L.F("settings.plugin.active_count", "Active: {0} / {1}", enabledCount, PManager.Plugins.Count));
-            ImGui.SameLine();
             if (ImGui.SmallButton(L.Label("settings.plugin.enable_all", "Enable all", "EnableAllPlugins")))
             {
                 SetAllPlugins(true);
@@ -288,7 +326,9 @@ namespace GameHelper.Settings
                 SetAllPlugins(false);
             }
 
-            ImGui.SameLine();
+            var reloadWidth = ImGui.CalcTextSize(L.T("settings.plugin.reload_all", "Reload all plugins")).X + ImGui.GetStyle().FramePadding.X * 2f;
+            if (ImGui.GetItemRectMax().X + ImGui.GetStyle().ItemSpacing.X + reloadWidth <= ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X)
+                ImGui.SameLine();
             if (ImGui.SmallButton(L.Label("settings.plugin.reload_all", "Reload all plugins", "ReloadAllPlugins")))
             {
                 ReloadAllPlugins();
@@ -296,9 +336,8 @@ namespace GameHelper.Settings
 
             if (!string.IsNullOrEmpty(pluginReloadStatus))
             {
-                ImGui.SameLine();
                 ImGui.PushStyleColor(ImGuiCol.Text, ImGuiTheme.TextMuted);
-                ImGui.TextUnformatted(pluginReloadStatus);
+                ImGui.TextWrapped(pluginReloadStatus);
                 ImGui.PopStyleColor();
             }
 
@@ -313,7 +352,8 @@ namespace GameHelper.Settings
                 return;
             }
 
-            ImGui.TableSetupColumn(L.T("settings.plugin.column.plugin", "Plugin"), ImGuiTableColumnFlags.WidthStretch, 0.45f);
+            ImGui.TableSetupScrollFreeze(0, 1);
+            ImGui.TableSetupColumn(L.T("settings.plugin.column.plugin", "Plugin"), ImGuiTableColumnFlags.WidthFixed, Math.Clamp(ImGui.GetContentRegionAvail().X * 0.3f, 140f, 190f));
             ImGui.TableSetupColumn(L.T("settings.plugin.column.description", "Description"), ImGuiTableColumnFlags.WidthStretch, 1.0f);
             ImGui.TableSetupColumn(L.T("settings.plugin.column.status", "Status"), ImGuiTableColumnFlags.WidthFixed, 70f);
             ImGui.TableSetupColumn(L.T("settings.plugin.column.enable", "Enable"), ImGuiTableColumnFlags.WidthFixed, 60f);
@@ -324,7 +364,7 @@ namespace GameHelper.Settings
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 ImGui.AlignTextToFramePadding();
-                ImGui.Text(container.Name);
+                ImGui.TextWrapped(container.Name);
 
                 ImGui.TableNextColumn();
                 ImGui.AlignTextToFramePadding();
@@ -335,7 +375,7 @@ namespace GameHelper.Settings
                 }
                 else
                 {
-                    ImGui.TextUnformatted(description);
+                    ImGui.TextWrapped(description);
                     if (ImGui.IsItemHovered())
                     {
                         ImGui.SetTooltip(description);
@@ -419,41 +459,86 @@ namespace GameHelper.Settings
             ImGui.PopStyleColor();
             ImGui.InputText(L.Label("settings.status.party_leader_name", "Party Leader Name", "PartyLeaderName"), ref Core.GHSettings.LeaderName, 200);
 
-            ImGuiTheme.SectionHeader(L.T("settings.language.title", "Language"));
-            DrawUiLanguageWidget();
+            if (!ImGui.BeginTabBar("##generalSettingsPages", ImGuiTabBarFlags.FittingPolicyScroll)) return;
+            if (ImGui.BeginTabItem(L.T("settings.navigation.preferences", "Preferences") + "###generalPage0"))
+            {
+                if (ImGui.BeginChild("##generalPageBody", Vector2.Zero))
+                {
+                    ImGui.PushItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X * 0.4f, 140f, 280f));
+                    ImGuiTheme.SectionHeader(L.T("settings.language.title", "Language"));
+                    DrawUiLanguageWidget();
 
-            ImGuiTheme.SectionHeader(L.T("settings.controls.title", "Controls & Display"));
-            DrawInputConfigWidget();
-            DrawNearbyWidget();
-            DrawToolsConfig();
+                    ImGuiTheme.SectionHeader(L.T("settings.display.title", "Display"));
+                    DrawDisplayConfig();
 
-            ImGuiTheme.SectionHeader(
-                L.T("settings.filters.title", "Filters & Tracking"),
-                L.T("settings.filters.subtitle", "Advanced entity filters. Change zone or restart after edits."));
-            DrawPoiWidget();
-            DrawMonstersToIgnore();
-            DrawNPCWidget();
-            DrawMiscObjWidget();
+                    ImGuiTheme.SectionHeader(L.T("settings.controls.title", "Controls & Display"));
+                    DrawInputConfigWidget();
+                    DrawNearbyWidget();
+                    DrawToolsConfig();
 
-            ImGuiTheme.SectionHeader(L.T("settings.advanced.title", "Advanced"));
-            DrawMiscConfig();
-            ChangeFontWidget();
-            DrawReloadPluginWidget();
+                    ImGui.PopItemWidth();
+                }
+                ImGui.EndChild();
+                ImGui.EndTabItem();
+            }
+            if (ImGui.BeginTabItem(L.T("settings.filters.title", "Filters & Tracking") + "###generalPage1"))
+            {
+                if (ImGui.BeginChild("##generalPageBody", Vector2.Zero))
+                {
+                    ImGui.PushItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X * 0.4f, 140f, 280f));
+                    ImGuiTheme.SectionHeader(
+                        L.T("settings.filters.title", "Filters & Tracking"),
+                        L.T("settings.filters.subtitle", "Advanced entity filters. Change zone or restart after edits."));
+                    DrawPoiWidget();
+                    DrawMonstersToIgnore();
+                    DrawNPCWidget();
+                    DrawMiscObjWidget();
 
-            ImGuiTheme.SectionHeader(L.T("settings.about.title", "About"));
-            ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X);
-            ImGui.TextColored(color, L.T("settings.about.scam", "This is free software, if you purchased a copy you have been scammed"));
-            ImGui.TextColored(color, L.T("settings.about.version", "For PoE2 0.5.5"));
-            ImGui.TextColored(color, L.T("settings.about.zero_day", "Zero Day developer is Kronos"));
-            ImGui.TextColored(color, L.T("settings.about.offset", "Offset updater is Arsenic, Nabeora, Lafko"));
-            ImGui.TextColored(color, L.T("settings.about.discord", "Official GameHelper2 Discord is https://discord.gg/864GyuM5S"));
-            ImGui.NewLine();
-            ImGui.TextColored(
-                Vector4.One,
-                L.T(
-                    "settings.about.disclaimer",
-                    "Developer of this software is not responsible for any loss that may happen due to the usage of this software. Use this software at your own risk."));
-            ImGui.PopTextWrapPos();
+                    ImGui.PopItemWidth();
+                }
+                ImGui.EndChild();
+                ImGui.EndTabItem();
+            }
+            if (ImGui.BeginTabItem(L.T("settings.advanced.title", "Advanced") + "###generalPage2"))
+            {
+                if (ImGui.BeginChild("##generalPageBody", Vector2.Zero))
+                {
+                    ImGui.PushItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X * 0.4f, 140f, 280f));
+                    ImGuiTheme.SectionHeader(L.T("settings.advanced.title", "Advanced"));
+                    DrawMiscConfig();
+                    ChangeFontWidget();
+                    DrawReloadPluginWidget();
+
+                    ImGui.PopItemWidth();
+                }
+                ImGui.EndChild();
+                ImGui.EndTabItem();
+            }
+            if (ImGui.BeginTabItem(L.T("settings.about.title", "About") + "###generalPage3"))
+            {
+                if (ImGui.BeginChild("##generalPageBody", Vector2.Zero))
+                {
+                    ImGui.PushItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X * 0.4f, 140f, 280f));
+                    ImGuiTheme.SectionHeader(L.T("settings.about.title", "About"));
+                    ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X);
+                    ImGui.TextColored(color, L.T("settings.about.scam", "This is free software, if you purchased a copy you have been scammed"));
+                    ImGui.TextColored(color, L.T("settings.about.version", "For PoE2 0.5.5"));
+                    ImGui.TextColored(color, L.T("settings.about.zero_day", "Zero Day developer is Kronos"));
+                    ImGui.TextColored(color, L.T("settings.about.offset", "Offset updater is Arsenic, Nabeora, Lafko"));
+                    ImGui.TextColored(color, L.T("settings.about.discord", "Official GameHelper2 Discord is https://discord.gg/864GyuM5S"));
+                    ImGui.NewLine();
+                    ImGui.TextColored(
+                        Vector4.One,
+                        L.T(
+                            "settings.about.disclaimer",
+                            "Developer of this software is not responsible for any loss that may happen due to the usage of this software. Use this software at your own risk."));
+                    ImGui.PopTextWrapPos();
+                    ImGui.PopItemWidth();
+                }
+                ImGui.EndChild();
+                ImGui.EndTabItem();
+            }
+            ImGui.EndTabBar();
         }
 
         private static void DrawUiLanguageWidget()
@@ -485,6 +570,36 @@ namespace GameHelper.Settings
                 L.T(
                     "settings.language.tooltip",
                     "Controls GameHelper's main overlay text. Font glyph range is configured separately below."));
+        }
+
+        private static void DrawDisplayConfig()
+        {
+            var separate = Core.GHSettings.SettingsOnSeparateWindow;
+            if (ImGui.RadioButton(L.Label("settings.display.single", "Single screen — menus on the game", "SingleScreen"), !separate))
+                SetSeparateSettingsWindow(false);
+            if (ImGui.RadioButton(L.Label("settings.display.multi", "Multiple screens — independent settings window", "MultipleScreens"), separate))
+                SetSeparateSettingsWindow(true);
+            ImGui.PushTextWrapPos();
+            ImGui.TextUnformatted(L.T("settings.display.help", "Move the settings window to another screen using its title bar. Its position and size are remembered. Gameplay overlays stay on the game."));
+            ImGui.PopTextWrapPos();
+            if (separate && ImGui.Button(L.Label("settings.display.reset", "Reset window position", "ResetSettingsWindowPosition")))
+            {
+                Core.GHSettings.SettingsWindowPositionSaved = false;
+                Core.Overlay?.ResetSettingsDisplay();
+                CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
+            }
+            if (!string.IsNullOrEmpty(Core.Overlay?.SettingsDisplayError))
+            {
+                ImGui.PushTextWrapPos();
+                ImGui.TextUnformatted(L.T("settings.display.failed", "The independent window could not be opened. The menus remain on the game."));
+                ImGui.PopTextWrapPos();
+            }
+        }
+
+        private static void SetSeparateSettingsWindow(bool enabled)
+        {
+            Core.GHSettings.SettingsOnSeparateWindow = enabled;
+            CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
         }
 
         private static void DrawNearbyWidget()
@@ -993,7 +1108,7 @@ namespace GameHelper.Settings
         /// </summary>
         private static void DrawConfirmationPopup()
         {
-            ImGui.SetNextWindowPos(new Vector2(Core.Overlay.Size.Width / 3f, Core.Overlay.Size.Height / 3f));
+            ImGui.SetNextWindowPos(ImGui.GetIO().DisplaySize / 3f);
             if (ImGui.BeginPopup("GameHelperCloseConfirmation"))
             {
                 ImGui.Text(L.T("settings.confirm.quit", "Do you want to quit the GameHelper overlay?"));
@@ -1049,46 +1164,54 @@ namespace GameHelper.Settings
                     }
                 }
 
-                Core.IsSettingsMenuOpen = isSettingsWindowVisible;
+                Core.IsSettingsMenuOpen = isSettingsWindowVisible && !Core.GHSettings.SettingsOnSeparateWindow;
                 if (!isSettingsWindowVisible)
                 {
                     continue;
                 }
 
-                ImGui.SetNextWindowSizeConstraints(new Vector2(800, 600), Vector2.One * float.MaxValue);
-                var isMainMenuExpanded = ImGui.Begin(
-                    $"{L.F("settings.window.title", "Game Overlay Settings [ {0} ]", Core.GetVersion())}###GameOverlaySettings",
-                    ref isOverlayRunningLocal,
-                    ImGuiWindowFlags.MenuBar);
-
-                if (DrawTitleBarHideButton())
-                {
-                    HideSettingsWindow();
-                    ImGui.End();
-                    continue;
-                }
-
-                if (!isOverlayRunningLocal)
-                {
-                    ImGui.OpenPopup("GameHelperCloseConfirmation");
-                }
-
-                DrawConfirmationPopup();
-                if (!Core.GHSettings.IsOverlayRunning)
-                {
-                    CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
-                }
-
-                if (!isMainMenuExpanded)
-                {
-                    ImGui.End();
-                    continue;
-                }
-
-                DrawManuBar();
-                DrawSettingsLayout();
-                ImGui.End();
+                if (!Core.GHSettings.SettingsOnSeparateWindow) DrawWindow(false);
             }
+        }
+
+        internal static bool IsVisible => isSettingsWindowVisible;
+
+        internal static void DrawWindow(bool independent)
+        {
+            ImGuiTheme.PushSettingsStyle();
+            try
+            {
+                var flags = ImGuiWindowFlags.MenuBar;
+                if (independent)
+                {
+                    ImGui.SetNextWindowPos(Vector2.Zero);
+                    ImGui.SetNextWindowSize(ImGui.GetIO().DisplaySize);
+                    flags |= ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoSavedSettings;
+                }
+                else
+                {
+                    ImGui.SetNextWindowSize(new Vector2(Math.Min(1100f, ImGui.GetIO().DisplaySize.X - 40f), Math.Min(760f, ImGui.GetIO().DisplaySize.Y - 60f)), ImGuiCond.FirstUseEver);
+                    ImGui.SetNextWindowSizeConstraints(new Vector2(800, 600), Vector2.One * float.MaxValue);
+                }
+                var expanded = ImGui.Begin($"{L.T("settings.window.compact_title", "GameHelper · Settings")}###GameOverlaySettings",
+                    ref isOverlayRunningLocal, flags);
+                try
+                {
+                    if (!independent && DrawTitleBarHideButton())
+                    {
+                        HideSettingsWindow();
+                        return;
+                    }
+                    if (!isOverlayRunningLocal) ImGui.OpenPopup("GameHelperCloseConfirmation");
+                    DrawConfirmationPopup();
+                    if (!Core.GHSettings.IsOverlayRunning) CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
+                    if (!expanded) return;
+                    DrawManuBar();
+                    DrawSettingsLayout();
+                }
+                finally { ImGui.End(); }
+            }
+            finally { ImGuiTheme.PopSettingsStyle(); }
         }
 
         /// <summary>

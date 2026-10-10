@@ -18,6 +18,7 @@ namespace LootTracker
         public string Name = string.Empty;   // localized area name (display only)
         public string Hash = string.Empty;    // AreaHash — the unique instance id (dedup key)
         public int AreaLevel;
+        public bool IsFinished;               // confirmed by the game's map-complete HUD
         public TimeSpan ActiveTime;            // wall time spent inside the map (paused in hideout/town)
         // Accumulated net inventory delta for this run: itemPath -> Δcount (across all hideout exits,
         // re-baselined on same-map re-entry). Positive = gained. Priced into ProfitEx in step 4.
@@ -284,6 +285,7 @@ namespace LootTracker
 
         public override void OnDisable()
         {
+            this.CloseTrackerDisplay();
             this.SaveActiveState(); // persist the live session on a clean GH close
             this.ResetHandle();
             this.UnloadIcons();
@@ -342,110 +344,118 @@ namespace LootTracker
 
         public override void DrawSettings()
         {
-            // Collapsed-by-default group for the HUD layout knobs (no DefaultOpen flag = starts closed).
-            if (ImGui.CollapsingHeader(this.Loc.Title("lt.settings", "Settings", "lt_settings")))
-            {
-                ImGui.SeparatorText(this.L("lt.compact_bar", "Compact bar (hideout)"));
-                ImGui.SliderFloat(this.L("lt.compact_height", "Compact bar height (px)"), ref this.Settings.CompactHeight, 70f, 200f, "%.0f");
-                ImGui.SliderFloat(this.L("lt.compact_width", "Compact bar width (px)"), ref this.Settings.CompactWidth, 200f, 1920f, "%.0f");
-                ImGui.TextDisabled(this.L("lt.compact_width_hint",
-                    "Requested width of the compact bar. Capped to the experience-bar width, so it\n" +
-                    "never extends past the XP bar regardless of this value."));
-                ImGui.SliderInt(this.L("lt.history_size", "History size"), ref this.Settings.HistorySize, 5, 200);
-                ImGui.TextDisabled(this.L("lt.history_size_hint", "Completed-map rows kept in the session history (table + memory); oldest dropped past this."));
-
-                ImGui.Spacing();
-                ImGui.SeparatorText(this.L("lt.bars", "Bars (map strip + compact)"));
-                ImGui.Checkbox(this.L("lt.anchor_right", "Anchor to right side"), ref this.Settings.BarOnRight);
-                ImGui.SliderFloat(this.L("lt.offset_bottom", "Offset from bottom (px)"), ref this.Settings.BarBottomOffset, 0f, 300f, "%.0f");
-                ImGui.TextDisabled(this.L("lt.offset_bottom_hint",
-                    "Distance the bars sit up from the bottom of the game window. Raise it until\n" +
-                    "they clear the experience bar / skill bar at your resolution and UI scale."));
-                ImGui.SliderFloat(this.L("lt.bar_opacity", "Bar opacity"), ref this.Settings.BarOpacity, 0f, 1f, "%.2f");
-                ImGui.SliderFloat(this.L("lt.ui_scale", "UI scale"), ref this.Settings.UiScale, 0.5f, 2f, "%.2f");
-                ImGui.TextDisabled(this.L("lt.ui_scale_hint",
-                    "Manual multiplier on top of the automatic game-UI scale (window height / 1600).\n" +
-                    "Font and fixed widths scale with it, so the bars match the HUD across resolutions."));
-                ImGui.Checkbox(this.L("lt.show_kills", "Show kill counts"), ref this.Settings.ShowKills);
-                ImGui.TextDisabled(this.L("lt.show_kills_hint", "Per-rarity monsters slain this run (Normal · Magic · Rare · Unique)."));
-
-                ImGui.Spacing();
-                ImGui.SeparatorText(this.L("lt.pickup_notifs", "Pickup notifications"));
-                ImGui.Checkbox(this.L("lt.show_toasts", "Show pickup toasts"), ref this.Settings.ShowPickupToasts);
-                ImGui.TextDisabled(this.L("lt.show_toasts_hint",
-                    "A brief toast (item name + value) above the map strip when you pick an item up.\n" +
-                    "Up to 3 at once; same-item pickups merge. Only while actively on a map."));
-                ImGui.BeginDisabled(!this.Settings.ShowPickupToasts);
-                ImGui.SliderFloat(this.L("lt.notify_min", "Min value to notify (ex)"), ref this.Settings.NotifyMinEx, 20f, 200f, "%.0f");
-                ImGui.TextDisabled(this.L("lt.notify_min_hint", "Only pickups worth at least this many Exalted toast. Unpriced items never toast."));
-                ImGui.SliderFloat(this.L("lt.toast_duration", "Toast duration (s)"), ref this.Settings.NotifyDurationSec, 1f, 6f, "%.1f");
-                ImGui.EndDisabled();
-
-                ImGui.Spacing();
-                ImGui.SeparatorText(this.L("lt.display", "Display"));
-                ImGui.Checkbox(this.L("lt.divine_only", "Show prices only in Divine"), ref this.Settings.ShowPricesInDivineOnly);
-                ImGui.TextDisabled(this.L("lt.divine_only_hint",
-                    "Hide the Exalted figures everywhere on the overlay and show Divine instead\n" +
-                    "(including fractions, e.g. 0.5 div). Falls back to Exalted until the rate is known."));
-            }
-
-            ImGui.Spacing();
-            if (ImGui.Button(this.L("lt.new_session", "New session")))
-            {
-                this.ResetSession();
-            }
-
-            ImGui.SameLine(0f, 20f);
-            if (ImGui.Button(this.L("lt.view_history", "View session history")))
-            {
-                this.LoadSessions();
-                this.showSessionHistory = true;
-            }
-
-            ImGui.SliderInt(this.L("lt.sessions_keep", "Sessions to keep"), ref this.Settings.MaxSessions, 1, 200);
-            ImGui.TextDisabled(this.L("lt.sessions_keep_hint", "Older sessions are deleted once this many are stored. A session is saved on \"New session\"."));
-
-            ImGui.Spacing();
-            ImGui.SeparatorText(this.L("lt.active_session", "Active session"));
-            this.DrawActiveSessionTable();
-
-            ImGui.Spacing();
-            ImGui.Separator();
-
-            ImGui.SeparatorText(this.L("lt.pricing", "Pricing"));
-            this.DrawLeaguePicker();
-            ImGui.SliderInt(this.L("lt.refresh_interval", "Refresh interval (min)"), ref this.Settings.CacheTtlMinutes, 5, 60);
-
-            var status = this.priceCache.Status;
-            string statusText = status switch
-            {
-                PriceSyncStatus.Syncing => this.L("lt.status_syncing", "syncing…"),
-                PriceSyncStatus.Ready => this.priceCache.LastSyncUtc == DateTime.MinValue
-                    ? this.L("lt.status_ready_nodata", "ready (no data yet)")
-                    : this.LF("lt.status_updated_ago", "updated {0} ago", FormatRelative(this.priceCache.LastSyncUtc)),
-                PriceSyncStatus.Error => this.LF("lt.status_error", "error: {0}", this.priceCache.LastError),
-                _ => this.L("lt.status_idle", "idle"),
-            };
-            ImGui.Text(this.LF("lt.status_label", "Status: {0}", statusText));
-
-            // The single most common pricing failure: a league name the API doesn't know (typically a
-            // web slug), which answers 200 with an empty body. PriceCache reports it verbatim (it has
-            // no localization access), so the localized explanation lives here.
-            if (status == PriceSyncStatus.Error &&
-                this.priceCache.LastError.Contains("returned 0 rows", StringComparison.Ordinal))
-            {
-                ImGui.TextWrapped(this.L("lt.status_zero_rows",
-                    "poe.ninja answered, but has no rows for this league. Check the league name: it must be\n" +
-                    "the API name with spaces (\"Runes of Aldur\"), not the web slug (\"runesofaldur\")."));
-            }
-            ImGui.Text(this.LF("lt.items_cached", "Items cached: {0}", this.priceCache.PriceCount));
-            if (this.priceCache.DivineToExaltedRate > 0)
-                ImGui.Text(this.LF("lt.divine_rate", "1 Divine = {0:F2} Exalted", this.priceCache.DivineToExaltedRate));
-
-            ImGui.BeginDisabled(status == PriceSyncStatus.Syncing);
-            if (ImGui.Button(this.L("lt.refresh_now", "Refresh now")))
-                this.priceCache.StartRefresh(this.Settings.League, this.PriceCachePathname);
-            ImGui.EndDisabled();
+            
+            this.DrawSettingsTabs("LootTrackerSettings",
+                ("session", "Session", () =>
+                {
+                    ImGui.Spacing();
+                    if (ImGui.Button(this.L("lt.new_session", "New session")))
+                    {
+                        this.ResetSession();
+                    }
+                    
+                    ImGui.SameLine(0f, 20f);
+                    if (ImGui.Button(this.L("lt.view_history", "View session history")))
+                    {
+                        this.LoadSessions();
+                        this.showSessionHistory = true;
+                    }
+                    
+                    ImGui.SliderInt(this.L("lt.sessions_keep", "Sessions to keep"), ref this.Settings.MaxSessions, 1, 200);
+                    ImGui.TextDisabled(this.L("lt.sessions_keep_hint", "Older sessions are deleted once this many are stored. A session is saved on \"New session\"."));
+                    
+                    ImGui.Spacing();
+                    ImGui.SeparatorText(this.L("lt.active_session", "Active session"));
+                    this.DrawActiveSessionTable();
+                    
+                    ImGui.Spacing();
+                    ImGui.Separator();
+                }),
+                ("appearance", "Appearance", () =>
+                {
+                    this.DrawDisplaySettings();
+                    ImGui.SeparatorText(this.L("lt.compact_bar", "Compact bar (hideout)"));
+                    ImGui.SliderFloat(this.L("lt.compact_height", "Compact bar height (px)"), ref this.Settings.CompactHeight, 190f, 600f, "%.0f");
+                    ImGui.SliderFloat(this.L("lt.compact_width", "Compact bar width (px)"), ref this.Settings.CompactWidth, 320f, 1920f, "%.0f");
+                    ImGui.TextDisabled(this.L("lt.compact_width_hint",
+                        "Requested width of the compact bar. Capped to the experience-bar width, so it\n" +
+                        "never extends past the XP bar regardless of this value."));
+                    ImGui.SliderInt(this.L("lt.history_size", "History size"), ref this.Settings.HistorySize, 5, 200);
+                    ImGui.TextDisabled(this.L("lt.history_size_hint", "Completed-map rows kept in the session history (table + memory); oldest dropped past this."));
+                    
+                    ImGui.Spacing();
+                    ImGui.SeparatorText(this.L("lt.bars", "Bars (map strip + compact)"));
+                    ImGui.Checkbox(this.L("lt.anchor_right", "Anchor to right side"), ref this.Settings.BarOnRight);
+                    ImGui.SliderFloat(this.L("lt.offset_bottom", "Offset from bottom (px)"), ref this.Settings.BarBottomOffset, 0f, 300f, "%.0f");
+                    ImGui.TextDisabled(this.L("lt.offset_bottom_hint",
+                        "Distance the bars sit up from the bottom of the game window. Raise it until\n" +
+                        "they clear the experience bar / skill bar at your resolution and UI scale."));
+                    ImGui.SliderFloat(this.L("lt.bar_opacity", "Bar opacity"), ref this.Settings.BarOpacity, 0f, 1f, "%.2f");
+                    ImGui.SliderFloat(this.L("lt.ui_scale", "UI scale"), ref this.Settings.UiScale, 0.5f, 2f, "%.2f");
+                    ImGui.TextDisabled(this.L("lt.ui_scale_hint",
+                        "Manual multiplier on top of the automatic game-UI scale (window height / 1600).\n" +
+                        "Font and fixed widths scale with it, so the bars match the HUD across resolutions."));
+                    ImGui.Checkbox(this.L("lt.show_kills", "Show kill counts"), ref this.Settings.ShowKills);
+                    ImGui.TextDisabled(this.L("lt.show_kills_hint", "Per-rarity monsters slain this run (Normal · Magic · Rare · Unique)."));
+                    
+                    ImGui.Spacing();
+                    ImGui.SeparatorText(this.L("lt.pickup_notifs", "Pickup notifications"));
+                    ImGui.Checkbox(this.L("lt.show_toasts", "Show pickup toasts"), ref this.Settings.ShowPickupToasts);
+                    ImGui.TextDisabled(this.L("lt.show_toasts_hint",
+                        "A brief toast (item name + value) above the map strip when you pick an item up.\n" +
+                        "Up to 3 at once; same-item pickups merge. Only while actively on a map."));
+                    ImGui.BeginDisabled(!this.Settings.ShowPickupToasts);
+                    ImGui.SliderFloat(this.L("lt.notify_min", "Min value to notify (ex)"), ref this.Settings.NotifyMinEx, 20f, 200f, "%.0f");
+                    ImGui.TextDisabled(this.L("lt.notify_min_hint", "Only pickups worth at least this many Exalted toast. Unpriced items never toast."));
+                    ImGui.SliderFloat(this.L("lt.toast_duration", "Toast duration (s)"), ref this.Settings.NotifyDurationSec, 1f, 6f, "%.1f");
+                    ImGui.EndDisabled();
+                    
+                    ImGui.Spacing();
+                    ImGui.SeparatorText(this.L("lt.display", "Display"));
+                    this.DrawProfitCurrencyControls();
+                    ImGui.Checkbox(this.L("lt.divine_only", "Show prices only in Divine"), ref this.Settings.ShowPricesInDivineOnly);
+                    ImGui.TextDisabled(this.L("lt.divine_only_hint",
+                        "Hide the Exalted figures everywhere on the overlay and show Divine instead\n" +
+                        "(including fractions, e.g. 0.5 div). Falls back to Exalted until the rate is known."));
+                }),
+                ("pricing", "Prices", () =>
+                {
+                    ImGui.SeparatorText(this.L("lt.pricing", "Pricing"));
+                    this.DrawLeaguePicker();
+                    ImGui.SliderInt(this.L("lt.refresh_interval", "Refresh interval (min)"), ref this.Settings.CacheTtlMinutes, 5, 60);
+                    
+                    var status = this.priceCache.Status;
+                    string statusText = status switch
+                    {
+                        PriceSyncStatus.Syncing => this.L("lt.status_syncing", "syncing…"),
+                        PriceSyncStatus.Ready => this.priceCache.LastSyncUtc == DateTime.MinValue
+                            ? this.L("lt.status_ready_nodata", "ready (no data yet)")
+                            : this.LF("lt.status_updated_ago", "updated {0} ago", FormatRelative(this.priceCache.LastSyncUtc)),
+                        PriceSyncStatus.Error => this.LF("lt.status_error", "error: {0}", this.priceCache.LastError),
+                        _ => this.L("lt.status_idle", "idle"),
+                    };
+                    ImGui.Text(this.LF("lt.status_label", "Status: {0}", statusText));
+                    
+                    // The single most common pricing failure: a league name the API doesn't know (typically a
+                    // web slug), which answers 200 with an empty body. PriceCache reports it verbatim (it has
+                    // no localization access), so the localized explanation lives here.
+                    if (status == PriceSyncStatus.Error &&
+                        this.priceCache.LastError.Contains("returned 0 rows", StringComparison.Ordinal))
+                    {
+                        ImGui.TextWrapped(this.L("lt.status_zero_rows",
+                            "poe.ninja answered, but has no rows for this league. Check the league name: it must be\n" +
+                            "the API name with spaces (\"Runes of Aldur\"), not the web slug (\"runesofaldur\")."));
+                    }
+                    ImGui.Text(this.LF("lt.items_cached", "Items cached: {0}", this.priceCache.PriceCount));
+                    if (this.priceCache.DivineToExaltedRate > 0)
+                        ImGui.Text(this.LF("lt.divine_rate", "1 Divine = {0:F2} Exalted", this.priceCache.DivineToExaltedRate));
+                    
+                    ImGui.BeginDisabled(status == PriceSyncStatus.Syncing);
+                    if (ImGui.Button(this.L("lt.refresh_now", "Refresh now")))
+                        this.priceCache.StartRefresh(this.Settings.League, this.PriceCachePathname);
+                    ImGui.EndDisabled();
+                }));
+            
         }
 
         // League selector. Filled from poe.ninja's economyLeagues (NinjaLeagues), grouped by the
@@ -573,12 +583,18 @@ namespace LootTracker
         public override void DrawUI()
         {
             // Session-history windows are independent of game state (they read from disk).
-            this.DrawSessionHistoryWindow();
-            this.DrawSessionDetailWindow();
-            this.DrawMapLootWindow();
+            if (!this.Settings.SeparateWindow)
+            {
+                this.CloseTrackerDisplay();
+                this.DrawSessionHistoryWindow();
+                this.DrawSessionDetailWindow();
+                this.DrawMapLootWindow();
+            }
 
             if (Core.States.GameCurrentState != GameStateTypes.InGameState)
             {
+                this.BankActiveTime(DateTime.UtcNow);
+                if (this.Settings.SeparateWindow) this.RenderTrackerDisplay();
                 return;
             }
 
@@ -586,6 +602,7 @@ namespace LootTracker
             this.UpdateAreaState();
             this.ScanKills();
             this.UpdateLiveInventory();
+            this.UpdateMapCompletion();
             this.MaybeAutoSaveSession();
 
             // HUD bars hide when the game window isn't focused (alt-tabbed), and whenever the experience
@@ -593,13 +610,22 @@ namespace LootTracker
             // screen (Atlas / world-travel map, inventory, passive tree), so a failed FP resolve is
             // itself a reliable, fork-independent "panel is open" signal — both bars hide in that case
             // instead of falling back to a viewport position that would overlap the open panel.
-            if (Core.Process.Foreground && this.TryGetExperienceBarRect(out _, out _))
+            if (this.Settings.SeparateWindow)
+            {
+                this.RenderTrackerDisplay();
+                if (Core.Process.Foreground) this.DrawPickupToasts();
+                return;
+            }
+
+            if (!Core.IsSettingsMenuOpen && !IsLargePanelOpen() && !this.IsTrackerPriorityOverlayOpen() &&
+                this.ShouldDrawGameTracker(Core.Process.Foreground) &&
+                (this.Settings.FreePosition || this.TryGetExperienceBarRect(out _, out _)))
             {
                 if (this.onMapArea)
                 {
                     this.DrawMapBar();
                 }
-                else if (!IsLargePanelOpen())
+                else
                 {
                     this.DrawCompactBar();
                 }
@@ -757,6 +783,7 @@ namespace LootTracker
             // Skip transient loading frames (no hash / no area name yet).
             if (string.IsNullOrEmpty(inst) || string.IsNullOrEmpty(details.Name))
             {
+                this.BankActiveTime(DateTime.UtcNow);
                 return;
             }
 
@@ -765,6 +792,9 @@ namespace LootTracker
                 this.lastProcessedZoneHash = inst;
                 this.HandleZoneTransition(area, details, inst);
             }
+
+            if (this.onMapArea && this.current?.Hash == inst)
+                this.StartRunTimer(DateTime.UtcNow);
 
             // Capture the map-entry baseline on the first frame the inventory reads cleanly (the
             // transition fires before the inventory is populated, so we defer the snapshot).
@@ -837,7 +867,7 @@ namespace LootTracker
                     this.TrimCompleted();
                 }
 
-                this.runStartUtc = now;
+                this.StartRunTimer(now);
 
                 // (Re-)baseline once the inventory is readable, so items left in stash don't count as loss.
                 this.baseline = null;
@@ -867,8 +897,25 @@ namespace LootTracker
             this.SaveActiveState();
         }
 
-        // Bank the active run's still-running time into its total and pause the timer (idempotent:
-        // a no-op when nothing is running).
+        // Resume only unfinished instances, preserving any banked time.
+        private void StartRunTimer(DateTime now)
+        {
+            if (this.current != null && !this.current.IsFinished && this.runStartUtc == null)
+                this.runStartUtc = now;
+        }
+
+        private void FinishCurrentMap(DateTime now)
+        {
+            if (!this.onMapArea || this.current == null || this.current.IsFinished) return;
+            this.BankActiveTime(now);
+            this.current.IsFinished = true;
+            this.SaveActiveState();
+        }
+
+        private TimeSpan RunDisplayTime(MapRun run)
+            => ReferenceEquals(run, this.current) ? this.CurrentLiveTime() : run.ActiveTime;
+
+        // Bank the active segment once, then pause.
         private void BankActiveTime(DateTime now)
         {
             if (this.current != null && this.runStartUtc is { } start)
@@ -916,7 +963,7 @@ namespace LootTracker
             }
 
             var t = this.current.ActiveTime;
-            if (this.runStartUtc is { } start)
+            if (!this.current.IsFinished && this.runStartUtc is { } start)
             {
                 t += DateTime.UtcNow - start;
             }
@@ -936,7 +983,7 @@ namespace LootTracker
         // the cached liveLegDelta. No-op unless actively on a map (timer running, baseline taken).
         private void UpdateLiveInventory()
         {
-            if (this.current == null || this.runStartUtc == null || this.baseline == null)
+            if (this.current == null || !this.onMapArea || this.baseline == null)
             {
                 return;
             }
@@ -982,9 +1029,9 @@ namespace LootTracker
                 return new Dictionary<string, long>(StringComparer.Ordinal);
             }
 
-            // Only with a live baseline (timer running AND the map-entry snapshot taken) is liveLegDelta
+            // Only while inside the map with its entry snapshot is liveLegDelta
             // valid for this map; until then it may be stale from the previous map, so show folded-only.
-            if (this.runStartUtc != null && this.baseline != null)
+            if (this.onMapArea && this.baseline != null)
             {
                 var combined = new Dictionary<string, long>(this.current.Gained, StringComparer.Ordinal);
                 MergeInto(combined, this.liveLegDelta);

@@ -31,8 +31,8 @@ namespace LootTracker
         // with a bare dictionary hit.
         private void ScanKills()
         {
-            // Only while actively inside a map (timer running) is there a run to attribute kills to.
-            if (this.current == null || this.runStartUtc == null)
+            // Kills still count after objective completion while the player remains in the map.
+            if (this.current == null || !this.onMapArea)
             {
                 return;
             }

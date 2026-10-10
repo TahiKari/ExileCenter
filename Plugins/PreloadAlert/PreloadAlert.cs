@@ -1,4 +1,4 @@
-﻿// <copyright file="PreloadAlert.cs" company="PlaceholderCompany">
+// <copyright file="PreloadAlert.cs" company="PlaceholderCompany">
 // Copyright (c) PlaceholderCompany. All rights reserved.
 // </copyright>
 
@@ -91,11 +91,22 @@ namespace PreloadAlert
         /// </summary>
         public override void DrawSettings()
         {
-            ImGui.TextWrapped(this.PluginText.T("settings.description", "If you find something new and want to add it to the preload " +
-                              "you can use Core -> Data Visualization -> CurrentAreaLoadedFiles feature."));
-            ImGui.Separator();
-            this.DisplaySettings();
-            this.DisplayAllImportantPreloads();
+            
+            this.DrawSettingsTabs("PreloadAlertSettings",
+                ("general", "Settings", () =>
+                {
+                    this.DisplaySettings();
+                }),
+                ("filters", "Filters", () =>
+                {
+                    this.DisplayAllImportantPreloads();
+                }),
+                ("help", "Help", () =>
+                {
+                    ImGui.TextWrapped(this.PluginText.T("settings.description", "If you find something new and want to add it to the preload " +
+                                      "you can use Core -> Data Visualization -> CurrentAreaLoadedFiles feature."));
+                }));
+            
         }
 
         /// <summary>
@@ -197,7 +208,7 @@ namespace PreloadAlert
 
         private void DisplaySettings()
         {
-            if (ImGui.CollapsingHeader(this.PluginText.Title("section.settings", "Settings", "PreloadAlertSettings")))
+            if (ImGui.CollapsingHeader(this.PluginText.Title("section.settings", "Settings", "PreloadAlertSettings"), ImGuiTreeNodeFlags.DefaultOpen))
             {
                 ImGui.Checkbox(this.PluginText.Label("settings.lock_window", "Lock/Unlock preload window", "PreloadAlertLockWindow"), ref this.Settings.Locked);
                 ImGuiHelper.ToolTip(this.PluginText.T("settings.lock_window.tooltip", "You can also lock it by double clicking the preload window. " +
@@ -211,7 +222,7 @@ namespace PreloadAlert
 
         private void DisplayAllImportantPreloads()
         {
-            if (ImGui.CollapsingHeader(this.PluginText.Title("section.all_important_preloads", "All Important Preloads", "PreloadAlertAllImportantPreloads")))
+            if (ImGui.CollapsingHeader(this.PluginText.Title("section.all_important_preloads", "All Important Preloads", "PreloadAlertAllImportantPreloads"), ImGuiTreeNodeFlags.DefaultOpen))
             {
                 ImGui.InputText(this.PluginText.Label("preloads.filter", "Preload Alert List Filter", "PreloadAlertListFilter"), ref this.preloadListFilter, 200);
                 if (this.preloads.Count() == 0)

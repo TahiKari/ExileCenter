@@ -88,10 +88,7 @@ namespace StashValue
         public override void DrawSettings()
         {
             var changed = false;
-            changed |= ImGui.Checkbox("Show stash item prices", ref this.Settings.ShowOverlay);
-            changed |= ImGui.Checkbox("Show inventory item prices", ref this.Settings.ShowInventoryOverlay);
-            changed |= ImGui.Checkbox("Hide price when hovering item", ref this.Settings.HidePriceOnHover);
-
+            
             var maxThreshold = this.Settings.DisplayCurrency switch
             {
                 0 => 100f,   // Divine
@@ -105,60 +102,69 @@ namespace StashValue
                 _ => "c"
             };
             this.Settings.MinValueEx = Math.Clamp(this.Settings.MinValueEx, 0.0f, maxThreshold);
-            changed |= ImGui.SliderFloat($"Min Price Threshold ({currencyLabel})##threshold", ref this.Settings.MinValueEx, 0.0f, maxThreshold, $"%.2f {currencyLabel}");
-
-            changed |= ImGui.Checkbox("Show Debug Info (Draw Boxes & Diagnostics)", ref this.Settings.ShowDebugInfo);
-
-            ImGui.Separator();
-            ImGui.Text("Display Currency");
-            if (ImGui.RadioButton("Chaos", this.Settings.DisplayCurrency == 2)) { this.Settings.DisplayCurrency = 2; changed = true; }
-            ImGui.SameLine();
-            if (ImGui.RadioButton("Exalted", this.Settings.DisplayCurrency == 1)) { this.Settings.DisplayCurrency = 1; changed = true; }
-            ImGui.SameLine();
-            if (ImGui.RadioButton("Divine", this.Settings.DisplayCurrency == 0)) { this.Settings.DisplayCurrency = 0; changed = true; }
-
-            changed |= ImGui.SliderFloat("Font Scale", ref this.Settings.PriceFontScale, 0.5f, 2f, "%.2f");
-            changed |= ImGui.SliderFloat("Horizontal Offset", ref this.Settings.PriceOffsetX, -50f, 50f);
-            changed |= ImGui.SliderFloat("Vertical Offset", ref this.Settings.PriceOffsetY, -50f, 50f);
-            changed |= ImGui.ColorEdit4("Text Color", ref this.Settings.TextColor);
-
-            ImGui.Separator();
-            ImGui.Text("Price Source");
-            if (ImGui.RadioButton("poe2scout", this.Settings.PriceSource == PoeNinjaPriceFetcher.SourcePoe2Scout))
-            {
-                this.Settings.PriceSource = PoeNinjaPriceFetcher.SourcePoe2Scout;
-                changed = true;
-            }
-            ImGui.SameLine();
-            if (ImGui.RadioButton("poe.ninja", this.Settings.PriceSource == PoeNinjaPriceFetcher.SourcePoeNinja))
-            {
-                this.Settings.PriceSource = PoeNinjaPriceFetcher.SourcePoeNinja;
-                changed = true;
-            }
-
-            changed |= ImGui.InputText("League", ref this.Settings.League, 64);
-            changed |= ImGui.SliderInt("Refresh interval (min)", ref this.Settings.RefreshIntervalMin, 1, 120);
-
+            this.DrawSettingsTabs("StashValueByZx0Settings",
+                ("general", "Settings", () =>
+                {
+                    changed |= ImGui.Checkbox("Show stash item prices", ref this.Settings.ShowOverlay);
+                    changed |= ImGui.Checkbox("Show inventory item prices", ref this.Settings.ShowInventoryOverlay);
+                    changed |= ImGui.Checkbox("Hide price when hovering item", ref this.Settings.HidePriceOnHover);
+                    changed |= ImGui.SliderFloat($"Min Price Threshold ({currencyLabel})##threshold", ref this.Settings.MinValueEx, 0.0f, maxThreshold, $"%.2f {currencyLabel}");
+                    ImGui.Text("Display Currency");
+                    if (ImGui.RadioButton("Chaos", this.Settings.DisplayCurrency == 2)) { this.Settings.DisplayCurrency = 2; changed = true; }
+                    ImGui.SameLine();
+                    if (ImGui.RadioButton("Exalted", this.Settings.DisplayCurrency == 1)) { this.Settings.DisplayCurrency = 1; changed = true; }
+                    ImGui.SameLine();
+                    if (ImGui.RadioButton("Divine", this.Settings.DisplayCurrency == 0)) { this.Settings.DisplayCurrency = 0; changed = true; }
+                }),
+                ("appearance", "Appearance", () =>
+                {
+                    changed |= ImGui.SliderFloat("Font Scale", ref this.Settings.PriceFontScale, 0.5f, 2f, "%.2f");
+                    changed |= ImGui.SliderFloat("Horizontal Offset", ref this.Settings.PriceOffsetX, -50f, 50f);
+                    changed |= ImGui.SliderFloat("Vertical Offset", ref this.Settings.PriceOffsetY, -50f, 50f);
+                    changed |= ImGui.ColorEdit4("Text Color", ref this.Settings.TextColor);
+                }),
+                ("pricing", "Prices", () =>
+                {
+                    ImGui.Text("Price Source");
+                    if (ImGui.RadioButton("poe2scout", this.Settings.PriceSource == PoeNinjaPriceFetcher.SourcePoe2Scout))
+                    {
+                        this.Settings.PriceSource = PoeNinjaPriceFetcher.SourcePoe2Scout;
+                        changed = true;
+                    }
+                    ImGui.SameLine();
+                    if (ImGui.RadioButton("poe.ninja", this.Settings.PriceSource == PoeNinjaPriceFetcher.SourcePoeNinja))
+                    {
+                        this.Settings.PriceSource = PoeNinjaPriceFetcher.SourcePoeNinja;
+                        changed = true;
+                    }
+                    
+                    changed |= ImGui.InputText("League", ref this.Settings.League, 64);
+                    changed |= ImGui.SliderInt("Refresh interval (min)", ref this.Settings.RefreshIntervalMin, 1, 120);
+                    
+                    if (ImGui.Button("Refresh prices now"))
+                    {
+                        PoeNinjaPriceFetcher.Configure(this.Settings.PriceSource, this.Settings.League ?? string.Empty, this.Settings.RefreshIntervalMin);
+                        PoeNinjaPriceFetcher.ForceRefresh(this.DllDirectory, ignoreCooldown: true);
+                    }
+                    
+                    ImGui.SameLine();
+                    if (PoeNinjaPriceFetcher.IsFetching)
+                    {
+                        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.2f, 1f), "Loading...");
+                    }
+                    else if (PoeNinjaPriceFetcher.LastFetchUtc > DateTime.MinValue)
+                    {
+                        var mins = Math.Max(0, (int)(DateTime.UtcNow - PoeNinjaPriceFetcher.LastFetchUtc).TotalMinutes);
+                        ImGui.TextColored(new Vector4(0.5f, 0.8f, 0.5f, 1f), $"{PoeNinjaPriceFetcher.LoadedItemCount} items | {mins} min ago");
+                    }
+                }),
+                ("diagnostics", "Diagnostics", () =>
+                {
+                    changed |= ImGui.Checkbox("Show Debug Info (Draw Boxes & Diagnostics)", ref this.Settings.ShowDebugInfo);
+                }));
             if (changed)
             {
                 this.SaveSettings();
-            }
-
-            if (ImGui.Button("Refresh prices now"))
-            {
-                PoeNinjaPriceFetcher.Configure(this.Settings.PriceSource, this.Settings.League ?? string.Empty, this.Settings.RefreshIntervalMin);
-                PoeNinjaPriceFetcher.ForceRefresh(this.DllDirectory, ignoreCooldown: true);
-            }
-
-            ImGui.SameLine();
-            if (PoeNinjaPriceFetcher.IsFetching)
-            {
-                ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.2f, 1f), "Loading...");
-            }
-            else if (PoeNinjaPriceFetcher.LastFetchUtc > DateTime.MinValue)
-            {
-                var mins = Math.Max(0, (int)(DateTime.UtcNow - PoeNinjaPriceFetcher.LastFetchUtc).TotalMinutes);
-                ImGui.TextColored(new Vector4(0.5f, 0.8f, 0.5f, 1f), $"{PoeNinjaPriceFetcher.LoadedItemCount} items | {mins} min ago");
             }
         }
 

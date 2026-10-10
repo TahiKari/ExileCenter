@@ -137,7 +137,7 @@
         public void Draw(PluginLocalization text)
         {
             ImGui.Text(text.T("config.manual_edit_note", "NOTE: For going above/below the limit, or for manual editing, press CTRL + Left Mouse Button click."));
-            if (ImGui.BeginTable("config_table", 2))
+            if (ImGui.BeginTable("config_table", 1))
             {
                 ImGui.TableNextColumn();
                 ImGui.Checkbox(text.Label("config.enable_healthbar", "Enable Healthbar", "HealthBarsConfigEnableHealthbar"), ref this.Enable);

@@ -280,7 +280,7 @@
         public void Draw(bool isSelf = false, TextureLoader? textures = null, bool useGradientGlobal = false)
         {
             ImGui.Text("NOTE: For going above/below the limit, or for manual editing, press CTRL + Left Mouse Button click.");
-            if (ImGui.BeginTable("config_table", 2))
+            if (ImGui.BeginTable("config_table", 1))
             {
                 // Left column toggles (Self ordering)
                 ImGui.TableNextColumn();

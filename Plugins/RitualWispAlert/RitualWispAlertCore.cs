@@ -105,15 +105,24 @@ namespace RitualWispAlert
         /// <inheritdoc/>
         public override void DrawSettings()
         {
-            ImGui.Checkbox(this.PluginText.Label("settings.enable_overlay", "Draw Ritual wisp range circle", "RitualWispEnableOverlay"), ref this.Settings.EnableOverlay);
-            ImGui.Checkbox(this.PluginText.Label("settings.hide_unfocused_or_paused", "Hide while the game is unfocused or paused", "RitualWispHideUnfocused"), ref this.Settings.HideWhenGameUnfocusedOrPaused);
-            ImGui.DragFloat(this.PluginText.Label("settings.radius", "Circle radius (metres)", "RitualWispRadius"), ref this.Settings.RadiusMeters, 0.1f, 0.5f, 10f, "%.1f m");
-            ImGui.DragFloat(this.PluginText.Label("settings.thickness", "Circle thickness", "RitualWispThickness"), ref this.Settings.Thickness, 0.1f, 0.5f, 10f, "%.1f px");
-            ImGui.ColorEdit4(this.PluginText.Label("settings.inside_color", "Color while inside range", "RitualWispInsideColor"), ref this.Settings.InsideColor);
-            ImGui.ColorEdit4(this.PluginText.Label("settings.outside_color", "Color while outside range", "RitualWispOutsideColor"), ref this.Settings.OutsideColor);
-            ImGui.DragFloat(this.PluginText.Label("settings.offset_x", "Center X offset", "RitualWispOffsetX"), ref this.Settings.OffsetX, 0.5f, -500f, 500f, "%.1f");
-            ImGui.DragFloat(this.PluginText.Label("settings.offset_y", "Center Y offset", "RitualWispOffsetY"), ref this.Settings.OffsetY, 0.5f, -500f, 500f, "%.1f");
-            ImGui.DragFloat(this.PluginText.Label("settings.offset_z", "Height offset", "RitualWispOffsetZ"), ref this.Settings.OffsetZ, 0.5f, -500f, 500f, "%.1f");
+            
+            this.DrawSettingsTabs("RitualWispAlertSettings",
+                ("general", "Settings", () =>
+                {
+                    ImGui.Checkbox(this.PluginText.Label("settings.enable_overlay", "Draw Ritual wisp range circle", "RitualWispEnableOverlay"), ref this.Settings.EnableOverlay);
+                    ImGui.Checkbox(this.PluginText.Label("settings.hide_unfocused_or_paused", "Hide while the game is unfocused or paused", "RitualWispHideUnfocused"), ref this.Settings.HideWhenGameUnfocusedOrPaused);
+                    ImGui.DragFloat(this.PluginText.Label("settings.radius", "Circle radius (metres)", "RitualWispRadius"), ref this.Settings.RadiusMeters, 0.1f, 0.5f, 10f, "%.1f m");
+                }),
+                ("appearance", "Appearance", () =>
+                {
+                    ImGui.DragFloat(this.PluginText.Label("settings.thickness", "Circle thickness", "RitualWispThickness"), ref this.Settings.Thickness, 0.1f, 0.5f, 10f, "%.1f px");
+                    ImGui.ColorEdit4(this.PluginText.Label("settings.inside_color", "Color while inside range", "RitualWispInsideColor"), ref this.Settings.InsideColor);
+                    ImGui.ColorEdit4(this.PluginText.Label("settings.outside_color", "Color while outside range", "RitualWispOutsideColor"), ref this.Settings.OutsideColor);
+                    ImGui.DragFloat(this.PluginText.Label("settings.offset_x", "Center X offset", "RitualWispOffsetX"), ref this.Settings.OffsetX, 0.5f, -500f, 500f, "%.1f");
+                    ImGui.DragFloat(this.PluginText.Label("settings.offset_y", "Center Y offset", "RitualWispOffsetY"), ref this.Settings.OffsetY, 0.5f, -500f, 500f, "%.1f");
+                    ImGui.DragFloat(this.PluginText.Label("settings.offset_z", "Height offset", "RitualWispOffsetZ"), ref this.Settings.OffsetZ, 0.5f, -500f, 500f, "%.1f");
+                }));
+            
         }
 
         /// <inheritdoc/>

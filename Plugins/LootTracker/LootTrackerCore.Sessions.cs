@@ -93,12 +93,13 @@ namespace LootTracker
                 var state = new ActiveSessionState { StartUtc = this.sessionStartUtc };
                 foreach (var r in this.completed)
                 {
-                    bool isActive = ReferenceEquals(r, this.current) && this.runStartUtc != null;
+                    bool isActive = ReferenceEquals(r, this.current) && this.onMapArea;
                     state.Completed.Add(new MapRun
                     {
                         Name = r.Name,
                         Hash = r.Hash,
                         AreaLevel = r.AreaLevel,
+                        IsFinished = r.IsFinished,
                         ActiveTime = isActive ? this.CurrentLiveTime() : r.ActiveTime,
                         Gained = new Dictionary<string, long>(isActive ? this.CurrentGainedLive() : r.Gained, StringComparer.Ordinal),
                         Kills = (int[])r.Kills.Clone(),
@@ -546,53 +547,15 @@ namespace LootTracker
         // a per-row Loot button that opens the same loot window history uses — re-priced live.
         private void DrawActiveSessionTable()
         {
-            if (this.completed.Count == 0)
+            float height = Math.Max(220f, ImGui.GetContentRegionAvail().Y - 16f);
+            bool visible = ImGui.BeginChild("active_session_dashboard", new System.Numerics.Vector2(0f, height));
+            try
             {
-                ImGui.TextDisabled(this.L("lt.no_maps", "No maps completed yet this session."));
-                return;
+                if (visible) this.DrawTrackerContents(height, 1f, true);
             }
-
-            var rate = this.priceCache.DivineToExaltedRate;
-            bool div = this.Settings.ShowPricesInDivineOnly && rate > 0;
-
-            if (ImGui.BeginTable("active_runs_tbl", 4,
-                    ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY,
-                    new System.Numerics.Vector2(0f, 200f)))
+            finally
             {
-                ImGui.TableSetupColumn(this.L("lt.col_map", "Map"));
-                ImGui.TableSetupColumn(this.L("lt.col_time", "Time"), ImGuiTableColumnFlags.WidthFixed, 70);
-                ImGui.TableSetupColumn(this.L("lt.col_profit", "Profit"), ImGuiTableColumnFlags.WidthFixed, 90);
-                ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 60);
-                ImGui.TableHeadersRow();
-
-                MapRun? toOpen = null;
-                for (int i = this.completed.Count - 1; i >= 0; i--)
-                {
-                    var r = this.completed[i];
-                    ImGui.TableNextRow();
-                    ImGui.TableNextColumn();
-                    ImGui.TextUnformatted(r.Name);
-                    ImGui.TableNextColumn();
-                    ImGui.TextUnformatted(FormatDuration(r.ActiveTime));
-                    ImGui.TableNextColumn();
-                    double ex = this.ValueOf(r.Gained, out _, out _);
-                    ImGui.TextColored(ex >= 0 ? GreenCol : RedCol, div
-                        ? $"{ex / rate:+0.##;-0.##;0} div"
-                        : $"{ex:+0.0;-0.0;0} ex");
-                    ImGui.TableNextColumn();
-                    if (ImGui.SmallButton($"{this.L("lt.loot", "Loot")}##a{i}"))
-                    {
-                        toOpen = r;
-                    }
-                }
-
-                ImGui.EndTable();
-
-                if (toOpen != null)
-                {
-                    this.lootMap = null;
-                    this.lootRun = toOpen;
-                }
+                ImGui.EndChild();
             }
         }
     }

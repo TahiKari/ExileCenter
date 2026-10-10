@@ -32,6 +32,13 @@ namespace WorldDrawing
         /// <inheritdoc/>
         public override void DrawSettings()
         {
+            
+            this.DrawSettingsTabs("WorldDrawingSettings",
+                ("general", "Settings", () =>
+                {
+                    ImGui.TextWrapped(GameHelper.Localization.OverlayLocalization.T("settings.plugin.no_settings", "This plugin works automatically and has no additional settings."));
+                }));
+            
         }
 
         /// <inheritdoc/>

@@ -59,115 +59,101 @@ namespace RitualHelper
         {
             try
             {
-            LeagueProvider.EnsureLoaded();
-
-            if (ImGui.BeginTabBar("##RitualHelperTabs"))
-            {
-                if (ImGui.BeginTabItem(this.PluginText.Title("tab.general", "General", "RitualHelperGeneralTab")))
-                {
-                    ImGui.Checkbox(this.PluginText.Label("settings.show_prices", "Show Prices", "RitualHelperShowPrices"), ref this.Settings.ShowOverlay);
-
-                    ImGui.Separator();
-                    ImGui.Text(this.PluginText.T("section.display", "Display"));
-                    if (ImGui.RadioButton(this.PluginText.Label("currency.chaos", "Chaos (c)", "RitualHelperCurrencyChaos"), this.Settings.DisplayCurrency == 2))
-                        this.Settings.DisplayCurrency = 2;
-                    ImGui.SameLine();
-                    if (ImGui.RadioButton(this.PluginText.Label("currency.divine", "Divine (D)", "RitualHelperCurrencyDivine"), this.Settings.DisplayCurrency == 0))
-                        this.Settings.DisplayCurrency = 0;
-                    ImGui.SameLine();
-                    if (ImGui.RadioButton(this.PluginText.Label("currency.exalted", "Exalted (Ex)", "RitualHelperCurrencyExalted"), this.Settings.DisplayCurrency == 1))
-                        this.Settings.DisplayCurrency = 1;
-
-                    ImGui.SliderFloat(this.PluginText.Label("settings.font_scale", "Font Scale", "RitualHelperFontScale"), ref this.Settings.PriceFontScale, 0.1f, 2.0f);
-                    ImGui.SliderFloat(this.PluginText.Label("settings.offset_x", "Offset X", "RitualHelperOffsetX"), ref this.Settings.PriceOffsetX, -50f, 50f);
-                    ImGui.SliderFloat(this.PluginText.Label("settings.offset_y", "Offset Y", "RitualHelperOffsetY"), ref this.Settings.PriceOffsetY, -50f, 50f);
-                    ImGui.ColorEdit4(this.PluginText.Label("settings.text_color", "Text Color", "RitualHelperTextColor"), ref this.Settings.PriceTextColor);
-                    ImGui.SliderFloat(this.PluginText.Label("settings.min_display_value", "Min display value (Ex)", "RitualHelperMinDisplayValue"), ref this.Settings.MinDisplayExalted, 0f, 500f, "%.0f Ex");
-                    ImGui.TextWrapped(
-                        this.PluginText.T("settings.display_help", "Prices are shown as value + currency orb icon (no background box)."));
-
-                    ImGui.Separator();
-                    ImGui.Text(this.PluginText.T("section.alert_sound", "Alert Sound"));
-                    ImGui.Checkbox(this.PluginText.Label("settings.enable_alert", "Enable alert", "RitualHelperEnableAlert"), ref this.Settings.PlayValueAlert);
-                    ImGui.SliderFloat(this.PluginText.Label("settings.alert_from_divine", "Alert from (Divine)", "RitualHelperAlertFromDivine"), ref this.Settings.AlertMinDivine, 0.1f, 50f, "%.3f");
-
-                    ImGui.Text(this.PluginText.T("settings.sound", "Sound"));
-                    if (ImGui.RadioButton(this.PluginText.Label("sound.asterisk", "Asterisk", "RitualHelperSoundAsterisk"), this.Settings.AlertSound == 0))
-                        this.Settings.AlertSound = 0;
-                    ImGui.SameLine();
-                    if (ImGui.RadioButton(this.PluginText.Label("sound.exclamation", "Exclamation", "RitualHelperSoundExclamation"), this.Settings.AlertSound == 1))
-                        this.Settings.AlertSound = 1;
-                    ImGui.SameLine();
-                    if (ImGui.RadioButton(this.PluginText.Label("sound.hand", "Hand", "RitualHelperSoundHand"), this.Settings.AlertSound == 2))
-                        this.Settings.AlertSound = 2;
-                    if (ImGui.RadioButton(this.PluginText.Label("sound.question", "Question", "RitualHelperSoundQuestion"), this.Settings.AlertSound == 3))
-                        this.Settings.AlertSound = 3;
-                    ImGui.SameLine();
-                    if (ImGui.RadioButton(this.PluginText.Label("sound.beep", "Beep", "RitualHelperSoundBeep"), this.Settings.AlertSound == 4))
-                        this.Settings.AlertSound = 4;
-
-                    if (ImGui.Button(this.PluginText.Label("button.test_sound", "Test Sound", "RitualHelperTestSound")))
-                        this.pendingSoundPlayback = this.Settings.AlertSound;
-
-                    ImGui.Separator();
-                    ImGui.TextWrapped(
-                        this.PluginText.T("settings.naming_help", "All items (currency and uniques) are named automatically from game memory. " +
-                        "Prices come from poe2scout + poe.ninja; items missing there show no label (trade tools may differ)."));
-                    ImGui.EndTabItem();
-                }
-
-                if (ImGui.BeginTabItem(this.PluginText.Title("tab.data_source", "Data Source", "RitualHelperDataSourceTab")))
-                {
-                    this.DrawPriceSourceSelector();
-                    this.DrawLeagueSelector();
-
-                    ImGui.SliderInt(this.PluginText.Label("settings.refresh_interval", "Refresh interval (min)", "RitualHelperRefreshInterval"), ref this.Settings.RefreshIntervalMin, 1, 120);
-                    if (ImGui.Button(this.PluginText.Label("button.refresh_prices", "Refresh Prices Now", "RitualHelperRefreshPrices")))
+                LeagueProvider.EnsureLoaded();
+                this.DrawSettingsTabs("RitualHelperSettings",
+                    ("general", "Settings", () =>
                     {
-                        PoeNinjaPriceFetcher.Configure(this.Settings.PriceSource, this.Settings.League ?? string.Empty, this.Settings.RefreshIntervalMin);
-                        PoeNinjaPriceFetcher.ForceRefresh(this.DllDirectory);
-                    }
-
-                    ImGui.SameLine();
-                    if (PoeNinjaPriceFetcher.IsFetching || LeagueProvider.IsLoading)
+                        ImGui.Checkbox(this.PluginText.Label("settings.show_prices", "Show Prices", "RitualHelperShowPrices"), ref this.Settings.ShowOverlay);
+                        
+                        ImGui.Separator();
+                        ImGui.Text(this.PluginText.T("section.display", "Display"));
+                        if (ImGui.RadioButton(this.PluginText.Label("currency.chaos", "Chaos (c)", "RitualHelperCurrencyChaos"), this.Settings.DisplayCurrency == 2))
+                            this.Settings.DisplayCurrency = 2;
+                        ImGui.SameLine();
+                        if (ImGui.RadioButton(this.PluginText.Label("currency.divine", "Divine (D)", "RitualHelperCurrencyDivine"), this.Settings.DisplayCurrency == 0))
+                            this.Settings.DisplayCurrency = 0;
+                        ImGui.SameLine();
+                        if (ImGui.RadioButton(this.PluginText.Label("currency.exalted", "Exalted (Ex)", "RitualHelperCurrencyExalted"), this.Settings.DisplayCurrency == 1))
+                            this.Settings.DisplayCurrency = 1;
+                        
+                        ImGui.SliderFloat(this.PluginText.Label("settings.font_scale", "Font Scale", "RitualHelperFontScale"), ref this.Settings.PriceFontScale, 0.1f, 2.0f);
+                        ImGui.SliderFloat(this.PluginText.Label("settings.offset_x", "Offset X", "RitualHelperOffsetX"), ref this.Settings.PriceOffsetX, -50f, 50f);
+                        ImGui.SliderFloat(this.PluginText.Label("settings.offset_y", "Offset Y", "RitualHelperOffsetY"), ref this.Settings.PriceOffsetY, -50f, 50f);
+                        ImGui.ColorEdit4(this.PluginText.Label("settings.text_color", "Text Color", "RitualHelperTextColor"), ref this.Settings.PriceTextColor);
+                        ImGui.SliderFloat(this.PluginText.Label("settings.min_display_value", "Min display value (Ex)", "RitualHelperMinDisplayValue"), ref this.Settings.MinDisplayExalted, 0f, 500f, "%.0f Ex");
+                        ImGui.TextWrapped(
+                            this.PluginText.T("settings.display_help", "Prices are shown as value + currency orb icon (no background box)."));
+                        
+                        ImGui.Separator();
+                        ImGui.Text(this.PluginText.T("section.alert_sound", "Alert Sound"));
+                        ImGui.Checkbox(this.PluginText.Label("settings.enable_alert", "Enable alert", "RitualHelperEnableAlert"), ref this.Settings.PlayValueAlert);
+                        ImGui.SliderFloat(this.PluginText.Label("settings.alert_from_divine", "Alert from (Divine)", "RitualHelperAlertFromDivine"), ref this.Settings.AlertMinDivine, 0.1f, 50f, "%.3f");
+                        
+                        ImGui.Text(this.PluginText.T("settings.sound", "Sound"));
+                        if (ImGui.RadioButton(this.PluginText.Label("sound.asterisk", "Asterisk", "RitualHelperSoundAsterisk"), this.Settings.AlertSound == 0))
+                            this.Settings.AlertSound = 0;
+                        ImGui.SameLine();
+                        if (ImGui.RadioButton(this.PluginText.Label("sound.exclamation", "Exclamation", "RitualHelperSoundExclamation"), this.Settings.AlertSound == 1))
+                            this.Settings.AlertSound = 1;
+                        ImGui.SameLine();
+                        if (ImGui.RadioButton(this.PluginText.Label("sound.hand", "Hand", "RitualHelperSoundHand"), this.Settings.AlertSound == 2))
+                            this.Settings.AlertSound = 2;
+                        if (ImGui.RadioButton(this.PluginText.Label("sound.question", "Question", "RitualHelperSoundQuestion"), this.Settings.AlertSound == 3))
+                            this.Settings.AlertSound = 3;
+                        ImGui.SameLine();
+                        if (ImGui.RadioButton(this.PluginText.Label("sound.beep", "Beep", "RitualHelperSoundBeep"), this.Settings.AlertSound == 4))
+                            this.Settings.AlertSound = 4;
+                        
+                        if (ImGui.Button(this.PluginText.Label("button.test_sound", "Test Sound", "RitualHelperTestSound")))
+                            this.pendingSoundPlayback = this.Settings.AlertSound;
+                        
+                        ImGui.Separator();
+                        ImGui.TextWrapped(
+                            this.PluginText.T("settings.naming_help", "All items (currency and uniques) are named automatically from game memory. " +
+                            "Prices come from poe2scout + poe.ninja; items missing there show no label (trade tools may differ)."));
+                    }),
+                    ("pricing", "Prices", () =>
                     {
-                        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.2f, 1f), this.PluginText.T("status.loading", "Loading..."));
-                    }
-                    else if (PoeNinjaPriceFetcher.LastFetchUtc > DateTime.MinValue)
+                        this.DrawPriceSourceSelector();
+                        this.DrawLeagueSelector();
+                        
+                        ImGui.SliderInt(this.PluginText.Label("settings.refresh_interval", "Refresh interval (min)", "RitualHelperRefreshInterval"), ref this.Settings.RefreshIntervalMin, 1, 120);
+                        if (ImGui.Button(this.PluginText.Label("button.refresh_prices", "Refresh Prices Now", "RitualHelperRefreshPrices")))
+                        {
+                            PoeNinjaPriceFetcher.Configure(this.Settings.PriceSource, this.Settings.League ?? string.Empty, this.Settings.RefreshIntervalMin);
+                            PoeNinjaPriceFetcher.ForceRefresh(this.DllDirectory);
+                        }
+                        
+                        ImGui.SameLine();
+                        if (PoeNinjaPriceFetcher.IsFetching || LeagueProvider.IsLoading)
+                        {
+                            ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.2f, 1f), this.PluginText.T("status.loading", "Loading..."));
+                        }
+                        else if (PoeNinjaPriceFetcher.LastFetchUtc > DateTime.MinValue)
+                        {
+                            var mins = Math.Max(0, (int)(DateTime.UtcNow - PoeNinjaPriceFetcher.LastFetchUtc).TotalMinutes);
+                            ImGui.TextColored(new Vector4(0.5f, 0.8f, 0.5f, 1f),
+                                this.PluginText.F("status.fetch_summary", "{0} items | {1} min ago", PoeNinjaPriceFetcher.LoadedItemCount, mins));
+                        }
+                        
+                        ImGui.TextWrapped(
+                            this.PluginText.T("settings.price_source_help", "Prices are estimates from poe2scout / poe.ninja (not live trade). Uniques use the higher of scout and ninja. Refresh after league economy shifts."));
+                    }),
+                    ("diagnostics", "Diagnostics", () =>
                     {
-                        var mins = Math.Max(0, (int)(DateTime.UtcNow - PoeNinjaPriceFetcher.LastFetchUtc).TotalMinutes);
-                        ImGui.TextColored(new Vector4(0.5f, 0.8f, 0.5f, 1f),
-                            this.PluginText.F("status.fetch_summary", "{0} items | {1} min ago", PoeNinjaPriceFetcher.LoadedItemCount, mins));
-                    }
-
-                    ImGui.TextWrapped(
-                        this.PluginText.T("settings.price_source_help", "Prices are estimates from poe2scout / poe.ninja (not live trade). Uniques use the higher of scout and ninja. Refresh after league economy shifts."));
-
-                    ImGui.EndTabItem();
-                }
-
-                if (ImGui.BeginTabItem(this.PluginText.Title("tab.advanced", "Advanced", "RitualHelperAdvancedTab")))
-                {
-                    ImGui.Checkbox(this.PluginText.Label("settings.debug_mode", "Debug Mode (Show All Inventories)", "RitualHelperDebugMode"), ref this.Settings.DebugMode);
-                    ImGui.Checkbox(this.PluginText.Label("settings.diagnose_pricing", "Diagnose Pricing (label every tile)", "RitualHelperDiagnosePricing"), ref this.Settings.DiagnosePricing);
-                    ImGui.TextWrapped(
-                        this.PluginText.T("settings.diagnose_help", "When on, every ritual tile is labelled with its rarity, the base name read from memory, " +
-                        "the final lookup name, and the internal id. Tiles with no price show a red 'NO PRICE'."));
-
-                    ImGui.Separator();
-                    ImGui.Checkbox(this.PluginText.Label("settings.force_bfs", "Force BFS window search (testing)", "RitualHelperForceBfs"), ref this.Settings.ForceBfsFallback);
-                    ImGui.TextWrapped(
-                        this.PluginText.T("settings.force_bfs_help", "Bypass the fast index chain and always locate the ritual window via the signature BFS " +
-                        "fallback. Normally the fallback only engages if the index chain breaks after a patch."));
-                    ImGui.EndTabItem();
-                }
-
-                ImGui.EndTabBar();
-            }
-
-            ImGui.Separator();
-            ImGui.TextWrapped(
-                this.PluginText.T("settings.footer_help", "This plugin reads items from the Ritual shop (Favours window) and displays prices on each item."));
+                        ImGui.Checkbox(this.PluginText.Label("settings.debug_mode", "Debug Mode (Show All Inventories)", "RitualHelperDebugMode"), ref this.Settings.DebugMode);
+                        ImGui.Checkbox(this.PluginText.Label("settings.diagnose_pricing", "Diagnose Pricing (label every tile)", "RitualHelperDiagnosePricing"), ref this.Settings.DiagnosePricing);
+                        ImGui.TextWrapped(
+                            this.PluginText.T("settings.diagnose_help", "When on, every ritual tile is labelled with its rarity, the base name read from memory, " +
+                            "the final lookup name, and the internal id. Tiles with no price show a red 'NO PRICE'."));
+                        
+                        ImGui.Separator();
+                        ImGui.Checkbox(this.PluginText.Label("settings.force_bfs", "Force BFS window search (testing)", "RitualHelperForceBfs"), ref this.Settings.ForceBfsFallback);
+                        ImGui.TextWrapped(
+                            this.PluginText.T("settings.force_bfs_help", "Bypass the fast index chain and always locate the ritual window via the signature BFS " +
+                            "fallback. Normally the fallback only engages if the index chain breaks after a patch."));
+                    }));
+                
             }
             finally
             {

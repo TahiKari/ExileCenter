@@ -263,223 +263,210 @@ namespace RunecraftHelper
 
         public override void DrawSettings()
         {
-            ImGui.TextWrapped(this.L("settings.intro",
-                            "RunecraftHelper: while the in-game Runeshape Combinations panel is open, the " +
-                            "poe.ninja Exalted price is drawn on the right edge of each visible reward row. " +
-                            "The reward name shown is the game's own (any client language)."));
-
-            ImGui.Spacing();
-            ImGui.Separator();
-
-            if(ImGui.CollapsingHeader(this.Loc.Title("settings.poeninja", "poe.ninja settings", "rh_poeninja"))) {
-                this.DrawLeaguePicker();
-                ImGui.SliderInt(this.L("settings.refresh_interval", "Refresh interval (min)"), ref this.Settings.CacheTtlMinutes, 5, 60);
-
-                // poe.ninja price sync status + manual refresh — common (the price overlay is shared by all features).
-                ImGui.Spacing();
-                var status = this.priceCache.Status;
-                var lastSync = this.priceCache.LastSyncUtc;
-                string statusText = status switch
+            
+            this.DrawSettingsTabs("RunecraftHelperSettings",
+                ("monoliths", "Monoliths", () =>
                 {
-                    PriceSyncStatus.Syncing => this.L("status.syncing", "syncing…"),
-                    PriceSyncStatus.Ready => lastSync == DateTime.MinValue
-                        ? this.L("status.ready_nodata", "ready (no data yet)")
-                        : this.LF("status.updated_ago", "updated {0} ago", FormatRelative(lastSync)),
-                    PriceSyncStatus.Error => this.LF("status.error", "error: {0}", this.priceCache.LastError),
-                    _ => this.L("status.idle", "idle"),
-                };
-
-                ImGui.Text(this.LF("status.label", "Status: {0}", statusText));
-
-                // The single most common pricing failure: a league name the API doesn't know (typically a
-                // web slug), which answers 200 with an empty body. PriceCache reports it verbatim (it has
-                // no localization access), so the localized explanation lives here.
-                if (status == PriceSyncStatus.Error &&
-                    this.priceCache.LastError.Contains("returned 0 rows", StringComparison.Ordinal))
-                {
-                    ImGui.TextWrapped(this.L("status.zero_rows",
-                        "poe.ninja answered, but has no rows for this league. Check the league name: it must be\n" +
-                        "the API name with spaces (\"Runes of Aldur\"), not the web slug (\"runesofaldur\")."));
-                }
-
-                ImGui.Text(this.LF("status.items_cached", "Items cached: {0}", this.priceCache.PriceCount));
-                if (this.priceCache.DivineToExaltedRate > 0)
-                    ImGui.Text(this.LF("status.divine_rate", "1 Divine = {0:F2} Exalted", this.priceCache.DivineToExaltedRate));
-
-                ImGui.BeginDisabled(status == PriceSyncStatus.Syncing);
-                if (ImGui.Button(this.L("settings.refresh_now", "Refresh now")))
-                    this.priceCache.StartRefresh(this.Settings.League, this.PriceCachePathname);
-                ImGui.EndDisabled();
-            }
-
-            ImGui.Spacing();
-            if (!ImGui.BeginTabBar("rh_settings_tabs"))
-                return;
-
-            if (ImGui.BeginTabItem(this.Loc.Title("tab.monoliths", "Runestone monoliths", "rh_tab_monoliths")))
-            {
-                ImGui.Spacing();
-
-                ImGui.TextDisabled(this.L("mono.map_value_hint", "Paints each monolith's best value (ex) on the large-map overlay"));
-                ImGui.Checkbox(this.L("mono.draw_on_map", "Draw value on map overlay"), ref this.Settings.DrawMonolithValueOnMap);
-                if (this.Settings.DrawMonolithValueOnMap)
-                {
-                    ImGui.Indent();
-                    ImGui.Checkbox(this.L("mono.show_holes_on_map", "Show socket count"), ref this.Settings.ShowHoleCountOnMap);
-                    ImGui.TextDisabled(this.L("mono.show_holes_hint", "Prefixes the label with the socket count: \"[5] 49 ex\""));
-                    ImGui.Unindent();
-                }
-
-                ImGui.Spacing();
-
-                // Just the toggle — which runes are worth showing comes from the rune-chain weight table
-                // (Expedition tab), so there is no second rune list to keep in sync with it.
-                ImGui.Checkbox(this.L("mono.show_glow_runes", "Show glow runes"), ref this.Settings.ShowGlowRunes);
-                if (this.Settings.ShowGlowRunes)
-                    ImGui.TextDisabled(this.L("mono.glow_hint",
-                        "Labels a monolith on the large map with the rune(s) it would propagate from its gold\n" +
-                        "socket, best first, joined by \" | \". Only runes the rune-chain table values above\n" +
-                        "1.00 are shown — a monolith with nothing worth propagating stays unlabelled."));
-
-                ImGui.Separator();
-                ImGui.Spacing();
-
-                ImGui.Checkbox(this.L("mono.show_rewards", "Show monolith reward window"), ref this.Settings.ShowMonolithRewards);
-                if (this.Settings.ShowMonolithRewards)
-                {
-                    // Price overlay controls live here — they tint / position the per-recipe price text drawn on the
-                    // in-game Runeshape Combinations panel (the monolith reward overlay).
-                    int colorMode = (int)this.Settings.ColorMode;
-                    // Combo items are null-separated for ImGui; keep the \0 joins in C# and localize each item on
-                    // its own key (avoids fragile \0 escapes inside the JSON dictionaries).
-                    string priceItems = this.L("mono.price_off", "Off") + "\0" +
-                                        this.L("mono.price_relative", "Relative (vs. median on screen)") + "\0" +
-                                        this.L("mono.price_absolute", "Absolute (Exalted thresholds)") + "\0";
-                    if (ImGui.Combo(this.L("mono.price_color", "Price color"), ref colorMode, priceItems))
-                        this.Settings.ColorMode = (RewardColorMode)colorMode;
-
-                    ImGui.SliderFloat(this.L("mono.price_x", "Price X offset"), ref this.Settings.OverlayXOffset, -400f, 400f, "%.0f px");
-
-                    ImGui.SliderFloat(this.L("mono.hide_under", "Hide rewards under (ex)"), ref this.Settings.MonolithRewardsMinExalted, 0f, 50f, "%.0f ex");
-
-                    ImGui.InputFloat(this.L("mono.highlight_threshold", "Highlight threshold (ex)"), ref this.Settings.MonolithHighlightThreshold, 1f, 10f, "%.0f");
-                    if (this.Settings.MonolithHighlightThreshold < 0f) this.Settings.MonolithHighlightThreshold = 0f;
-                    ImGui.TextDisabled(this.L("mono.highlight_threshold_hint",
-                        "Tints a monolith's header by its best reward value: green at/above the\n" +
-                        "threshold, yellow from 0.6× up to it, none below. 0 = off (use Price color)."));
-                }
-
-                //ImGui.Checkbox("Show monolith debug window", ref this.Settings.ShowWindow);
-                ImGui.EndTabItem();
-            }
-
-            if (ImGui.BeginTabItem(this.Loc.Title("tab.expedition", "Expedition", "rh_tab_expedition")))
-            {
-                ImGui.Spacing();
-
-                ImGui.TextDisabled(this.L("exp.planner_caption", "Explosive-chain route planner"));
-                ImGui.Checkbox(this.L("exp.show_planner", "Show route planner"), ref this.Settings.ShowExpeditionPlanner);
-                if (this.Settings.ShowExpeditionPlanner)
-                {
-                    ImGui.TextDisabled(this.L("exp.planner_hint", "A planner window appears while the in-game explosive HUD is visible"));
-
-                    // Run hotkey. Kept next to the planner toggle rather than on a general "input" page: it is
-                    // meaningless unless the planner is on, and the key only does anything inside an expedition.
-                    ImGui.Checkbox(this.L("exp.run_hotkey", "Run hotkey"), ref this.Settings.ExpPlannerRunHotkeyEnabled);
-                    if (this.Settings.ExpPlannerRunHotkeyEnabled)
-                    {
-                        ImGui.Indent();
-                        ImGui.SetNextItemWidth(220f);
-                        ImGuiHelper.NonContinuousEnumComboBox(this.L("exp.run_hotkey_key", "Key"), ref this.Settings.ExpPlannerRunHotkey);
-                        ImGui.TextDisabled(this.L("exp.run_hotkey_hint",
-                            "Rebuilds the route without the mouse, and works while the planner window is\n" +
-                            "collapsed. It listens only during an expedition, before the detonator is\n" +
-                            "pressed, so a key the game uses elsewhere (Shift) is usually fine here."));
-                        ImGui.Unindent();
-                    }
-                    if(ImGui.CollapsingHeader(this.Loc.Title("exp.reward_profile", "Reward / target profile", "rh_exp_reward"))) {
-                        this.DrawExpeditionTargetProfileSettings();
-                    }
-
-                    if(ImGui.CollapsingHeader(this.Loc.Title("exp.buff_profile", "Relic buff profile", "rh_exp_buff"))) {
-                        this.DrawExpeditionBuffProfileSettings();
-                    }
-
-                    // Rune-chain valuation is a route-planning input (it values the chain of monsters the
-                    // explosives unearth), so it lives with the planner and is gated on it.
-                    this.DrawRuneChainSection();
-                }
-
-                // Separator sits outside the planner gate so Debug is always set off from the section above
-                // it, planner on or off.
-                ImGui.Separator();
-                ImGui.Spacing();
-
-                if (ImGui.CollapsingHeader(this.Loc.Title("common.debug", "Debug", "rh_exp_debug")))
-                {
-                    //ImGui.Checkbox("Show Expedition debug window", ref this.Settings.ShowExpeditionDebug);
-                    ImGui.Checkbox(this.L("exp.show_grid_value", "Show grid value"), ref this.Settings.ShowExpeditionGridValue);
-                    //ImGui.Checkbox("Show path blockers (gates)", ref this.Settings.ShowExpeditionGates);
-                    //if (this.Settings.ShowExpeditionGates)
-                    //{
-                    //    ImGui.TextDisabled("Paints, on the large map (Tab), the footprint of each TriggerableBlockage\n" +
-                    //        "terrain object — the hole it punches in the walkable grid. Red = still blocking,\n" +
-                    //        "green dot = open. Visualization + route now uses blast-opened paths (WIP).");
-                    //    ImGui.Indent();
-                    //    ImGui.SetNextItemWidth(160);
-                    //    ImGui.SliderInt("flood max radius", ref this.Settings.ExpGateFloodMaxRadius, 5, 120);
-                    //    ImGui.SetNextItemWidth(160);
-                    //    ImGui.SliderInt("flood max cells", ref this.Settings.ExpGateFloodMaxCells, 100, 8000);
-                    //    ImGui.SetNextItemWidth(160);
-                    //    ImGui.SliderInt("disk fallback radius", ref this.Settings.ExpGateDiskRadius, 2, 40);
-                    //    ImGui.TextDisabled("Tune until the red footprint covers the blocker (re-floods live).");
-                    //    ImGui.Unindent();
-                    //}
-
-                    //ImGui.Checkbox("Show weight heatmap (all)", ref this.Settings.ShowExpeditionHeatmap);
-                    //ImGui.Checkbox("Show marker heatmap (non-monolith)", ref this.Settings.ShowExpeditionHeatmapMarkers);
-                    //if (this.Settings.ShowExpeditionHeatmap || this.Settings.ShowExpeditionHeatmapMarkers)
-                    //{
-                    //    ImGui.Indent();
-                    //    ImGui.SetNextItemWidth(160);
-                    //    ImGui.SliderInt("heatmap radius", ref this.Settings.ExpHeatmapRadius, 20, 200);
-                    //    ImGui.TextDisabled("Dumps expedition_inventory.txt.");
-                    //    ImGui.Unindent();
-                    //}
-
-                    ImGui.Checkbox(this.L("exp.show_spine", "Show route spine (Router)"), ref this.Settings.ShowExpeditionSpine);
-                    if (this.Settings.ShowExpeditionSpine)
-                        ImGui.TextDisabled(this.L("exp.spine_hint",
-                            "Large map (Tab): draws the Router's strict-spine polyline (cyan) — the path\n" +
-                            "walked (detonator → anchors), shown separately from the charge placements."));
-
-                    ImGui.Checkbox(this.L("exp.log_planner", "Log planner decisions"), ref this.Settings.ExpLogPlanner);
-                    if (this.Settings.ExpLogPlanner)
-                    {
-                        ImGui.TextDisabled(this.L("exp.log_hint",
-                            "Writes a full decision trace on each Run (every candidate, its score,\n" +
-                            "rejections, gate openings, final pick) to expedition_planner_log.txt in the\n" +
-                            "plugin folder. For debugging why the route chose a path."));
-                        if (this.expLogLines > 0)
+                    ImGui.TextWrapped(this.L("settings.intro",
+                                    "RunecraftHelper: while the in-game Runeshape Combinations panel is open, the " +
+                                    "poe.ninja Exalted price is drawn on the right edge of each visible reward row. " +
+                                    "The reward name shown is the game's own (any client language)."));
+                        ImGui.Spacing();
+                    
+                        ImGui.TextDisabled(this.L("mono.map_value_hint", "Paints each monolith's best value (ex) on the large-map overlay"));
+                        ImGui.Checkbox(this.L("mono.draw_on_map", "Draw value on map overlay"), ref this.Settings.DrawMonolithValueOnMap);
+                        if (this.Settings.DrawMonolithValueOnMap)
                         {
-                            ImGui.TextDisabled(this.LF("exp.log_lines", "planner log: {0} lines", this.expLogLines));
-                            ImGui.SameLine();
-                            if (ImGui.SmallButton(this.L("exp.open_log", "open log")))
+                            ImGui.Indent();
+                            ImGui.Checkbox(this.L("mono.show_holes_on_map", "Show socket count"), ref this.Settings.ShowHoleCountOnMap);
+                            ImGui.TextDisabled(this.L("mono.show_holes_hint", "Prefixes the label with the socket count: \"[5] 49 ex\""));
+                            ImGui.Unindent();
+                        }
+                    
+                        ImGui.Spacing();
+                    
+                        // Just the toggle — which runes are worth showing comes from the rune-chain weight table
+                        // (Expedition tab), so there is no second rune list to keep in sync with it.
+                        ImGui.Checkbox(this.L("mono.show_glow_runes", "Show glow runes"), ref this.Settings.ShowGlowRunes);
+                        if (this.Settings.ShowGlowRunes)
+                            ImGui.TextDisabled(this.L("mono.glow_hint",
+                                "Labels a monolith on the large map with the rune(s) it would propagate from its gold\n" +
+                                "socket, best first, joined by \" | \". Only runes the rune-chain table values above\n" +
+                                "1.00 are shown — a monolith with nothing worth propagating stays unlabelled."));
+                    
+                        ImGui.Separator();
+                        ImGui.Spacing();
+                    
+                        ImGui.Checkbox(this.L("mono.show_rewards", "Show monolith reward window"), ref this.Settings.ShowMonolithRewards);
+                        if (this.Settings.ShowMonolithRewards)
+                        {
+                            // Price overlay controls live here — they tint / position the per-recipe price text drawn on the
+                            // in-game Runeshape Combinations panel (the monolith reward overlay).
+                            int colorMode = (int)this.Settings.ColorMode;
+                            // Combo items are null-separated for ImGui; keep the \0 joins in C# and localize each item on
+                            // its own key (avoids fragile \0 escapes inside the JSON dictionaries).
+                            string priceItems = this.L("mono.price_off", "Off") + "\0" +
+                                                this.L("mono.price_relative", "Relative (vs. median on screen)") + "\0" +
+                                                this.L("mono.price_absolute", "Absolute (Exalted thresholds)") + "\0";
+                            if (ImGui.Combo(this.L("mono.price_color", "Price color"), ref colorMode, priceItems))
+                                this.Settings.ColorMode = (RewardColorMode)colorMode;
+                    
+                            ImGui.SliderFloat(this.L("mono.price_x", "Price X offset"), ref this.Settings.OverlayXOffset, -400f, 400f, "%.0f px");
+                    
+                            ImGui.SliderFloat(this.L("mono.hide_under", "Hide rewards under (ex)"), ref this.Settings.MonolithRewardsMinExalted, 0f, 50f, "%.0f ex");
+                    
+                            ImGui.InputFloat(this.L("mono.highlight_threshold", "Highlight threshold (ex)"), ref this.Settings.MonolithHighlightThreshold, 1f, 10f, "%.0f");
+                            if (this.Settings.MonolithHighlightThreshold < 0f) this.Settings.MonolithHighlightThreshold = 0f;
+                            ImGui.TextDisabled(this.L("mono.highlight_threshold_hint",
+                                "Tints a monolith's header by its best reward value: green at/above the\n" +
+                                "threshold, yellow from 0.6× up to it, none below. 0 = off (use Price color)."));
+                        }
+                }),
+                ("expedition", "Expedition", () =>
+                {
+                    ImGui.Spacing();
+                    
+                    ImGui.TextDisabled(this.L("exp.planner_caption", "Explosive-chain route planner"));
+                    ImGui.Checkbox(this.L("exp.show_planner", "Show route planner"), ref this.Settings.ShowExpeditionPlanner);
+                    if (this.Settings.ShowExpeditionPlanner)
+                    {
+                        ImGui.TextDisabled(this.L("exp.planner_hint", "A planner window appears while the in-game explosive HUD is visible"));
+                    
+                        // Run hotkey. Kept next to the planner toggle rather than on a general "input" page: it is
+                        // meaningless unless the planner is on, and the key only does anything inside an expedition.
+                        ImGui.Checkbox(this.L("exp.run_hotkey", "Run hotkey"), ref this.Settings.ExpPlannerRunHotkeyEnabled);
+                        if (this.Settings.ExpPlannerRunHotkeyEnabled)
+                        {
+                            ImGui.Indent();
+                            ImGui.SetNextItemWidth(220f);
+                            ImGuiHelper.NonContinuousEnumComboBox(this.L("exp.run_hotkey_key", "Key"), ref this.Settings.ExpPlannerRunHotkey);
+                            ImGui.TextDisabled(this.L("exp.run_hotkey_hint",
+                                "Rebuilds the route without the mouse, and works while the planner window is\n" +
+                                "collapsed. It listens only during an expedition, before the detonator is\n" +
+                                "pressed, so a key the game uses elsewhere (Shift) is usually fine here."));
+                            ImGui.Unindent();
+                        }
+                        if(ImGui.CollapsingHeader(this.Loc.Title("exp.reward_profile", "Reward / target profile", "rh_exp_reward"))) {
+                            this.DrawExpeditionTargetProfileSettings();
+                        }
+                    
+                        if(ImGui.CollapsingHeader(this.Loc.Title("exp.buff_profile", "Relic buff profile", "rh_exp_buff"))) {
+                            this.DrawExpeditionBuffProfileSettings();
+                        }
+                    
+                        // Rune-chain valuation is a route-planning input (it values the chain of monsters the
+                        // explosives unearth), so it lives with the planner and is gated on it.
+                        this.DrawRuneChainSection();
+                    }
+                    
+                    // Separator sits outside the planner gate so Debug is always set off from the section above
+                    // it, planner on or off.
+                    ImGui.Separator();
+                    ImGui.Spacing();
+                    
+                    if (ImGui.CollapsingHeader(this.Loc.Title("common.debug", "Debug", "rh_exp_debug")))
+                    {
+                        //ImGui.Checkbox("Show Expedition debug window", ref this.Settings.ShowExpeditionDebug);
+                        ImGui.Checkbox(this.L("exp.show_grid_value", "Show grid value"), ref this.Settings.ShowExpeditionGridValue);
+                        //ImGui.Checkbox("Show path blockers (gates)", ref this.Settings.ShowExpeditionGates);
+                        //if (this.Settings.ShowExpeditionGates)
+                        //{
+                        //    ImGui.TextDisabled("Paints, on the large map (Tab), the footprint of each TriggerableBlockage\n" +
+                        //        "terrain object — the hole it punches in the walkable grid. Red = still blocking,\n" +
+                        //        "green dot = open. Visualization + route now uses blast-opened paths (WIP).");
+                        //    ImGui.Indent();
+                        //    ImGui.SetNextItemWidth(160);
+                        //    ImGui.SliderInt("flood max radius", ref this.Settings.ExpGateFloodMaxRadius, 5, 120);
+                        //    ImGui.SetNextItemWidth(160);
+                        //    ImGui.SliderInt("flood max cells", ref this.Settings.ExpGateFloodMaxCells, 100, 8000);
+                        //    ImGui.SetNextItemWidth(160);
+                        //    ImGui.SliderInt("disk fallback radius", ref this.Settings.ExpGateDiskRadius, 2, 40);
+                        //    ImGui.TextDisabled("Tune until the red footprint covers the blocker (re-floods live).");
+                        //    ImGui.Unindent();
+                        //}
+                    
+                        //ImGui.Checkbox("Show weight heatmap (all)", ref this.Settings.ShowExpeditionHeatmap);
+                        //ImGui.Checkbox("Show marker heatmap (non-monolith)", ref this.Settings.ShowExpeditionHeatmapMarkers);
+                        //if (this.Settings.ShowExpeditionHeatmap || this.Settings.ShowExpeditionHeatmapMarkers)
+                        //{
+                        //    ImGui.Indent();
+                        //    ImGui.SetNextItemWidth(160);
+                        //    ImGui.SliderInt("heatmap radius", ref this.Settings.ExpHeatmapRadius, 20, 200);
+                        //    ImGui.TextDisabled("Dumps expedition_inventory.txt.");
+                        //    ImGui.Unindent();
+                        //}
+                    
+                        ImGui.Checkbox(this.L("exp.show_spine", "Show route spine (Router)"), ref this.Settings.ShowExpeditionSpine);
+                        if (this.Settings.ShowExpeditionSpine)
+                            ImGui.TextDisabled(this.L("exp.spine_hint",
+                                "Large map (Tab): draws the Router's strict-spine polyline (cyan) — the path\n" +
+                                "walked (detonator → anchors), shown separately from the charge placements."));
+                    
+                        ImGui.Checkbox(this.L("exp.log_planner", "Log planner decisions"), ref this.Settings.ExpLogPlanner);
+                        if (this.Settings.ExpLogPlanner)
+                        {
+                            ImGui.TextDisabled(this.L("exp.log_hint",
+                                "Writes a full decision trace on each Run (every candidate, its score,\n" +
+                                "rejections, gate openings, final pick) to expedition_planner_log.txt in the\n" +
+                                "plugin folder. For debugging why the route chose a path."));
+                            if (this.expLogLines > 0)
                             {
-                                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(this.expLogPath) { UseShellExecute = true }); }
-                                catch { /* ignore */ }
+                                ImGui.TextDisabled(this.LF("exp.log_lines", "planner log: {0} lines", this.expLogLines));
+                                ImGui.SameLine();
+                                if (ImGui.SmallButton(this.L("exp.open_log", "open log")))
+                                {
+                                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(this.expLogPath) { UseShellExecute = true }); }
+                                    catch { /* ignore */ }
+                                }
+                    
+                                ImGui.SameLine();
+                                if (ImGui.SmallButton(this.L("exp.copy_path", "copy path"))) ImGui.SetClipboardText(this.expLogPath);
                             }
-
-                            ImGui.SameLine();
-                            if (ImGui.SmallButton(this.L("exp.copy_path", "copy path"))) ImGui.SetClipboardText(this.expLogPath);
                         }
                     }
-                }
-
-                ImGui.EndTabItem();
-            }
-
-            ImGui.EndTabBar();
+                }),
+                ("pricing", "Prices", () =>
+                {
+                    this.DrawLeaguePicker();
+                    ImGui.SliderInt(this.L("settings.refresh_interval", "Refresh interval (min)"), ref this.Settings.CacheTtlMinutes, 5, 60);
+                    
+                    // poe.ninja price sync status + manual refresh — common (the price overlay is shared by all features).
+                    ImGui.Spacing();
+                    var status = this.priceCache.Status;
+                    var lastSync = this.priceCache.LastSyncUtc;
+                    string statusText = status switch
+                    {
+                        PriceSyncStatus.Syncing => this.L("status.syncing", "syncing…"),
+                        PriceSyncStatus.Ready => lastSync == DateTime.MinValue
+                            ? this.L("status.ready_nodata", "ready (no data yet)")
+                            : this.LF("status.updated_ago", "updated {0} ago", FormatRelative(lastSync)),
+                        PriceSyncStatus.Error => this.LF("status.error", "error: {0}", this.priceCache.LastError),
+                        _ => this.L("status.idle", "idle"),
+                    };
+                    
+                    ImGui.Text(this.LF("status.label", "Status: {0}", statusText));
+                    
+                    // The single most common pricing failure: a league name the API doesn't know (typically a
+                    // web slug), which answers 200 with an empty body. PriceCache reports it verbatim (it has
+                    // no localization access), so the localized explanation lives here.
+                    if (status == PriceSyncStatus.Error &&
+                        this.priceCache.LastError.Contains("returned 0 rows", StringComparison.Ordinal))
+                    {
+                        ImGui.TextWrapped(this.L("status.zero_rows",
+                            "poe.ninja answered, but has no rows for this league. Check the league name: it must be\n" +
+                            "the API name with spaces (\"Runes of Aldur\"), not the web slug (\"runesofaldur\")."));
+                    }
+                    
+                    ImGui.Text(this.LF("status.items_cached", "Items cached: {0}", this.priceCache.PriceCount));
+                    if (this.priceCache.DivineToExaltedRate > 0)
+                        ImGui.Text(this.LF("status.divine_rate", "1 Divine = {0:F2} Exalted", this.priceCache.DivineToExaltedRate));
+                    
+                    ImGui.BeginDisabled(status == PriceSyncStatus.Syncing);
+                    if (ImGui.Button(this.L("settings.refresh_now", "Refresh now")))
+                        this.priceCache.StartRefresh(this.Settings.League, this.PriceCachePathname);
+                    ImGui.EndDisabled();
+                }));
+            
         }
 
         // League selector. Filled from poe.ninja's economyLeagues (NinjaLeagues), grouped by the

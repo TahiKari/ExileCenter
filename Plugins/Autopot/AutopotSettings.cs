@@ -24,6 +24,10 @@ namespace Autopot
 
         /// <summary>Require vitals to rise above the logout threshold before re-arming.</summary>
         public bool SafetyLogoutRequireRecovery = true;
+        public bool ReturnToHideoutAfterLogout = true;
+        public bool HideoutReturnPending = false;
+        public System.Numerics.Vector2 HideoutPlayPosition;
+        public System.Numerics.Vector2 HideoutPlayWindowSize;
 
         public bool Key1Enabled = true;
         public VK Key1 = VK.KEY_1;

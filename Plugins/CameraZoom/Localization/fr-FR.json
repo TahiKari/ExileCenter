@@ -1,0 +1,20 @@
+{
+    "plugin.description":  "Déverrouille la limite de dézoom de la caméra, avec restauration du réglage d’origine.",
+    "help":  "Active la caméra étendue, choisis tes limites, puis utilise la molette dans le jeu. Désactive cette option pour rétablir les limites du jeu. La modification est aussi retirée à la fermeture normale de GameHelper. Les distances sont sauvegardées ; l\u0027activation reste manuelle à chaque lancement.",
+    "enable":  "Activer les limites personnalisées de caméra",
+    "detect":  "Vérifier la compatibilité du jeu",
+    "no_game":  "Ouvre le jeu avant de vérifier la caméra.",
+    "incompatible":  "La signature de caméra est absente, ambiguë ou incompatible. Aucune modification appliquée.",
+    "changed":  "Le code de la caméra a changé. Opération annulée.",
+    "status.idle":  "Dézoom désactivé. Ouvre le jeu pour vérifier sa compatibilité.",
+    "status.ready":  "Caméra compatible détectée. Tu peux activer le dézoom étendu.",
+    "status.active":  "Limites personnalisées actives. Utilise la molette du jeu pour régler la distance entre les deux limites.",
+    "status.restored":  "Limite de caméra d’origine restaurée. Utilise la molette pour rapprocher la caméra si nécessaire.",
+    "status.failed":  "Activation ou vérification impossible. Dézoom désactivé.",
+    "status.restore_failed":  "Restauration impossible. Réessaie de désactiver le dézoom ; un redémarrage du jeu rétablit la caméra d’origine.",
+    "minimum":  "Distance minimale (zoom maximal)",
+    "maximum":  "Distance maximale (dézoom maximal)",
+    "limits_help":  "100 % correspond à la limite de dézoom d\u0027origine. Plus la valeur est élevée, plus la caméra est éloignée. Les changements s\u0027appliquent lorsque les limites personnalisées sont activées. La limite minimale respecte le zoom le plus proche autorisé par le jeu.",
+    "reset":  "Rétablir les distances d\u0027origine",
+    "invalid_distance":  "Distance de caméra invalide. La caméra étendue a été arrêtée."
+}

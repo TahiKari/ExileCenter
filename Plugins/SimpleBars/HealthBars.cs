@@ -49,121 +49,124 @@ namespace SimpleBars
         /// <inheritdoc />
         public override void DrawSettings()
         {
-            ImGui.Text("Turn off in game health bars for best result.");
-            ImGui.Text("Disable the built-in HealthBars plugin when using SimpleBars.");
-            ImGui.Text("Enable/Disable plugin to reload textures.");
-            ImGui.Text($"Total Textures loaded: {this.textures.TotalTexturesLoaded}");
-            if (ImGui.CollapsingHeader("Common Configuration"))
-            {
-                if (ImGui.BeginTable("common_config_table", 2))
+            
+            this.DrawSettingsTabs("SimpleBarsSettings",
+                ("general", "Settings", () =>
                 {
-                    ImGui.TableNextColumn();
-                    ImGui.Checkbox("Draw healthbars in town", ref this.Settings.DrawInTown);
-                    ImGui.TableNextColumn();
-                    ImGui.Checkbox("Draw healthbars in hideout", ref this.Settings.DrawInHideout);
-                    ImGui.TableNextColumn();
-                    ImGui.Checkbox("Draw healthbars when game is in background", ref this.Settings.DrawWhenGameInBackground);
-                    ImGui.TableNextColumn();
-                    ImGui.Checkbox("Interpolate position", ref this.Settings.InterpolatePosition);
-                    ImGuiHelper.ToolTip("Enable this if your healthbar is stuttering.");
-                    if (this.Settings.InterpolatePosition)
-                    {
-                        if (ImGui.DragInt("Interpolation Rate", ref this.Settings.InterpolationRate, 1f, 1, 1000))
+                    ImGui.Text("Turn off in game health bars for best result.");
+                    ImGui.Text("Disable the built-in HealthBars plugin when using SimpleBars.");
+                        if (ImGui.BeginTable("common_config_table", 1))
                         {
-                            if (this.Settings.InterpolationRate <= 0)
+                            ImGui.TableNextColumn();
+                            ImGui.Checkbox("Draw healthbars in town", ref this.Settings.DrawInTown);
+                            ImGui.TableNextColumn();
+                            ImGui.Checkbox("Draw healthbars in hideout", ref this.Settings.DrawInHideout);
+                            ImGui.TableNextColumn();
+                            ImGui.Checkbox("Draw healthbars when game is in background", ref this.Settings.DrawWhenGameInBackground);
+                            ImGui.TableNextColumn();
+                            ImGui.Checkbox("Interpolate position", ref this.Settings.InterpolatePosition);
+                            ImGuiHelper.ToolTip("Enable this if your healthbar is stuttering.");
+                            if (this.Settings.InterpolatePosition)
                             {
-                                this.Settings.InterpolationRate = 1;
+                                if (ImGui.DragInt("Interpolation Rate", ref this.Settings.InterpolationRate, 1f, 1, 1000))
+                                {
+                                    if (this.Settings.InterpolationRate <= 0)
+                                    {
+                                        this.Settings.InterpolationRate = 1;
+                                    }
+                                    else if (this.Settings.InterpolationRate >= 1000)
+                                    {
+                                        this.Settings.InterpolationRate = 1000;
+                                    }
+                                }
                             }
-                            else if (this.Settings.InterpolationRate >= 1000)
+                    
+                            ImGui.TableNextColumn();
+                            ImGui.Text("white       magic      rare         unique");
+                            ImGui.DragInt4("Cull Strike (%health)", ref this.Settings.CullingStrikeRangePerRarity[0], 1, 0, 100);
+                            ImGui.TableNextColumn();
+                            ImGui.Checkbox("Use gradient textures globally", ref this.Settings.UseGradientBarsGlobal);
+                            ImGui.TableNextColumn();
+                            // ShowManaRatherThanESOnSelf removed in SimpleBars fork.
+                            ImGui.EndTable();
+                        }
+                }),
+                ("monsters", "Monsters", () =>
+                {
+                    if (ImGui.BeginTabBar("monster_config"))
+                    {
+                        foreach (var item in this.Settings.Monster)
+                        {
+                            if (ImGui.BeginTabItem(item.Key))
                             {
-                                this.Settings.InterpolationRate = 1000;
+                                item.Value.Draw(false, this.textures, this.Settings.UseGradientBarsGlobal);
+                                ImGui.EndTabItem();
                             }
                         }
+                    
+                        ImGui.EndTabBar();
                     }
-
-                    ImGui.TableNextColumn();
-                    ImGui.Text("white       magic      rare         unique");
-                    ImGui.DragInt4("Cull Strike (%health)", ref this.Settings.CullingStrikeRangePerRarity[0], 1, 0, 100);
-                    ImGui.TableNextColumn();
-                    ImGui.Checkbox("Use gradient textures globally", ref this.Settings.UseGradientBarsGlobal);
-                    ImGui.TableNextColumn();
-                    // ShowManaRatherThanESOnSelf removed in SimpleBars fork.
-                    ImGui.EndTable();
-                }
-            }
-
-            if (ImGui.CollapsingHeader("Monster Configuration"))
-            {
-                if (ImGui.BeginTabBar("monster_config"))
+                }),
+                ("player", "Player", () =>
                 {
-                    foreach (var item in this.Settings.Monster)
+                    if (ImGui.BeginTabBar("player_config"))
                     {
-                        if (ImGui.BeginTabItem(item.Key))
+                        foreach (var item in this.Settings.Player)
                         {
-                            item.Value.Draw(false, this.textures, this.Settings.UseGradientBarsGlobal);
-                            ImGui.EndTabItem();
+                            if (ImGui.BeginTabItem(item.Key))
+                            {
+                                // Expose self-only controls and show live preview
+                                item.Value.Draw(item.Key == "self", this.textures, this.Settings.UseGradientBarsGlobal);
+                                ImGui.EndTabItem();
+                            }
                         }
+                    
+                        ImGui.EndTabBar();
                     }
-
-                    ImGui.EndTabBar();
-                }
-            }
-
-            if (ImGui.CollapsingHeader("POI Configuration"))
-            {
-                ImGui.SetNextItemWidth(ImGui.GetFontSize() * 10);
-                if(ImGui.InputInt("Group Number##poimonsterconfig", ref this.poiMonsterConfigToAdd) && this.poiMonsterConfigToAdd < 0)
+                }),
+                ("poi", "Points of interest", () =>
                 {
-                    this.poiMonsterConfigToAdd = 0;
-                }
-
-                ImGui.SameLine();
-                if (ImGui.Button("Add"))
-                {
-                    this.Settings.POIMonster.TryAdd(this.poiMonsterConfigToAdd, new());
-                }
-
-                if (ImGui.BeginTabBar("poimonster_config", ImGuiTabBarFlags.AutoSelectNewTabs))
-                {
-                    foreach (var conf in this.Settings.POIMonster)
+                    ImGui.SetNextItemWidth(ImGui.GetFontSize() * 10);
+                    if(ImGui.InputInt("Group Number##poimonsterconfig", ref this.poiMonsterConfigToAdd) && this.poiMonsterConfigToAdd < 0)
                     {
-                        var text = conf.Key < 0 ? "Default" : $"Group {conf.Key}";
-                        var shouldNotDelete = true;
-                        if (ImGui.BeginTabItem(text, ref shouldNotDelete, ImGuiTabItemFlags.NoAssumedClosure))
-                        {
-                            conf.Value.Draw(false, this.textures, this.Settings.UseGradientBarsGlobal);
-                            ImGui.EndTabItem();
-                        }
-
-                        if (conf.Key >= 0 && !shouldNotDelete)
-                        {
-                            this.poiMonsterConfigToDelete = conf.Key;
-                            ImGui.OpenPopup("POIConfigHealthbarDeleteConfirmation");
-                        }
+                        this.poiMonsterConfigToAdd = 0;
                     }
-
-                    this.DrawConfirmationPopup();
-                    ImGui.EndTabBar();
-                }
-            }
-
-            if (ImGui.CollapsingHeader("Player Configuration"))
-            {
-                if (ImGui.BeginTabBar("player_config"))
-                {
-                    foreach (var item in this.Settings.Player)
+                    
+                    ImGui.SameLine();
+                    if (ImGui.Button("Add"))
                     {
-                        if (ImGui.BeginTabItem(item.Key))
-                        {
-                            // Expose self-only controls and show live preview
-                            item.Value.Draw(item.Key == "self", this.textures, this.Settings.UseGradientBarsGlobal);
-                            ImGui.EndTabItem();
-                        }
+                        this.Settings.POIMonster.TryAdd(this.poiMonsterConfigToAdd, new());
                     }
-
-                    ImGui.EndTabBar();
-                }
-            }
+                    
+                    if (ImGui.BeginTabBar("poimonster_config", ImGuiTabBarFlags.AutoSelectNewTabs))
+                    {
+                        foreach (var conf in this.Settings.POIMonster)
+                        {
+                            var text = conf.Key < 0 ? "Default" : $"Group {conf.Key}";
+                            var shouldNotDelete = true;
+                            if (ImGui.BeginTabItem(text, ref shouldNotDelete, ImGuiTabItemFlags.NoAssumedClosure))
+                            {
+                                conf.Value.Draw(false, this.textures, this.Settings.UseGradientBarsGlobal);
+                                ImGui.EndTabItem();
+                            }
+                    
+                            if (conf.Key >= 0 && !shouldNotDelete)
+                            {
+                                this.poiMonsterConfigToDelete = conf.Key;
+                                ImGui.OpenPopup("POIConfigHealthbarDeleteConfirmation");
+                            }
+                        }
+                    
+                        this.DrawConfirmationPopup();
+                        ImGui.EndTabBar();
+                    }
+                }),
+                ("diagnostics", "Diagnostics", () =>
+                {
+                    ImGui.Text("Enable/Disable plugin to reload textures.");
+                    ImGui.Text($"Total Textures loaded: {this.textures.TotalTexturesLoaded}");
+                }));
+            
         }
 
         /// <inheritdoc />

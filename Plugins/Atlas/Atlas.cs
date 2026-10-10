@@ -437,445 +437,441 @@ namespace Atlas
 
         public override void DrawSettings()
         {
-            #region SettingsUI
-            // Collapsed-by-default top section grouping the rarely-touched setup toggles
-            // (input layout, font, map-name language). CollapsingHeader matches GameHelper's
-            // General-tab section style (full-width bar).
-            if (ImGui.CollapsingHeader(this.Loc.Title("atlas.settings", "Settings", "atlas_settings")))
-            {
-                ImGui.SeparatorText(this.L("atlas.input", "Input"));
-                if (ImGui.Checkbox(this.L("atlas.controller_mode", "Controller Mode"), ref Settings.ControllerMode))
-                    nodeCache.Clear(); // re-resolve the panel on the other layout next frame
-                ImGuiHelper.ToolTip(this.L("atlas.controller_mode_hint", "GameHelper auto-detects controller mode, so you normally don't need this. " +
-                    "Tick it only to FORCE the controller Atlas layout if auto-detect ever fails. Either way the " +
-                    "plugin falls back to the other layout when the selected one isn't found. In controller mode " +
-                    "the overlay also stays visible while the inventory is open."));
-
-                ImGui.SeparatorText(this.L("atlas.font", "Font"));
-                if (ImGui.Checkbox(this.L("atlas.universal_font", "Universal font (render map names in any language)"), ref Settings.UniversalFont))
-                {
-                    if (Settings.UniversalFont)
-                        UniversalFont.Apply(DllDirectory);
-                    else
-                        UniversalFont.Restore();
-                }
-                ImGuiHelper.ToolTip(this.L("atlas.universal_font_hint", "Loads the plugin's bundled DejaVuSans + GNU Unifont into the overlay so " +
-                    "any-language map names render without configuring a font in GameHelper. Affects the whole overlay; " +
-                    "turning it off restores GameHelper's configured font."));
-
-                ImGui.SeparatorText(this.L("atlas.map_name_language", "Map name language"));
-                bool isAuto = IsAutoLang(Settings.Language);
-                string autoLabel = this.L("atlas.lang_auto", "Auto (follow UI language)");
-                // Preview shows "Auto" (with the resolved token) or the explicit override token.
-                string preview = isAuto ? $"{autoLabel} — {UiLanguageMapToken()}" : Settings.Language;
-                if (ImGui.BeginCombo(this.L("atlas.language", "Language"), preview))
-                {
-                    // Auto = track GameHelper's UI language; re-resolves live when the UI language changes.
-                    if (ImGui.Selectable(autoLabel, isAuto) && !isAuto)
-                    {
-                        Settings.Language = AutoLang;
-                        ApplyContentLanguage(EffectiveLanguage);
-                        nodeCache.Clear();
-                    }
-                    if (isAuto)
-                        ImGui.SetItemDefaultFocus();
-                    foreach (var lang in AvailableLanguages)
-                    {
-                        bool selected = !isAuto && string.Equals(lang, Settings.Language, StringComparison.OrdinalIgnoreCase);
-                        if (ImGui.Selectable(lang, selected) && !selected)
-                        {
-                            Settings.Language = lang;
-                            ApplyContentLanguage(lang); // re-slice content name/desc overlays for the new language
-                            nodeCache.Clear(); // force a node-cache rebuild next frame so labels re-localize live
-                        }
-                        if (selected)
-                            ImGui.SetItemDefaultFocus();
-                    }
-                    ImGui.EndCombo();
-                }
-                ImGuiHelper.ToolTip(this.L("atlas.language_hint", "Display language for map-node names (from maps.json 'translates'). " +
-                    "Auto follows GameHelper's UI language; pick a specific language to match your game client instead. " +
-                    "Changing it re-labels nodes immediately. Map Group names are matched in the selected language."));
-
-                ImGui.SeparatorText(this.L("atlas.draw_lines", "Draw Lines"));
-                if (ImGui.TreeNode(this.Loc.Title("atlas.draw_lines_settings", "Draw Lines Settings", "atlas_draw_lines")))
-                {
-                    ImGui.Checkbox(this.L("atlas.shortest_path", "Shortest Path"), ref Settings.RouteLinesThroughNodes);
-                    ImGuiHelper.ToolTip(this.L("atlas.shortest_path_hint", "Route lines follow the shortest hop-path through the revealed atlas edges " +
-                        "(from the nearest accessible node). When off, a straight line is drawn instead."));
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(150);
-                    ImGui.SliderFloat(this.L("atlas.path_thickness", "Path Thickness"), ref Settings.PathLineThickness, 1.0f, 8.0f);
-                    ImGui.SetNextItemWidth(150);
-                    ImGui.SliderFloat(this.L("atlas.arrow_spacing", "Arrow spacing"), ref Settings.RouteArrowSpacing, 6.0f, 18.0f);
-                    ImGuiHelper.ToolTip(this.L("atlas.arrow_spacing_hint", "Gap between the direction arrows drawn along a route (higher = more spread out)."));
-                    ImGui.SetNextItemWidth(150);
-                    ImGui.SliderFloat(this.L("atlas.search_route_range", "Search route range"), ref Settings.DrawSearchInRange, 1.0f, 10.0f);
-                    ImGui.TreePop();
-                }
-
-                ImGui.SeparatorText(this.L("atlas.debug", "Debug"));
-                ImGui.Checkbox(this.L("atlas.show_node_index", "Show Node Index (debug/RE)"), ref Settings.ShowNodeIndex);
-                ImGuiHelper.ToolTip(this.L("atlas.show_node_index_hint", "DEBUG: draws each node's child-index (its number in the atlas-panel child list) as a badge " +
-                    "to the left of the map name, so a node referenced by number is easy to locate on-screen."));
-            }
-
-            // Collapsed-by-default Display section: node-visibility filters, biome border, label
-            // layout, and the content-icon overlay.
-            if (ImGui.CollapsingHeader(this.Loc.Title("atlas.display", "Display", "atlas_display")))
-            {
-                ImGui.SeparatorText(this.L("atlas.atlas_settings", "Atlas Settings"));
-                ImGui.Checkbox(this.L("atlas.hide_completed", "Hide Completed Maps"), ref Settings.HideCompletedMaps);
-                ImGui.Checkbox(this.L("atlas.hide_not_accessible", "Hide Not Accessible Maps"), ref Settings.HideNotAccessibleMaps);
-                ImGui.Checkbox(this.L("atlas.hide_available", "Hide Available Maps"), ref Settings.HideAvailableMaps);
-                ImGuiHelper.ToolTip(this.L("atlas.hide_available_hint", "Hide maps that are accessible/runnable right now. Route/search targets stay visible."));
-                ImGui.Checkbox(this.L("atlas.show_connections", "Show node connections"), ref Settings.ShowAtlasGraph);
-                ImGuiHelper.ToolTip(this.L("atlas.show_connections_hint", "Draw the atlas connection graph — a faint line along every edge between adjacent map nodes, beneath the labels and routes."));
-                if (Settings.ShowAtlasGraph)
-                {
-                    ColorSwatch("##AtlasGraphColor", ref Settings.AtlasGraphLineColor);
-                    ImGui.SameLine();
-                    ImGui.Text(this.L("atlas.connection_color", "Connection Color"));
-                    ImGui.SetNextItemWidth(150);
-                    ImGui.SliderFloat(this.L("atlas.connection_thickness", "Connection Thickness"), ref Settings.AtlasGraphThickness, 0.5f, 5.0f);
-                }
-
-                ImGui.Checkbox(this.L("atlas.show_biome_border", "Show Biome Border"), ref Settings.ShowBiomeBorder);
-                if (Settings.ShowBiomeBorder)
-                    if (ImGui.TreeNode(this.Loc.Title("atlas.biome_settings", "Biome Settings", "atlas_biome")))
-                    {
-                        ImGui.SetNextItemWidth(180);
-                        ImGui.SliderFloat(this.L("atlas.biome_border_thickness", "Biome Border Thickness"), ref Settings.BiomeBorderThickness, 1.0f, 6.0f);
-
-                        if (ImGui.BeginTable("split", 3))
-                        {
-                            foreach (var biome in Biomes)
-                            {
-                                ImGui.TableNextColumn();
-                                var id = biome.Key;
-                                var info = biome.Value;
-
-                                if (!Settings.BiomeOverrides.TryGetValue(id, out var ov))
-                                {
-                                    ov = new ContentOverride();
-                                    Settings.BiomeOverrides[id] = ov;
-                                }
-
-                                bool show = ov.Show ?? info.Show;
-                                if (ImGui.Checkbox($"##Show##{id}", ref show))
-                                {
-                                    ov.Show = show;
-                                    ApplyBiomeOverrides();
-                                }
-
-                                var border = ov.BorderColor ?? info.BdColor;
-                                ImGui.SameLine();
-                                ColorSwatch($"{this.L("atlas.border_color", "Border Color")}##Biome{id}", ref border);
-                                if (!ColorsEqual(border, ov.BorderColor ?? info.BdColor))
-                                {
-                                    ov.BorderColor = border;
-                                    ApplyBiomeOverrides();
-                                }
-
-                                var label = string.IsNullOrWhiteSpace(info.Label) ? $"Biome {id}" : info.Label;
-                                ImGui.SameLine();
-                                ImGui.Text(label);
-                            }
-                            ImGui.EndTable();
-                        }
-
-                        ImGui.TreePop();
-                    }
-
-                if (ImGui.TreeNode(this.Loc.Title("atlas.layout_settings", "Layout Settings", "atlas_layout")))
-                {
-                    var nudge = Settings.AnchorNudge;
-                    if (ImGui.SliderFloat2(this.L("atlas.layout_nudge", "Layout Nudge (px)"), ref nudge, -60f, 60f))
-                        Settings.AnchorNudge = nudge;
-                    ImGui.SliderFloat(this.L("atlas.scale_multiplier", "Scale Multiplier"), ref Settings.ScaleMultiplier, 0.5f, 3.0f);
-                    ImGui.TreePop();
-                }
-
-                // Per-map rating (0 = normal … 10 = terrible): colored number pill right of the map
-                // name. Ratings are keyed by canonical English name (config/mapratings.json) while
-                // the table lists maps in the UI language, so they work on any client language.
-                if (ImGui.TreeNode(this.Loc.Title("atlas.maps_rating", "Maps rating", "atlas_maps_rating")))
-                {
-                    ImGui.Checkbox(this.L("atlas.map_rating_show", "Show maps rating"), ref Settings.ShowMapRating);
-                    ImGuiHelper.ToolTip(this.L("atlas.map_rating_show_hint",
-                        "Draws each rated map's rating (0 = normal … 10 = terrible) as a colored pill " +
-                        "to the right of the map name: green → yellow → red."));
-
-                    ImGui.SetNextItemWidth(220);
-                    ImGui.InputTextWithHint("##RatingFilter", this.L("atlas.hint_filter", "filter…"), ref RatingFilter, 64);
-
-                    EnsureMapPickCache();
-                    if (ImGui.BeginTable("##MapRatings", 3,
-                        ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersOuter | ImGuiTableFlags.ScrollY,
-                        new Vector2(0, 320)))
-                    {
-                        ImGui.TableSetupScrollFreeze(0, 1);
-                        ImGui.TableSetupColumn(this.L("atlas.rating_map_col", "Map"), ImGuiTableColumnFlags.WidthStretch);
-                        ImGui.TableSetupColumn(this.L("atlas.rating_col", "Rating"), ImGuiTableColumnFlags.WidthFixed, 170f);
-                        ImGui.TableSetupColumn("##clear", ImGuiTableColumnFlags.WidthFixed, 26f);
-                        ImGui.TableHeadersRow();
-
-                        var rfilter = RatingFilter;
-                        foreach (var (english, localized) in MapPickCache)
-                        {
-                            if (!string.IsNullOrEmpty(rfilter)
-                                && localized.IndexOf(rfilter, StringComparison.OrdinalIgnoreCase) < 0
-                                && english.IndexOf(rfilter, StringComparison.OrdinalIgnoreCase) < 0)
-                                continue;
-
-                            ImGui.PushID(english);
-                            ImGui.TableNextRow();
-                            ImGui.TableNextColumn();
-                            ImGui.AlignTextToFramePadding();
-                            ImGui.TextUnformatted(localized);
-
-                            ImGui.TableNextColumn();
-                            bool rated = Settings.MapRatings.TryGetValue(english, out int rating);
-                            if (rated)
-                            {
-                                ImGui.ColorButton("##sw", RatingColor(rating),
-                                    ImGuiColorEditFlags.NoTooltip | ImGuiColorEditFlags.NoPicker | ImGuiColorEditFlags.NoDragDrop,
-                                    new Vector2(ImGui.GetFrameHeight(), ImGui.GetFrameHeight()));
-                                ImGui.SameLine();
-                            }
-                            int v = rated ? rating : 0;
-                            ImGui.SetNextItemWidth(-1);
-                            // Unrated rows show "—" until first touched; any edit stores a rating.
-                            if (ImGui.SliderInt("##rating", ref v, 0, 10, rated ? "%d" : "—"))
-                                Settings.MapRatings[english] = v;
-                            if (ImGui.IsItemDeactivatedAfterEdit())
-                                SaveMapRatings();
-
-                            ImGui.TableNextColumn();
-                            if (rated && ImGui.SmallButton("X"))
-                            {
-                                Settings.MapRatings.Remove(english);
-                                SaveMapRatings();
-                            }
-                            ImGui.PopID();
-                        }
-
-                        ImGui.EndTable();
-                    }
-
-                    ImGui.TreePop();
-                }
-
-                // Expedition (sea / Uncharted Waters) overlays: leyline highlight + fog ships.
-                if (ImGui.TreeNode(this.Loc.Title("atlas.expedition_settings", "Expedition Settings", "atlas_expedition")))
-                {
-                    if (ImGui.Checkbox(this.L("atlas.uncharted_leylines", "Uncharted waters leyline"), ref Settings.ShowUnchartedLeylines))
-                        nodeCache.Clear(); // force a cache rebuild next frame — the ship scan is gated on this toggle
-                    ImGuiHelper.ToolTip(this.L("atlas.uncharted_leylines_hint",
-                        "Hover a sea ship (Uncharted Waters) to highlight its reveal area: the connection graph " +
-                        "between the map nodes a logbook used there will uncover, thicker than the normal node " +
-                        "connections. The hidden maps are already assigned client-side, so the highlighted " +
-                        "cluster is exactly what that ship yields."));
-                    if (Settings.ShowUnchartedLeylines)
-                    {
-                        ColorSwatch("##UnchartedLeylineColor", ref Settings.UnchartedLeylineColor);
-                        ImGui.SameLine();
-                        ImGui.Text(this.L("atlas.leyline_color", "Leyline Color"));
-                        ImGui.SetNextItemWidth(150);
-                        ImGui.SliderFloat(this.L("atlas.leyline_thickness", "Leyline Thickness"), ref Settings.UnchartedLeylineThickness, 1.0f, 8.0f);
-                    }
-
-                    if (ImGui.Checkbox(this.L("atlas.ships_in_fog", "Show ships in fog"), ref Settings.ShowShipsInFog))
-                        nodeCache.Clear(); // force a cache rebuild next frame — the ship scan is gated on the toggles
-                    ImGuiHelper.ToolTip(this.L("atlas.ships_in_fog_hint",
-                        "Marks the Uncharted Waters ships the game isn't rendering yet (deep fog) with an icon, " +
-                        "one per uncharted sea chunk — so upcoming logbook spots are visible before you sail " +
-                        "close. Uses icons\\UnchartedShip.png when present, else a ring marker. Hovering the " +
-                        "icon also triggers the leyline highlight."));
-                    if (Settings.ShowShipsInFog)
-                    {
-                        ImGui.SetNextItemWidth(150);
-                        ImGui.SliderFloat(this.L("atlas.ship_icon_size", "Ship icon size"), ref Settings.ShipIconSize, 32f, 96f);
-                    }
-
-                    ImGui.TreePop();
-                }
-
-                // Ritual (atlas line to the Crux of Nothingness) overlays.
-                if (ImGui.TreeNode(this.Loc.Title("atlas.ritual_settings", "Ritual Settings", "atlas_ritual")))
-                {
-                    if (ImGui.Checkbox(this.L("atlas.ritual_predict", "Show Ritual mods (on hover)"),
-                        ref Settings.ShowRitualPrediction))
-                        nodeCache.Clear(); // force a cache rebuild next frame — the mod-text read is gated on this toggle
-                    ImGuiHelper.ToolTip(this.L("atlas.ritual_predict_hint",
-                        "Shows the Rite mods of the Ritual atlas line (the line drawn to the Crux of " +
-                        "Nothingness): the game's own mods on committed line nodes (blue), plus the exact " +
-                        "predicted mods (green) every still-reachable node WILL roll — the whole look-ahead " +
-                        "chain into the fog, before you click, including which nodes get a second mod. Before " +
-                        "the first node is placed, hover any accessible map in line mode to preview the whole " +
-                        "chain that start would give. Predicted labels are in English."));
-
-                    ImGui.Checkbox(this.L("atlas.ritual_planner", "Head of the king planner window"),
-                        ref Settings.ShowRitualPlanner);
-                    ImGuiHelper.ToolTip(this.L("atlas.ritual_planner_hint",
-                        "Opens a window while the atlas is in line-drawing mode listing every path the line " +
-                        "could take from every possible start map, with the predicted reward chain for each. " +
-                        "Pick desired rewards in the filter dropdown (a path shows if ANY of them is in its " +
-                        "chain); tick a path to highlight its route on the atlas and draw a ray to its first " +
-                        "map. Closing the window with X also clears this checkbox."));
-                    if (Settings.ShowRitualPlanner)
-                    {
-                        ImGui.SetNextItemWidth(180);
-                        ImGui.SliderFloat(this.L("atlas.ritual_planner_font", "Rewards window font size"),
-                            ref Settings.RitualPlannerFontScale, 0.5f, 3.0f, "%.2fx");
-                        ImGuiHelper.ToolTip(this.L("atlas.ritual_planner_font_hint",
-                            "Text scale for the \"Head of the king Rewards\" window (1.00x = default)."));
-                        this.DrawRewardWeightsTable();
-                    }
-
-                    // The "Log Ritual rolls (RE)" debug toggle is HIDDEN from the UI for release;
-                    // LogRitualRolls still works when set by hand in config/settings.txt.
-                    ImGui.TreePop();
-                }
-
-                ImGui.SeparatorText(this.L("atlas.content_icons", "Content Icons"));
-                ImGui.Checkbox(this.L("atlas.show_content_icons", "Show Content Icons"), ref Settings.ShowContentIcons);
-                ImGuiHelper.ToolTip(this.L("atlas.show_content_icons_hint", "Draws each content as its in-game icon (from Plugins\\Atlas\\icons\\<name>.png) above the map " +
-                    "name. Content without an icon file falls back to its text name. Icons are suppressed on visible nodes " +
-                    "(the game already draws them there) and shown only on hidden ones."));
-                if (Settings.ShowContentIcons)
-                {
-                    ImGui.SetNextItemWidth(180);
-                    ImGui.SliderFloat(this.L("atlas.content_icon_size", "Content Icon Size"), ref Settings.ContentIconSize, 16f, 64f);
-                    var iconOffset = Settings.ContentIconOffset;
-                    ImGui.SetNextItemWidth(180);
-                    if (ImGui.SliderFloat2(this.L("atlas.content_icon_offset", "Content Icon Offset (X,Y)"), ref iconOffset, -64f, 64f))
-                        Settings.ContentIconOffset = iconOffset;
-                }
-
-                if (ImGui.TreeNode(this.Loc.Title("atlas.map_styles", "Map Styles", "MapStyles")))
-                {
-                    ImGui.InputTextWithHint("##MapGroupName", this.L("atlas.hint_group_name", "group name"), ref Settings.GroupNameInput, 256);
-                    ImGui.SameLine();
-                    if (ImGui.Button(this.L("atlas.add_map_group", "Add new map group")))
-                    {
-                        Settings.MapGroups.Add(new MapGroupSettings(Settings.GroupNameInput, Settings.DefaultBackgroundColor, Settings.DefaultFontColor));
-                        Settings.GroupNameInput = string.Empty;
-                    }
-
-                    for (int i = 0; i < Settings.MapGroups.Count; i++)
-                    {
-                        var mapGroup = Settings.MapGroups[i];
-                        if (ImGui.TreeNode($"{mapGroup.Name}##MapGroup{i}"))
-                        {
-                            float buttonSize = ImGui.GetFrameHeight();
-                            if (TriangleButton($"##Up{i}", buttonSize, new Vector4(1, 1, 1, 1), true))
-                            {
-                                MoveMapGroup(i, -1);
-                            }
-                            ImGui.SameLine();
-                            if (TriangleButton($"##Down{i}", buttonSize, new Vector4(1, 1, 1, 1), false))
-                            {
-                                MoveMapGroup(i, 1);
-                            }
-                            ImGui.SameLine();
-                            if (ImGui.Button($"{this.L("atlas.rename_group", "Rename Group")}##{i}"))
-                            {
-                                NewGroupName = mapGroup.Name;
-                                ImGui.OpenPopup($"RenamePopup##{i}");
-                            }
-                            ImGui.SameLine();
-                            if (ImGui.Button($"{this.L("atlas.delete_group", "Delete Group")}##{i}"))
-                            {
-                                DeleteMapGroup(i);
-                            }
-                            ImGui.SameLine();
-                            ColorSwatch($"##MapGroupBackgroundColor{i}", ref mapGroup.BackgroundColor);
-                            ImGui.SameLine();
-                            ImGui.Text(this.L("atlas.background_color", "Background Color"));
-                            ImGui.SameLine();
-                            ColorSwatch($"##MapGroupFontColor{i}", ref mapGroup.FontColor);
-                            ImGui.SameLine(); ImGui.Text(this.L("atlas.font_color", "Font Color"));
-
-                            for (int j = 0; j < mapGroup.Maps.Count; j++)
-                            {
-                                var mapName = mapGroup.Maps[j];
-                                if (ImGui.InputTextWithHint($"##MapName{i}-{j}", this.L("atlas.hint_map_name", "map name"), ref mapName, 256))
-                                    mapGroup.Maps[j] = mapName;
-
-                                ImGui.SameLine();
-                                if (ImGui.Button($"{this.L("atlas.delete", "Delete")}##MapNameDelete{i}-{j}"))
-                                {
-                                    mapGroup.Maps.RemoveAt(j);
-                                    break;
-                                }
-                            }
-
-                            if (ImGui.Button($"{this.L("atlas.add_new_map", "Add new map")}##AddNewMap{i}"))
-                                mapGroup.Maps.Add(string.Empty);
-
-                            // Pick a map from a filtered list instead of typing it. Stores the localized
-                            // name (map styles match by the displayed name in the selected language); the
-                            // filter narrows by localized or English name. Skips maps already in the group.
-                            ImGui.SameLine();
-                            ImGui.SetNextItemWidth(220);
-                            if (ImGui.BeginCombo($"##MapGroupAdd{i}", this.L("atlas.add_from_list", "Add from list…")))
-                            {
-                                EnsureMapPickCache();
-                                ImGui.SetNextItemWidth(-1);
-                                ImGui.InputTextWithHint($"##MapGroupFilter{i}", this.L("atlas.hint_filter", "filter…"), ref MapGroupAddFilter, 64);
-                                var gfilter = MapGroupAddFilter;
-                                foreach (var (english, localized) in MapPickCache)
-                                {
-                                    if (!string.IsNullOrEmpty(gfilter)
-                                        && localized.IndexOf(gfilter, StringComparison.OrdinalIgnoreCase) < 0
-                                        && english.IndexOf(gfilter, StringComparison.OrdinalIgnoreCase) < 0)
-                                        continue;
-                                    if (mapGroup.Maps.Exists(m => NormalizeName(m).Equals(localized, StringComparison.OrdinalIgnoreCase)))
-                                        continue;
-                                    if (ImGui.Selectable($"{localized}##mg{english}"))
-                                    {
-                                        mapGroup.Maps.Add(localized);
-                                        MapGroupAddFilter = string.Empty;
-                                    }
-                                }
-                                ImGui.EndCombo();
-                            }
-
-                            if (ImGui.BeginPopupModal($"RenamePopup##{i}", ImGuiWindowFlags.AlwaysAutoResize))
-                            {
-                                ImGui.InputText(this.L("atlas.new_name", "New Name"), ref NewGroupName, 256);
-                                if (ImGui.Button(this.L("atlas.ok", "OK")))
-                                {
-                                    mapGroup.Name = NewGroupName;
-                                    ImGui.CloseCurrentPopup();
-                                }
-                                ImGui.SameLine();
-                                if (ImGui.Button(this.L("atlas.cancel", "Cancel")))
-                                {
-                                    ImGui.CloseCurrentPopup();
-                                }
-                                ImGui.EndPopup();
-                            }
-                            ImGui.TreePop();
-                        }
-                    }
-                    ImGui.TreePop();
-                }
-            }
-
-            ImGui.SeparatorText(this.L("atlas.search_maps", "Search Maps"));
-            ImGui.InputTextWithHint(this.L("atlas.search_map", "Search Map"), this.L("atlas.search_map_hint", "You can search multiple maps at once using a comma separator ','"), ref Settings.SearchQuery, 256);
-            ImGui.SameLine();
-            if (ImGui.SmallButton(this.L("atlas.clear", "Clear")))
-                Settings.SearchQuery = string.Empty;
             // Search routing is always on now (the old "Draw Lines to Search in range" toggle is hidden);
             // a non-empty Search query draws routes to the matching maps within range.
             Settings.DrawLinesSearchQuery = true;
-
-            ImGui.SeparatorText(this.L("atlas.target_farming", "Target farming"));
-            DrawMapContentSettings();
-            #endregion
+            this.DrawSettingsTabs("AtlasSettings",
+                ("search", "Search", () =>
+                {
+                    ImGui.SeparatorText(this.L("atlas.search_maps", "Search Maps"));
+                    ImGui.InputTextWithHint(this.L("atlas.search_map", "Search Map"), this.L("atlas.search_map_hint", "You can search multiple maps at once using a comma separator ','"), ref Settings.SearchQuery, 256);
+                    ImGui.SameLine();
+                    if (ImGui.SmallButton(this.L("atlas.clear", "Clear")))
+                        Settings.SearchQuery = string.Empty;
+                    
+                    ImGui.SeparatorText(this.L("atlas.target_farming", "Target farming"));
+                    DrawMapContentSettings();
+                }),
+                ("appearance", "Appearance", () =>
+                {
+                    ImGui.SeparatorText(this.L("atlas.atlas_settings", "Atlas Settings"));
+                    ImGui.Checkbox(this.L("atlas.hide_completed", "Hide Completed Maps"), ref Settings.HideCompletedMaps);
+                    ImGui.Checkbox(this.L("atlas.hide_not_accessible", "Hide Not Accessible Maps"), ref Settings.HideNotAccessibleMaps);
+                    ImGui.Checkbox(this.L("atlas.hide_available", "Hide Available Maps"), ref Settings.HideAvailableMaps);
+                    ImGuiHelper.ToolTip(this.L("atlas.hide_available_hint", "Hide maps that are accessible/runnable right now. Route/search targets stay visible."));
+                    ImGui.Checkbox(this.L("atlas.show_connections", "Show node connections"), ref Settings.ShowAtlasGraph);
+                    ImGuiHelper.ToolTip(this.L("atlas.show_connections_hint", "Draw the atlas connection graph — a faint line along every edge between adjacent map nodes, beneath the labels and routes."));
+                    if (Settings.ShowAtlasGraph)
+                    {
+                        ColorSwatch("##AtlasGraphColor", ref Settings.AtlasGraphLineColor);
+                        ImGui.SameLine();
+                        ImGui.Text(this.L("atlas.connection_color", "Connection Color"));
+                        ImGui.SetNextItemWidth(150);
+                        ImGui.SliderFloat(this.L("atlas.connection_thickness", "Connection Thickness"), ref Settings.AtlasGraphThickness, 0.5f, 5.0f);
+                    }
+                    
+                    ImGui.Checkbox(this.L("atlas.show_biome_border", "Show Biome Border"), ref Settings.ShowBiomeBorder);
+                    if (Settings.ShowBiomeBorder)
+                        if (ImGui.TreeNode(this.Loc.Title("atlas.biome_settings", "Biome Settings", "atlas_biome")))
+                        {
+                            ImGui.SetNextItemWidth(180);
+                            ImGui.SliderFloat(this.L("atlas.biome_border_thickness", "Biome Border Thickness"), ref Settings.BiomeBorderThickness, 1.0f, 6.0f);
+                    
+                            if (ImGui.BeginTable("split", 3))
+                            {
+                                foreach (var biome in Biomes)
+                                {
+                                    ImGui.TableNextColumn();
+                                    var id = biome.Key;
+                                    var info = biome.Value;
+                    
+                                    if (!Settings.BiomeOverrides.TryGetValue(id, out var ov))
+                                    {
+                                        ov = new ContentOverride();
+                                        Settings.BiomeOverrides[id] = ov;
+                                    }
+                    
+                                    bool show = ov.Show ?? info.Show;
+                                    if (ImGui.Checkbox($"##Show##{id}", ref show))
+                                    {
+                                        ov.Show = show;
+                                        ApplyBiomeOverrides();
+                                    }
+                    
+                                    var border = ov.BorderColor ?? info.BdColor;
+                                    ImGui.SameLine();
+                                    ColorSwatch($"{this.L("atlas.border_color", "Border Color")}##Biome{id}", ref border);
+                                    if (!ColorsEqual(border, ov.BorderColor ?? info.BdColor))
+                                    {
+                                        ov.BorderColor = border;
+                                        ApplyBiomeOverrides();
+                                    }
+                    
+                                    var label = string.IsNullOrWhiteSpace(info.Label) ? $"Biome {id}" : info.Label;
+                                    ImGui.SameLine();
+                                    ImGui.Text(label);
+                                }
+                                ImGui.EndTable();
+                            }
+                    
+                            ImGui.TreePop();
+                        }
+                    
+                    if (ImGui.TreeNode(this.Loc.Title("atlas.layout_settings", "Layout Settings", "atlas_layout")))
+                    {
+                        var nudge = Settings.AnchorNudge;
+                        if (ImGui.SliderFloat2(this.L("atlas.layout_nudge", "Layout Nudge (px)"), ref nudge, -60f, 60f))
+                            Settings.AnchorNudge = nudge;
+                        ImGui.SliderFloat(this.L("atlas.scale_multiplier", "Scale Multiplier"), ref Settings.ScaleMultiplier, 0.5f, 3.0f);
+                        ImGui.TreePop();
+                    }
+                    
+                    // Per-map rating (0 = normal … 10 = terrible): colored number pill right of the map
+                    // name. Ratings are keyed by canonical English name (config/mapratings.json) while
+                    // the table lists maps in the UI language, so they work on any client language.
+                    if (ImGui.TreeNode(this.Loc.Title("atlas.maps_rating", "Maps rating", "atlas_maps_rating")))
+                    {
+                        ImGui.Checkbox(this.L("atlas.map_rating_show", "Show maps rating"), ref Settings.ShowMapRating);
+                        ImGuiHelper.ToolTip(this.L("atlas.map_rating_show_hint",
+                            "Draws each rated map's rating (0 = normal … 10 = terrible) as a colored pill " +
+                            "to the right of the map name: green → yellow → red."));
+                    
+                        ImGui.SetNextItemWidth(220);
+                        ImGui.InputTextWithHint("##RatingFilter", this.L("atlas.hint_filter", "filter…"), ref RatingFilter, 64);
+                    
+                        EnsureMapPickCache();
+                        if (ImGui.BeginTable("##MapRatings", 3,
+                            ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersOuter | ImGuiTableFlags.ScrollY,
+                            new Vector2(0, 320)))
+                        {
+                            ImGui.TableSetupScrollFreeze(0, 1);
+                            ImGui.TableSetupColumn(this.L("atlas.rating_map_col", "Map"), ImGuiTableColumnFlags.WidthStretch);
+                            ImGui.TableSetupColumn(this.L("atlas.rating_col", "Rating"), ImGuiTableColumnFlags.WidthFixed, 170f);
+                            ImGui.TableSetupColumn("##clear", ImGuiTableColumnFlags.WidthFixed, 26f);
+                            ImGui.TableHeadersRow();
+                    
+                            var rfilter = RatingFilter;
+                            foreach (var (english, localized) in MapPickCache)
+                            {
+                                if (!string.IsNullOrEmpty(rfilter)
+                                    && localized.IndexOf(rfilter, StringComparison.OrdinalIgnoreCase) < 0
+                                    && english.IndexOf(rfilter, StringComparison.OrdinalIgnoreCase) < 0)
+                                    continue;
+                    
+                                ImGui.PushID(english);
+                                ImGui.TableNextRow();
+                                ImGui.TableNextColumn();
+                                ImGui.AlignTextToFramePadding();
+                                ImGui.TextUnformatted(localized);
+                    
+                                ImGui.TableNextColumn();
+                                bool rated = Settings.MapRatings.TryGetValue(english, out int rating);
+                                if (rated)
+                                {
+                                    ImGui.ColorButton("##sw", RatingColor(rating),
+                                        ImGuiColorEditFlags.NoTooltip | ImGuiColorEditFlags.NoPicker | ImGuiColorEditFlags.NoDragDrop,
+                                        new Vector2(ImGui.GetFrameHeight(), ImGui.GetFrameHeight()));
+                                    ImGui.SameLine();
+                                }
+                                int v = rated ? rating : 0;
+                                ImGui.SetNextItemWidth(-1);
+                                // Unrated rows show "—" until first touched; any edit stores a rating.
+                                if (ImGui.SliderInt("##rating", ref v, 0, 10, rated ? "%d" : "—"))
+                                    Settings.MapRatings[english] = v;
+                                if (ImGui.IsItemDeactivatedAfterEdit())
+                                    SaveMapRatings();
+                    
+                                ImGui.TableNextColumn();
+                                if (rated && ImGui.SmallButton("X"))
+                                {
+                                    Settings.MapRatings.Remove(english);
+                                    SaveMapRatings();
+                                }
+                                ImGui.PopID();
+                            }
+                    
+                            ImGui.EndTable();
+                        }
+                    
+                        ImGui.TreePop();
+                    }
+                    
+                    // Expedition (sea / Uncharted Waters) overlays: leyline highlight + fog ships.
+                    if (ImGui.TreeNode(this.Loc.Title("atlas.expedition_settings", "Expedition Settings", "atlas_expedition")))
+                    {
+                        if (ImGui.Checkbox(this.L("atlas.uncharted_leylines", "Uncharted waters leyline"), ref Settings.ShowUnchartedLeylines))
+                            nodeCache.Clear(); // force a cache rebuild next frame — the ship scan is gated on this toggle
+                        ImGuiHelper.ToolTip(this.L("atlas.uncharted_leylines_hint",
+                            "Hover a sea ship (Uncharted Waters) to highlight its reveal area: the connection graph " +
+                            "between the map nodes a logbook used there will uncover, thicker than the normal node " +
+                            "connections. The hidden maps are already assigned client-side, so the highlighted " +
+                            "cluster is exactly what that ship yields."));
+                        if (Settings.ShowUnchartedLeylines)
+                        {
+                            ColorSwatch("##UnchartedLeylineColor", ref Settings.UnchartedLeylineColor);
+                            ImGui.SameLine();
+                            ImGui.Text(this.L("atlas.leyline_color", "Leyline Color"));
+                            ImGui.SetNextItemWidth(150);
+                            ImGui.SliderFloat(this.L("atlas.leyline_thickness", "Leyline Thickness"), ref Settings.UnchartedLeylineThickness, 1.0f, 8.0f);
+                        }
+                    
+                        if (ImGui.Checkbox(this.L("atlas.ships_in_fog", "Show ships in fog"), ref Settings.ShowShipsInFog))
+                            nodeCache.Clear(); // force a cache rebuild next frame — the ship scan is gated on the toggles
+                        ImGuiHelper.ToolTip(this.L("atlas.ships_in_fog_hint",
+                            "Marks the Uncharted Waters ships the game isn't rendering yet (deep fog) with an icon, " +
+                            "one per uncharted sea chunk — so upcoming logbook spots are visible before you sail " +
+                            "close. Uses icons\\UnchartedShip.png when present, else a ring marker. Hovering the " +
+                            "icon also triggers the leyline highlight."));
+                        if (Settings.ShowShipsInFog)
+                        {
+                            ImGui.SetNextItemWidth(150);
+                            ImGui.SliderFloat(this.L("atlas.ship_icon_size", "Ship icon size"), ref Settings.ShipIconSize, 32f, 96f);
+                        }
+                    
+                        ImGui.TreePop();
+                    }
+                    
+                    // Ritual (atlas line to the Crux of Nothingness) overlays.
+                    if (ImGui.TreeNode(this.Loc.Title("atlas.ritual_settings", "Ritual Settings", "atlas_ritual")))
+                    {
+                        if (ImGui.Checkbox(this.L("atlas.ritual_predict", "Show Ritual mods (on hover)"),
+                            ref Settings.ShowRitualPrediction))
+                            nodeCache.Clear(); // force a cache rebuild next frame — the mod-text read is gated on this toggle
+                        ImGuiHelper.ToolTip(this.L("atlas.ritual_predict_hint",
+                            "Shows the Rite mods of the Ritual atlas line (the line drawn to the Crux of " +
+                            "Nothingness): the game's own mods on committed line nodes (blue), plus the exact " +
+                            "predicted mods (green) every still-reachable node WILL roll — the whole look-ahead " +
+                            "chain into the fog, before you click, including which nodes get a second mod. Before " +
+                            "the first node is placed, hover any accessible map in line mode to preview the whole " +
+                            "chain that start would give. Predicted labels are in English."));
+                    
+                        ImGui.Checkbox(this.L("atlas.ritual_planner", "Head of the king planner window"),
+                            ref Settings.ShowRitualPlanner);
+                        ImGuiHelper.ToolTip(this.L("atlas.ritual_planner_hint",
+                            "Opens a window while the atlas is in line-drawing mode listing every path the line " +
+                            "could take from every possible start map, with the predicted reward chain for each. " +
+                            "Pick desired rewards in the filter dropdown (a path shows if ANY of them is in its " +
+                            "chain); tick a path to highlight its route on the atlas and draw a ray to its first " +
+                            "map. Closing the window with X also clears this checkbox."));
+                        if (Settings.ShowRitualPlanner)
+                        {
+                            ImGui.SetNextItemWidth(180);
+                            ImGui.SliderFloat(this.L("atlas.ritual_planner_font", "Rewards window font size"),
+                                ref Settings.RitualPlannerFontScale, 0.5f, 3.0f, "%.2fx");
+                            ImGuiHelper.ToolTip(this.L("atlas.ritual_planner_font_hint",
+                                "Text scale for the \"Head of the king Rewards\" window (1.00x = default)."));
+                            this.DrawRewardWeightsTable();
+                        }
+                    
+                        // The "Log Ritual rolls (RE)" debug toggle is HIDDEN from the UI for release;
+                        // LogRitualRolls still works when set by hand in config/settings.txt.
+                        ImGui.TreePop();
+                    }
+                    
+                    ImGui.SeparatorText(this.L("atlas.content_icons", "Content Icons"));
+                    ImGui.Checkbox(this.L("atlas.show_content_icons", "Show Content Icons"), ref Settings.ShowContentIcons);
+                    ImGuiHelper.ToolTip(this.L("atlas.show_content_icons_hint", "Draws each content as its in-game icon (from Plugins\\Atlas\\icons\\<name>.png) above the map " +
+                        "name. Content without an icon file falls back to its text name. Icons are suppressed on visible nodes " +
+                        "(the game already draws them there) and shown only on hidden ones."));
+                    if (Settings.ShowContentIcons)
+                    {
+                        ImGui.SetNextItemWidth(180);
+                        ImGui.SliderFloat(this.L("atlas.content_icon_size", "Content Icon Size"), ref Settings.ContentIconSize, 16f, 64f);
+                        var iconOffset = Settings.ContentIconOffset;
+                        ImGui.SetNextItemWidth(180);
+                        if (ImGui.SliderFloat2(this.L("atlas.content_icon_offset", "Content Icon Offset (X,Y)"), ref iconOffset, -64f, 64f))
+                            Settings.ContentIconOffset = iconOffset;
+                    }
+                    
+                    if (ImGui.TreeNode(this.Loc.Title("atlas.map_styles", "Map Styles", "MapStyles")))
+                    {
+                        ImGui.InputTextWithHint("##MapGroupName", this.L("atlas.hint_group_name", "group name"), ref Settings.GroupNameInput, 256);
+                        ImGui.SameLine();
+                        if (ImGui.Button(this.L("atlas.add_map_group", "Add new map group")))
+                        {
+                            Settings.MapGroups.Add(new MapGroupSettings(Settings.GroupNameInput, Settings.DefaultBackgroundColor, Settings.DefaultFontColor));
+                            Settings.GroupNameInput = string.Empty;
+                        }
+                    
+                        for (int i = 0; i < Settings.MapGroups.Count; i++)
+                        {
+                            var mapGroup = Settings.MapGroups[i];
+                            if (ImGui.TreeNode($"{mapGroup.Name}##MapGroup{i}"))
+                            {
+                                float buttonSize = ImGui.GetFrameHeight();
+                                if (TriangleButton($"##Up{i}", buttonSize, new Vector4(1, 1, 1, 1), true))
+                                {
+                                    MoveMapGroup(i, -1);
+                                }
+                                ImGui.SameLine();
+                                if (TriangleButton($"##Down{i}", buttonSize, new Vector4(1, 1, 1, 1), false))
+                                {
+                                    MoveMapGroup(i, 1);
+                                }
+                                ImGui.SameLine();
+                                if (ImGui.Button($"{this.L("atlas.rename_group", "Rename Group")}##{i}"))
+                                {
+                                    NewGroupName = mapGroup.Name;
+                                    ImGui.OpenPopup($"RenamePopup##{i}");
+                                }
+                                ImGui.SameLine();
+                                if (ImGui.Button($"{this.L("atlas.delete_group", "Delete Group")}##{i}"))
+                                {
+                                    DeleteMapGroup(i);
+                                }
+                                ImGui.SameLine();
+                                ColorSwatch($"##MapGroupBackgroundColor{i}", ref mapGroup.BackgroundColor);
+                                ImGui.SameLine();
+                                ImGui.Text(this.L("atlas.background_color", "Background Color"));
+                                ImGui.SameLine();
+                                ColorSwatch($"##MapGroupFontColor{i}", ref mapGroup.FontColor);
+                                ImGui.SameLine(); ImGui.Text(this.L("atlas.font_color", "Font Color"));
+                    
+                                for (int j = 0; j < mapGroup.Maps.Count; j++)
+                                {
+                                    var mapName = mapGroup.Maps[j];
+                                    if (ImGui.InputTextWithHint($"##MapName{i}-{j}", this.L("atlas.hint_map_name", "map name"), ref mapName, 256))
+                                        mapGroup.Maps[j] = mapName;
+                    
+                                    ImGui.SameLine();
+                                    if (ImGui.Button($"{this.L("atlas.delete", "Delete")}##MapNameDelete{i}-{j}"))
+                                    {
+                                        mapGroup.Maps.RemoveAt(j);
+                                        break;
+                                    }
+                                }
+                    
+                                if (ImGui.Button($"{this.L("atlas.add_new_map", "Add new map")}##AddNewMap{i}"))
+                                    mapGroup.Maps.Add(string.Empty);
+                    
+                                // Pick a map from a filtered list instead of typing it. Stores the localized
+                                // name (map styles match by the displayed name in the selected language); the
+                                // filter narrows by localized or English name. Skips maps already in the group.
+                                ImGui.SameLine();
+                                ImGui.SetNextItemWidth(220);
+                                if (ImGui.BeginCombo($"##MapGroupAdd{i}", this.L("atlas.add_from_list", "Add from list…")))
+                                {
+                                    EnsureMapPickCache();
+                                    ImGui.SetNextItemWidth(-1);
+                                    ImGui.InputTextWithHint($"##MapGroupFilter{i}", this.L("atlas.hint_filter", "filter…"), ref MapGroupAddFilter, 64);
+                                    var gfilter = MapGroupAddFilter;
+                                    foreach (var (english, localized) in MapPickCache)
+                                    {
+                                        if (!string.IsNullOrEmpty(gfilter)
+                                            && localized.IndexOf(gfilter, StringComparison.OrdinalIgnoreCase) < 0
+                                            && english.IndexOf(gfilter, StringComparison.OrdinalIgnoreCase) < 0)
+                                            continue;
+                                        if (mapGroup.Maps.Exists(m => NormalizeName(m).Equals(localized, StringComparison.OrdinalIgnoreCase)))
+                                            continue;
+                                        if (ImGui.Selectable($"{localized}##mg{english}"))
+                                        {
+                                            mapGroup.Maps.Add(localized);
+                                            MapGroupAddFilter = string.Empty;
+                                        }
+                                    }
+                                    ImGui.EndCombo();
+                                }
+                    
+                                if (ImGui.BeginPopupModal($"RenamePopup##{i}", ImGuiWindowFlags.AlwaysAutoResize))
+                                {
+                                    ImGui.InputText(this.L("atlas.new_name", "New Name"), ref NewGroupName, 256);
+                                    if (ImGui.Button(this.L("atlas.ok", "OK")))
+                                    {
+                                        mapGroup.Name = NewGroupName;
+                                        ImGui.CloseCurrentPopup();
+                                    }
+                                    ImGui.SameLine();
+                                    if (ImGui.Button(this.L("atlas.cancel", "Cancel")))
+                                    {
+                                        ImGui.CloseCurrentPopup();
+                                    }
+                                    ImGui.EndPopup();
+                                }
+                                ImGui.TreePop();
+                            }
+                        }
+                        ImGui.TreePop();
+                    }
+                }),
+                ("general", "Settings", () =>
+                {
+                    ImGui.SeparatorText(this.L("atlas.input", "Input"));
+                    if (ImGui.Checkbox(this.L("atlas.controller_mode", "Controller Mode"), ref Settings.ControllerMode))
+                        nodeCache.Clear(); // re-resolve the panel on the other layout next frame
+                    ImGuiHelper.ToolTip(this.L("atlas.controller_mode_hint", "GameHelper auto-detects controller mode, so you normally don't need this. " +
+                        "Tick it only to FORCE the controller Atlas layout if auto-detect ever fails. Either way the " +
+                        "plugin falls back to the other layout when the selected one isn't found. In controller mode " +
+                        "the overlay also stays visible while the inventory is open."));
+                    
+                    ImGui.SeparatorText(this.L("atlas.font", "Font"));
+                    if (ImGui.Checkbox(this.L("atlas.universal_font", "Universal font (render map names in any language)"), ref Settings.UniversalFont))
+                    {
+                        if (Settings.UniversalFont)
+                            UniversalFont.Apply(DllDirectory);
+                        else
+                            UniversalFont.Restore();
+                    }
+                    ImGuiHelper.ToolTip(this.L("atlas.universal_font_hint", "Loads the plugin's bundled DejaVuSans + GNU Unifont into the overlay so " +
+                        "any-language map names render without configuring a font in GameHelper. Affects the whole overlay; " +
+                        "turning it off restores GameHelper's configured font."));
+                    
+                    ImGui.SeparatorText(this.L("atlas.map_name_language", "Map name language"));
+                    bool isAuto = IsAutoLang(Settings.Language);
+                    string autoLabel = this.L("atlas.lang_auto", "Auto (follow UI language)");
+                    // Preview shows "Auto" (with the resolved token) or the explicit override token.
+                    string preview = isAuto ? $"{autoLabel} — {UiLanguageMapToken()}" : Settings.Language;
+                    if (ImGui.BeginCombo(this.L("atlas.language", "Language"), preview))
+                    {
+                        // Auto = track GameHelper's UI language; re-resolves live when the UI language changes.
+                        if (ImGui.Selectable(autoLabel, isAuto) && !isAuto)
+                        {
+                            Settings.Language = AutoLang;
+                            ApplyContentLanguage(EffectiveLanguage);
+                            nodeCache.Clear();
+                        }
+                        if (isAuto)
+                            ImGui.SetItemDefaultFocus();
+                        foreach (var lang in AvailableLanguages)
+                        {
+                            bool selected = !isAuto && string.Equals(lang, Settings.Language, StringComparison.OrdinalIgnoreCase);
+                            if (ImGui.Selectable(lang, selected) && !selected)
+                            {
+                                Settings.Language = lang;
+                                ApplyContentLanguage(lang); // re-slice content name/desc overlays for the new language
+                                nodeCache.Clear(); // force a node-cache rebuild next frame so labels re-localize live
+                            }
+                            if (selected)
+                                ImGui.SetItemDefaultFocus();
+                        }
+                        ImGui.EndCombo();
+                    }
+                    ImGuiHelper.ToolTip(this.L("atlas.language_hint", "Display language for map-node names (from maps.json 'translates'). " +
+                        "Auto follows GameHelper's UI language; pick a specific language to match your game client instead. " +
+                        "Changing it re-labels nodes immediately. Map Group names are matched in the selected language."));
+                    
+                    ImGui.SeparatorText(this.L("atlas.draw_lines", "Draw Lines"));
+                    if (ImGui.TreeNode(this.Loc.Title("atlas.draw_lines_settings", "Draw Lines Settings", "atlas_draw_lines")))
+                    {
+                        ImGui.Checkbox(this.L("atlas.shortest_path", "Shortest Path"), ref Settings.RouteLinesThroughNodes);
+                        ImGuiHelper.ToolTip(this.L("atlas.shortest_path_hint", "Route lines follow the shortest hop-path through the revealed atlas edges " +
+                            "(from the nearest accessible node). When off, a straight line is drawn instead."));
+                        ImGui.SameLine();
+                        ImGui.SetNextItemWidth(150);
+                        ImGui.SliderFloat(this.L("atlas.path_thickness", "Path Thickness"), ref Settings.PathLineThickness, 1.0f, 8.0f);
+                        ImGui.SetNextItemWidth(150);
+                        ImGui.SliderFloat(this.L("atlas.arrow_spacing", "Arrow spacing"), ref Settings.RouteArrowSpacing, 6.0f, 18.0f);
+                        ImGuiHelper.ToolTip(this.L("atlas.arrow_spacing_hint", "Gap between the direction arrows drawn along a route (higher = more spread out)."));
+                        ImGui.SetNextItemWidth(150);
+                        ImGui.SliderFloat(this.L("atlas.search_route_range", "Search route range"), ref Settings.DrawSearchInRange, 1.0f, 10.0f);
+                        ImGui.TreePop();
+                    }
+                    
+                    ImGui.SeparatorText(this.L("atlas.debug", "Debug"));
+                    ImGui.Checkbox(this.L("atlas.show_node_index", "Show Node Index (debug/RE)"), ref Settings.ShowNodeIndex);
+                    ImGuiHelper.ToolTip(this.L("atlas.show_node_index_hint", "DEBUG: draws each node's child-index (its number in the atlas-panel child list) as a badge " +
+                        "to the left of the map name, so a node referenced by number is easy to locate on-screen."));
+                }));
+            
         }
 
         // "Target farming" settings: user-defined content route groups, always shown (no outer

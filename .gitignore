@@ -47,6 +47,9 @@ Plugins/LootValue/obj/
 /*.runtimeconfig.json
 
 # Build artifacts / bundles accidentally copied into source tree
+/GameHelper-*.zip
+/Sauvegarde-Reglages-*.zip
+/LocalUpdateRelease/
 Plugins/**/*.dll
 Plugins/**/*.pdb
 Plugins/**/*.deps.json

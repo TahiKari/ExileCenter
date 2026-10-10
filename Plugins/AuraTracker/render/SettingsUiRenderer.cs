@@ -16,9 +16,17 @@ internal sealed class SettingsUiRenderer
         versionLabel = $"AuraTracker v{version} by Skrip";
     }
 
-    public void Draw(AuraTrackerSettings settings, PluginLocalization text)
+    public void Draw(AuraTrackerSettings settings, PluginLocalization text, string? section = null)
     {
-        if (ImGui.CollapsingHeader(text.Title("section.general", "General", "AuraTrackerGeneral")))
+        bool Section(string key, string title, string id)
+        {
+            if (section == null) return ImGui.CollapsingHeader(text.Title("section." + key, title, id));
+            var page = key == "general" ? "tracking" : key == "filters" ? "filters" : key == "chip_overrides" ? "colors" : "appearance";
+            if (page != section) return false;
+            ImGui.SeparatorText(text.T("section." + key, title));
+            return true;
+        }
+        if (Section("general", "General", "AuraTrackerGeneral"))
         {
             if (ImGui.BeginTable("at_general", 2))
             {
@@ -45,7 +53,7 @@ internal sealed class SettingsUiRenderer
             }
         }
 
-        if (ImGui.CollapsingHeader(text.Title("section.filters", "Filters", "AuraTrackerFilters")))
+        if (Section("filters", "Filters", "AuraTrackerFilters"))
         {
             ImGui.Checkbox(text.Label("settings.only_beasts", "Only beasts (tamable)", "AuraTrackerOnlyBeasts"), ref settings.OnlyBeasts);
             if (ImGui.IsItemHovered())
@@ -101,7 +109,7 @@ internal sealed class SettingsUiRenderer
             }
         }
 
-        if (ImGui.CollapsingHeader(text.Title("section.list_layout", "List Layout", "AuraTrackerLayout")))
+        if (Section("list_layout", "List Layout", "AuraTrackerLayout"))
         {
             if (ImGui.BeginTable("at_layout", 2))
             {
@@ -133,7 +141,7 @@ internal sealed class SettingsUiRenderer
             }
         }
 
-        if (ImGui.CollapsingHeader(text.Title("section.bar_buffs", "Bar & Buffs", "AuraTrackerBar")))
+        if (Section("bar_buffs", "Bar & Buffs", "AuraTrackerBar"))
         {
             if (ImGui.BeginTable("at_bar", 2))
             {
@@ -187,7 +195,7 @@ internal sealed class SettingsUiRenderer
             }
         }
 
-        if (ImGui.CollapsingHeader(text.Title("section.chip_overrides", "Chip Color Overrides", "AuraTrackerChips")))
+        if (Section("chip_overrides", "Chip Color Overrides", "AuraTrackerChips"))
         {
             ImGui.SetNextItemWidth(150);
             ImGui.DragInt(text.Label("settings.chip_color_seed", "Chip Color Seed", "AuraTrackerChipColorSeed"), ref settings.ChipColorSeed, 1, 0, 1000);
@@ -249,7 +257,7 @@ internal sealed class SettingsUiRenderer
             }
         }
 
-        if (ImGui.CollapsingHeader(text.Title("section.visuals", "Visuals", "AuraTrackerVisuals")))
+        if (Section("visuals", "Visuals", "AuraTrackerVisuals"))
         {
             if (ImGui.BeginTable("at_fx", 2))
             {
@@ -291,7 +299,7 @@ internal sealed class SettingsUiRenderer
             }
         }
 
-        if (ImGui.CollapsingHeader(text.Title("section.list_background", "List Background", "AuraTrackerBg")))
+        if (Section("list_background", "List Background", "AuraTrackerBg"))
         {
             if (ImGui.BeginTable("at_bg", 2))
             {

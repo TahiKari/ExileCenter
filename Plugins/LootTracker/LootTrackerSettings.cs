@@ -1,10 +1,26 @@
 namespace LootTracker
 {
     using System;
+    using System.Numerics;
     using GameHelper.Plugin;
 
     public sealed class LootTrackerSettings : IPSettings
     {
+        // Overlay and native-window positions are independent; old configurations keep XP anchoring.
+        public bool SeparateWindow = false;
+        // Closing the window only hides it until the next GameHelper start.
+        [Newtonsoft.Json.JsonIgnore]
+        public bool SeparateWindowVisible = true;
+        public bool FreePosition = false;
+        public bool LockPosition = true;
+        public bool OverlayPositionSaved = false;
+        public Vector2 OverlayPosition = new(16f, 16f);
+        public bool WindowPositionSaved = false;
+        public int WindowX;
+        public int WindowY;
+        public int WindowWidth = 820;
+        public int WindowHeight = 400;
+
         // How many completed-map rows to keep in the session history (table + memory); oldest dropped past this.
         public int HistorySize = 50;
 
@@ -73,5 +89,9 @@ namespace LootTracker
         // toasts) and show the Divine equivalent instead, including fractions (e.g. 0.5 div). Falls back
         // to Exalted while the Divine→Exalted rate is unknown.
         public bool ShowPricesInDivineOnly = false;
+
+        // Profit units are a persisted selection; legacy settings start in Exalted.
+        public int ProfitCurrencies = 1;
+        public bool ShowProfitSummary = true;
     }
 }

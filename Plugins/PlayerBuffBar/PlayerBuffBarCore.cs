@@ -1,4 +1,4 @@
-﻿namespace PlayerBuffBar
+namespace PlayerBuffBar
 {
     using System;
     using System.Collections.Generic;
@@ -75,43 +75,29 @@
 
         public override void DrawSettings()
         {
-            this.DrawGeneralSettings();
-
-            if (this.DrawSettingsSection(
-                "section.resource_bar",
-                "Resource bar (charges / rage)",
-                "resource",
-                ref this.Settings.SettingsResourceBarSectionOpen))
-            {
-                this.DrawResourceBarSettings();
-            }
-
-            if (this.DrawSettingsSection(
-                "section.buff_bars",
-                "Buff bars (up to 4)",
-                "buffbars",
-                ref this.Settings.SettingsBuffBarsSectionOpen))
-            {
-                this.DrawBuffBarsSettings();
-            }
-
-            if (this.DrawSettingsSection(
-                "section.buff_display",
-                "Buff display",
-                "buffdisplay",
-                ref this.Settings.SettingsBuffDisplaySectionOpen))
-            {
-                this.DrawBuffDisplaySettings();
-            }
-
-            if (this.DrawSettingsSection(
-                "section.icons_tools",
-                "Icons & tools",
-                "icons",
-                ref this.Settings.SettingsIconsToolsSectionOpen))
-            {
-                this.DrawIconsToolsSettings();
-            }
+            
+            this.DrawSettingsTabs("PlayerBuffBarSettings",
+                ("general", "Settings", () =>
+                {
+                    this.DrawGeneralSettings();
+                }),
+                ("resources", "Resources", () =>
+                {
+                    this.DrawResourceBarSettings();
+                }),
+                ("buffs", "Buffs", () =>
+                {
+                    this.DrawBuffBarsSettings();
+                }),
+                ("appearance", "Appearance", () =>
+                {
+                    this.DrawBuffDisplaySettings();
+                }),
+                ("tools", "Tools", () =>
+                {
+                    this.DrawIconsToolsSettings();
+                }));
+            
         }
 
         private void DrawResourceBarSettings()
@@ -300,13 +286,11 @@
                 this.DumpPlayerBuffs();
             }
 
-            ImGui.SameLine();
             if (ImGui.Button(this.PluginText.Label("button.download_missing_icons", "Download missing icons", "PlayerBuffBarDownloadMissingIcons")))
             {
                 this.QueueIconDownloads(force: true);
             }
 
-            ImGui.SameLine();
             if (ImGui.Button(this.PluginText.Label("button.reload_icons", "Reload icons", "PlayerBuffBarReloadIcons")))
             {
                 this.iconLoader.ReloadIconMap(this.DllDirectory);

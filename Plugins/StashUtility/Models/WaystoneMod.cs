@@ -4,6 +4,7 @@ namespace StashUtility.Models
     {
         public string Id { get; set; }
         public string Name { get; set; }
+        public string Affix { get; set; } = "prefix";
         public int ItemRarity { get; set; }
         public int PackSize { get; set; }
         public int MonsterRarity { get; set; }

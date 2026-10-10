@@ -73,43 +73,51 @@ namespace AmanamuVoidAlert
 
         public override void DrawSettings()
         {
-            ImGui.Checkbox(this.PluginText.Label("settings.enable_overlay", "Enable overlay", "AmanamuEnableOverlay"), ref this.Settings.EnableOverlay);
-            ImGui.Checkbox(this.PluginText.Label("settings.show_debug_window", "Show debug window", "AmanamuShowDebugWindow"), ref this.Settings.ShowDebugWindow);
-            ImGui.Checkbox(this.PluginText.Label("settings.draw_on_screen_labels", "Draw on-screen labels", "AmanamuDrawOnScreenLabels"), ref this.Settings.DrawOnScreenLabels);
-            ImGui.Checkbox(this.PluginText.Label("settings.draw_offscreen_arrows", "Draw off-screen / edge arrows", "AmanamuDrawOffscreenArrows"), ref this.Settings.DrawOffscreenArrows);
-            ImGui.Checkbox(
-                this.PluginText.Label("settings.draw_edge_arrow_on_screen", "Draw edge arrow even when monster is on screen", "AmanamuDrawEdgeArrowOnScreen"),
-                ref this.Settings.DrawEdgeArrowForOnScreenMonsters);
-            ImGui.Checkbox(this.PluginText.Label("settings.draw_circle", "Draw circle around monster", "AmanamuDrawCircle"), ref this.Settings.DrawCircle);
-            ImGui.Checkbox(this.PluginText.Label("settings.only_rare_unique", "Only rare / unique monsters", "AmanamuOnlyRareUnique"), ref this.Settings.OnlyRareOrUnique);
-            ImGui.Checkbox(this.PluginText.Label("settings.log_new_detections", "Log newly detected monsters", "AmanamuLogNewDetections"), ref this.Settings.LogNewDetections);
-
-            ImGui.Separator();
-            ImGui.SliderFloat(this.PluginText.Label("settings.max_tracking_distance", "Max tracking distance", "AmanamuMaxTrackingDistance"), ref this.Settings.MaxDistance, 500f, 8000f, "%.0f");
-            ImGui.SliderFloat(this.PluginText.Label("settings.forget_after_seconds", "Forget after seconds", "AmanamuForgetAfterSeconds"), ref this.Settings.ForgetAfterSeconds, 1f, 30f, "%.1f");
-            ImGui.SliderFloat(
-                this.PluginText.Label("settings.forget_missing_entity_after_seconds", "Forget missing live entity after seconds", "AmanamuForgetMissingEntityAfterSeconds"),
-                ref this.Settings.MissingEntityForgetSeconds,
-                0.2f,
-                5f,
-                "%.2f");
-            ImGui.SliderFloat(this.PluginText.Label("settings.label_y_offset", "Label Y offset", "AmanamuLabelYOffset"), ref this.Settings.LabelYOffset, 20f, 140f, "%.0f");
-            ImGui.SliderFloat(this.PluginText.Label("settings.circle_radius", "Circle radius", "AmanamuCircleRadius"), ref this.Settings.CircleRadius, 12f, 80f, "%.0f");
-            ImGui.SliderFloat(this.PluginText.Label("settings.arrow_edge_margin", "Arrow edge margin", "AmanamuArrowEdgeMargin"), ref this.Settings.ArrowEdgeMargin, 30f, 160f, "%.0f");
-            ImGui.SliderFloat(this.PluginText.Label("settings.proxy_distance", "Proxy distance", "AmanamuProxyDistance"), ref this.Settings.ProxyDistance, 200f, 2000f, "%.0f");
-
-            ImGui.Separator();
-            ImGui.TextWrapped(
-                this.PluginText.F("settings.primary_detection", "Primary detection: MonsterMod {0} or path contains LightlessWells.", ExpectedMonsterModId));
-            ImGui.TextWrapped(
-                this.PluginText.F("settings.inside_cloud_detection", "Inside cloud: buff contains '{0}'.", BuffInsideCloud));
-            ImGui.TextWrapped(
-                this.PluginText.F("settings.fallback_detection", "Fallback: any buff containing '{0}'.", BuffPrefixAbyssLightlessWell));
-
-            if (ImGui.Button(this.PluginText.Label("button.clear_tracked_monsters", "Clear tracked monsters", "AmanamuClearTrackedMonsters")))
-            {
-                this.tracked.Clear();
-            }
+            
+            this.DrawSettingsTabs("AmanamuVoidAlertSettings",
+                ("general", "Settings", () =>
+                {
+                    ImGui.Checkbox(this.PluginText.Label("settings.enable_overlay", "Enable overlay", "AmanamuEnableOverlay"), ref this.Settings.EnableOverlay);
+                    ImGui.Checkbox(this.PluginText.Label("settings.only_rare_unique", "Only rare / unique monsters", "AmanamuOnlyRareUnique"), ref this.Settings.OnlyRareOrUnique);
+                    ImGui.SliderFloat(this.PluginText.Label("settings.max_tracking_distance", "Max tracking distance", "AmanamuMaxTrackingDistance"), ref this.Settings.MaxDistance, 500f, 8000f, "%.0f");
+                    ImGui.SliderFloat(this.PluginText.Label("settings.forget_after_seconds", "Forget after seconds", "AmanamuForgetAfterSeconds"), ref this.Settings.ForgetAfterSeconds, 1f, 30f, "%.1f");
+                    ImGui.SliderFloat(
+                        this.PluginText.Label("settings.forget_missing_entity_after_seconds", "Forget missing live entity after seconds", "AmanamuForgetMissingEntityAfterSeconds"),
+                        ref this.Settings.MissingEntityForgetSeconds,
+                        0.2f,
+                        5f,
+                        "%.2f");
+                    ImGui.SliderFloat(this.PluginText.Label("settings.proxy_distance", "Proxy distance", "AmanamuProxyDistance"), ref this.Settings.ProxyDistance, 200f, 2000f, "%.0f");
+                }),
+                ("appearance", "Appearance", () =>
+                {
+                    ImGui.Checkbox(this.PluginText.Label("settings.draw_on_screen_labels", "Draw on-screen labels", "AmanamuDrawOnScreenLabels"), ref this.Settings.DrawOnScreenLabels);
+                    ImGui.Checkbox(this.PluginText.Label("settings.draw_offscreen_arrows", "Draw off-screen / edge arrows", "AmanamuDrawOffscreenArrows"), ref this.Settings.DrawOffscreenArrows);
+                    ImGui.Checkbox(
+                        this.PluginText.Label("settings.draw_edge_arrow_on_screen", "Draw edge arrow even when monster is on screen", "AmanamuDrawEdgeArrowOnScreen"),
+                        ref this.Settings.DrawEdgeArrowForOnScreenMonsters);
+                    ImGui.Checkbox(this.PluginText.Label("settings.draw_circle", "Draw circle around monster", "AmanamuDrawCircle"), ref this.Settings.DrawCircle);
+                    ImGui.SliderFloat(this.PluginText.Label("settings.label_y_offset", "Label Y offset", "AmanamuLabelYOffset"), ref this.Settings.LabelYOffset, 20f, 140f, "%.0f");
+                    ImGui.SliderFloat(this.PluginText.Label("settings.circle_radius", "Circle radius", "AmanamuCircleRadius"), ref this.Settings.CircleRadius, 12f, 80f, "%.0f");
+                    ImGui.SliderFloat(this.PluginText.Label("settings.arrow_edge_margin", "Arrow edge margin", "AmanamuArrowEdgeMargin"), ref this.Settings.ArrowEdgeMargin, 30f, 160f, "%.0f");
+                }),
+                ("diagnostics", "Diagnostics", () =>
+                {
+                    ImGui.Checkbox(this.PluginText.Label("settings.show_debug_window", "Show debug window", "AmanamuShowDebugWindow"), ref this.Settings.ShowDebugWindow);
+                    ImGui.Checkbox(this.PluginText.Label("settings.log_new_detections", "Log newly detected monsters", "AmanamuLogNewDetections"), ref this.Settings.LogNewDetections);
+                    ImGui.TextWrapped(
+                        this.PluginText.F("settings.primary_detection", "Primary detection: MonsterMod {0} or path contains LightlessWells.", ExpectedMonsterModId));
+                    ImGui.TextWrapped(
+                        this.PluginText.F("settings.inside_cloud_detection", "Inside cloud: buff contains '{0}'.", BuffInsideCloud));
+                    ImGui.TextWrapped(
+                        this.PluginText.F("settings.fallback_detection", "Fallback: any buff containing '{0}'.", BuffPrefixAbyssLightlessWell));
+                    
+                    if (ImGui.Button(this.PluginText.Label("button.clear_tracked_monsters", "Clear tracked monsters", "AmanamuClearTrackedMonsters")))
+                    {
+                        this.tracked.Clear();
+                    }
+                }));
+            
         }
 
         public override void DrawUI()

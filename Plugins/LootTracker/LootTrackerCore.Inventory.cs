@@ -11,6 +11,247 @@ namespace LootTracker
 
     public sealed partial class LootTrackerCore
     {
+        private SettingsDisplay? trackerDisplay;
+        private string trackerDisplayError = string.Empty;
+        private bool applyTrackerPosition;
+        private float detachedUiScale = 1f;
+        private bool trackerPositionDirty;
+        private bool trackerInteractionActive;
+        private bool trackerPriorityOverlayVisible;
+        private DateTime trackerPriorityCheck;
+        private System.Numerics.Vector2 trackerSize = new(200f, 80f);
+
+        private void DrawDisplaySettings()
+        {
+            ImGui.SeparatorText(this.L("lt.placement", "Screen placement"));
+            if (ImGui.Checkbox(this.L("lt.separate_window", "Independent window (another screen)"), ref this.Settings.SeparateWindow))
+            {
+                this.Settings.SeparateWindowVisible = true;
+                this.trackerDisplayError = string.Empty;
+                this.SaveSettings();
+            }
+            if (this.Settings.SeparateWindow)
+            {
+                ImGui.TextUnformatted(this.L("lt.separate_hint", "Drag the window title bar to any monitor. Its position and size are saved."));
+                if (ImGui.Button(this.L("lt.show_window", "Show window"))) this.Settings.SeparateWindowVisible = true;
+                if (ImGui.Button(this.L("lt.reset_window", "Reset window position")))
+                {
+                    this.CloseTrackerDisplay();
+                    this.Settings.WindowPositionSaved = false;
+                    this.Settings.SeparateWindowVisible = true;
+                    this.SaveSettings();
+                }
+            }
+            else
+            {
+                if (ImGui.Checkbox(this.L("lt.free_position", "Free position on the game screen"), ref this.Settings.FreePosition))
+                    this.applyTrackerPosition = true;
+                if (ImGui.Checkbox(this.L("lt.lock_position", "Lock position"), ref this.Settings.LockPosition))
+                {
+                    if (!this.Settings.LockPosition) this.Settings.FreePosition = true;
+                    this.applyTrackerPosition = true;
+                }
+                ImGui.TextUnformatted(this.L("lt.move_hint", "Unlock, close the settings menu, then drag the LootTracker title bar. Lock it again when done."));
+                if (this.Settings.FreePosition && ImGui.DragFloat2(this.L("lt.position_xy", "Position X / Y (px)"), ref this.Settings.OverlayPosition, 1f, 0f, 16000f, "%.0f"))
+                {
+                    this.Settings.OverlayPositionSaved = true;
+                    this.applyTrackerPosition = true;
+                }
+                if (ImGui.Button(this.L("lt.reset_overlay", "Restore automatic position")))
+                {
+                    this.Settings.FreePosition = false;
+                    this.Settings.LockPosition = true;
+                    this.Settings.OverlayPositionSaved = false;
+                    this.applyTrackerPosition = true;
+                    this.SaveSettings();
+                }
+            }
+            if (this.trackerDisplayError.Length > 0)
+            {
+                ImGui.TextUnformatted(this.L("lt.window_error", "The independent window could not open. The display has returned to the game screen."));
+                ImGui.TextUnformatted(this.trackerDisplayError);
+            }
+            ImGui.Spacing();
+        }
+
+        private static System.Numerics.Vector2 ClampTrackerPosition(System.Numerics.Vector2 position,
+            System.Numerics.Vector2 size, System.Numerics.Vector2 screen)
+        {
+            float x = float.IsFinite(position.X) ? position.X : 16f;
+            float y = float.IsFinite(position.Y) ? position.Y : 16f;
+            return new(Math.Clamp(x, 0f, Math.Max(0f, screen.X - Math.Min(screen.X, Math.Max(64f, size.X)))),
+                Math.Clamp(y, 0f, Math.Max(0f, screen.Y - Math.Min(screen.Y, Math.Max(32f, size.Y)))));
+        }
+
+        private void PrepareTrackerPosition(System.Numerics.Vector2 anchor, System.Numerics.Vector2 pivot)
+        {
+            if (this.Settings.FreePosition && this.Settings.OverlayPositionSaved)
+            {
+                var position = ClampTrackerPosition(this.Settings.OverlayPosition, this.trackerSize, ImGui.GetIO().DisplaySize);
+                ImGui.SetNextWindowPos(position, this.Settings.LockPosition || this.applyTrackerPosition ? ImGuiCond.Always : ImGuiCond.Appearing);
+            }
+            else ImGui.SetNextWindowPos(anchor, this.Settings.FreePosition ? ImGuiCond.Appearing : ImGuiCond.Always, pivot);
+            this.applyTrackerPosition = false;
+        }
+
+        [DllImport("user32.dll", EntryPoint = "GetForegroundWindow")]
+        private static extern IntPtr TrackerForegroundWindow();
+        [DllImport("user32.dll", EntryPoint = "GetWindowThreadProcessId")]
+        private static extern uint TrackerWindowProcess(IntPtr window, out uint processId);
+
+        private static bool IsTrackerAppForeground()
+        {
+            var window = TrackerForegroundWindow();
+            return window != IntPtr.Zero && TrackerWindowProcess(window, out var processId) != 0 &&
+                processId == (uint)Environment.ProcessId;
+        }
+
+        private bool ShouldDrawGameTracker(bool gameForeground)
+        {
+            bool held = ImGui.IsMouseDown(ImGuiMouseButton.Left);
+            if (!held) this.trackerInteractionActive = false;
+            return gameForeground || IsTrackerAppForeground() ||
+                (this.Settings.FreePosition && !this.Settings.LockPosition && held &&
+                    (this.trackerInteractionActive || ImGui.GetIO().WantCaptureMouse));
+        }
+
+        private delegate bool TrackerWindowCallback(IntPtr window, IntPtr parameter);
+        [DllImport("user32.dll", EntryPoint = "EnumWindows")]
+        private static extern bool TrackerEnumWindows(TrackerWindowCallback callback, IntPtr parameter);
+        [DllImport("user32.dll", EntryPoint = "IsWindowVisible")]
+        private static extern bool TrackerWindowVisible(IntPtr window);
+        [DllImport("user32.dll", EntryPoint = "IsIconic")]
+        private static extern bool TrackerWindowMinimized(IntPtr window);
+        [DllImport("user32.dll", EntryPoint = "GetWindowTextW", CharSet = CharSet.Unicode)]
+        private static extern int TrackerWindowTitle(IntPtr window, StringBuilder title, int capacity);
+        [DllImport("user32.dll", EntryPoint = "GetWindowRect")]
+        private static extern bool TrackerWindowBounds(IntPtr window, out TrackerRect bounds);
+        [StructLayout(LayoutKind.Sequential)]
+        private struct TrackerRect { public int Left, Top, Right, Bottom; }
+
+        private static bool IsTrackerPriorityWindow(IntPtr window, System.Drawing.Rectangle gameBounds)
+        {
+            if (!TrackerWindowVisible(window) || TrackerWindowMinimized(window)) return false;
+            var title = new StringBuilder(80);
+            if (TrackerWindowTitle(window, title, title.Capacity) == 0 ||
+                !title.ToString().StartsWith("PoE Overlay", StringComparison.OrdinalIgnoreCase)) return false;
+            if (!TrackerWindowBounds(window, out var bounds)) return false;
+            var rectangle = System.Drawing.Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
+            // Ignore the small tray/launcher window and windows on another monitor.
+            return rectangle.Width >= 160 && rectangle.Height >= 80 && rectangle.IntersectsWith(gameBounds);
+        }
+
+        private static bool FindTrackerPriorityOverlay(System.Drawing.Rectangle gameBounds)
+        {
+            bool found = false;
+            TrackerWindowCallback callback = (window, _) =>
+            {
+                found = IsTrackerPriorityWindow(window, gameBounds);
+                return !found;
+            };
+            TrackerEnumWindows(callback, IntPtr.Zero);
+            return found;
+        }
+
+        private bool IsTrackerPriorityOverlayOpen()
+        {
+            var now = DateTime.UtcNow;
+            if (now >= this.trackerPriorityCheck)
+            {
+                this.trackerPriorityOverlayVisible = FindTrackerPriorityOverlay(Core.Process.WindowArea);
+                this.trackerPriorityCheck = now.AddMilliseconds(100);
+            }
+            return this.trackerPriorityOverlayVisible;
+        }
+
+        private ImGuiWindowFlags TrackerWindowFlags(ImGuiWindowFlags flags)
+        {
+            if (this.Settings.FreePosition && !this.Settings.LockPosition)
+                return flags & ~(ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoInputs);
+            return flags;
+        }
+
+        private void RecordTrackerPosition()
+        {
+            this.trackerSize = ImGui.GetWindowSize();
+            this.trackerInteractionActive = this.Settings.FreePosition && !this.Settings.LockPosition &&
+                ImGui.IsMouseDown(ImGuiMouseButton.Left) &&
+                (this.trackerInteractionActive || ImGui.IsWindowHovered(ImGuiHoveredFlags.ChildWindows));
+            if (!this.Settings.FreePosition) return;
+            var position = ClampTrackerPosition(ImGui.GetWindowPos(), this.trackerSize, ImGui.GetIO().DisplaySize);
+            if (position != ImGui.GetWindowPos()) ImGui.SetWindowPos(position);
+            if (!this.Settings.OverlayPositionSaved || this.Settings.OverlayPosition != position)
+            {
+                this.Settings.OverlayPosition = position;
+                this.Settings.OverlayPositionSaved = true;
+                this.trackerPositionDirty = true;
+            }
+            if (this.trackerPositionDirty && !ImGui.IsMouseDown(ImGuiMouseButton.Left))
+            {
+                this.trackerPositionDirty = false;
+                this.SaveSettings();
+            }
+        }
+
+        private void CloseTrackerDisplay()
+        {
+            var display = this.trackerDisplay;
+            this.trackerDisplay = null;
+            display?.Dispose();
+        }
+
+        private void RenderTrackerDisplay()
+        {
+            try
+            {
+                if (this.trackerDisplay == null && this.Settings.SeparateWindowVisible)
+                {
+                    var placement = new GameHelper.Settings.State
+                    {
+                        SettingsWindowPositionSaved = this.Settings.WindowPositionSaved,
+                        SettingsWindowX = this.Settings.WindowX, SettingsWindowY = this.Settings.WindowY,
+                        SettingsWindowWidth = this.Settings.WindowWidth, SettingsWindowHeight = this.Settings.WindowHeight,
+                    };
+                    this.trackerDisplay = new SettingsDisplay(Core.Overlay, this.DrawDetachedTracker,
+                        () => { this.Settings.SeparateWindowVisible = false; this.SaveSettings(); }, placement,
+                        () => this.L("lt.window_title", "GameHelper · LootTracker"), bounds =>
+                        {
+                            this.Settings.WindowX = bounds.X; this.Settings.WindowY = bounds.Y;
+                            this.Settings.WindowWidth = bounds.Width; this.Settings.WindowHeight = bounds.Height;
+                            this.Settings.WindowPositionSaved = true;
+                            this.SaveSettings();
+                        }, new System.Drawing.Size(360, 240), new System.Drawing.Size(820, 400));
+                }
+                this.detachedUiScale = this.UiScaleFactor();
+                this.trackerDisplay?.Render(this.Settings.SeparateWindowVisible);
+            }
+            catch (Exception ex)
+            {
+                this.trackerDisplayError = ex.Message;
+                try { this.CloseTrackerDisplay(); } catch { }
+                this.Settings.SeparateWindow = false;
+                this.SaveSettings();
+                Console.WriteLine($"[LootTracker.Display] {ex}");
+            }
+        }
+
+        private void DrawDetachedTracker()
+        {
+            var size = ImGui.GetIO().DisplaySize;
+            ImGui.SetNextWindowPos(System.Numerics.Vector2.Zero);
+            ImGui.SetNextWindowSize(size);
+            bool visible = ImGui.Begin("##LootTrackerDesktop", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove |
+                ImGuiWindowFlags.NoSavedSettings);
+            try
+            {
+                if (visible) this.DrawCompactContents(size.Y, this.detachedUiScale);
+            }
+            finally { ImGui.End(); }
+            this.DrawSessionHistoryWindow();
+            this.DrawSessionDetailWindow();
+            this.DrawMapLootWindow();
+        }
+
         // Game-UI scale factor applied to the bars' font and fixed metrics: the auto factor
         // (DisplaySize.Y / 1600 — the game's own UI height-scale base) times the manual UiScale knob,
         // so the overlay shrinks/grows with the HUD across resolutions instead of clipping its content.
@@ -51,12 +292,14 @@ namespace LootTracker
             }
 
             var pivot = new System.Numerics.Vector2(this.Settings.BarOnRight ? 1f : 0f, 1f);
-            ImGui.SetNextWindowPos(new System.Numerics.Vector2(anchorX, anchorY), ImGuiCond.Always, pivot);
+            this.PrepareTrackerPosition(new System.Numerics.Vector2(anchorX, anchorY), pivot);
+            ImGui.SetNextWindowSize(new System.Numerics.Vector2(Math.Max(200f, Math.Min(this.Settings.CompactWidth, ImGui.GetIO().DisplaySize.X - 16f)), 0f));
             ImGui.SetNextWindowBgAlpha(Math.Clamp(this.Settings.BarOpacity, 0f, 1f));
-            const ImGuiWindowFlags flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoInputs |
+            var flags = ImGuiWindowFlags.NoDecoration |
                 ImGuiWindowFlags.NoNav | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.AlwaysAutoResize |
-                ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoMove;
-            if (!ImGui.Begin("##loottracker_bar", flags))
+                ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.NoMove;
+            flags = this.TrackerWindowFlags(flags);
+            if (!ImGui.Begin(this.L("lt.move_window", "LootTracker · drag to move") + "###loottracker_bar", flags))
             {
                 ImGui.End();
                 return;
@@ -67,62 +310,40 @@ namespace LootTracker
             var gained = this.CurrentGainedLive();
             double ex = this.ValueOf(gained, out _, out _);
             string name = this.current?.Name ?? "—";
-            var col = ex >= 0 ? GreenCol : RedCol;
-            const float gap = 14f;   // space between segments
             const float pad = 5f;    // space between an icon and its value
 
             // [map] name
             if (this.DrawInlineIcon("Map")) ImGui.SameLine(0f, pad);
-            ImGui.TextUnformatted(name);
+            ImGui.TextWrapped(name);
 
             // [time] mm:ss
-            ImGui.SameLine(0f, gap);
+            ContinueTrackerRow(90f);
             if (this.DrawInlineIcon("Time")) ImGui.SameLine(0f, pad);
             ImGui.TextUnformatted(FormatDuration(this.CurrentLiveTime()));
 
-            var rate = this.priceCache.DivineToExaltedRate;
-            if (this.DivineOnly)
+            this.DrawProfitCurrencyControls();
+            for (int unit = 0, value = 0; unit < ProfitUnits.Length; unit++)
             {
-                // +Y [divine] only — Exalted hidden by user choice.
-                ImGui.SameLine(0f, gap);
-                ImGui.TextColored(col, $"{ex / rate:+0.##;-0.##;0}");
-                ImGui.SameLine(0f, pad);
-                this.DrawInlineIcon("Divine");
-            }
-            else
-            {
-                // +X [exalt]
-                ImGui.SameLine(0f, gap);
-                ImGui.TextColored(col, $"{ex:+0;-0;0}");
-                ImGui.SameLine(0f, pad);
-                this.DrawInlineIcon("Exalt");
-
-                // (+Y [divine])  — same profit converted to Divine, shown only when the rate is known
-                if (rate > 0)
-                {
-                    var div = ex / rate;
-                    ImGui.SameLine(0f, gap);
-                    ImGui.TextColored(col, $"({div:+0.0;-0.0;0}");
-                    ImGui.SameLine(0f, pad);
-                    if (this.DrawInlineIcon("Divine")) ImGui.SameLine(0f, 1f);
-                    ImGui.TextColored(col, ")");
-                }
+                if ((this.SelectedProfitUnits & (1 << unit)) == 0) continue;
+                this.DrawProfitBadge(ex, unit, this.UiScaleFactor(), value > 0);
+                value++;
             }
 
             // <n>[normal] <n>[magic] <n>[rare] <n>[unique]  — monsters slain this run, by rarity.
             if (this.Settings.ShowKills && this.current != null)
             {
                 var k = this.current.Kills;
-                ImGui.SameLine(0f, gap);
+                ContinueTrackerRow(90f);
                 this.DrawKillStat("NormalMob", k[0]);
-                ImGui.SameLine(0f, gap);
+                ContinueTrackerRow(90f);
                 this.DrawKillStat("MagicMob", k[1]);
-                ImGui.SameLine(0f, gap);
+                ContinueTrackerRow(90f);
                 this.DrawKillStat("RareMob", k[2]);
-                ImGui.SameLine(0f, gap);
+                ContinueTrackerRow(90f);
                 this.DrawKillStat("UniqueMob", k[3]);
             }
 
+            this.RecordTrackerPosition();
             ImGui.End();
         }
 
@@ -150,8 +371,8 @@ namespace LootTracker
         // read-out (the New-session button lives in the plugin settings now).
         private void DrawCompactBar()
         {
-            float h = Math.Clamp(this.Settings.CompactHeight, 60f, 400f);
-            float reqW = Math.Max(this.Settings.CompactWidth, 200f);
+            float h = Math.Clamp(this.Settings.CompactHeight, 190f, 600f);
+            float reqW = Math.Max(this.Settings.CompactWidth, 320f);
             float x, y, w, pivotX;
             if (TryGetExperienceBarRect(out var xpPos, out var xpSize))
             {
@@ -165,110 +386,351 @@ namespace LootTracker
             {
                 var vp = ImGui.GetMainViewport();
                 const float margin = 8f;
-                w = Math.Min(vp.Size.X - 220f, reqW);
+                w = Math.Max(200f, Math.Min(vp.Size.X - 16f, reqW));
                 x = this.Settings.BarOnRight ? vp.Pos.X + vp.Size.X - margin : vp.Pos.X + margin;
                 y = vp.Pos.Y + vp.Size.Y - this.Settings.BarBottomOffset;
                 pivotX = this.Settings.BarOnRight ? 1f : 0f;
             }
 
-            ImGui.SetNextWindowPos(new System.Numerics.Vector2(x, y), ImGuiCond.Always, new System.Numerics.Vector2(pivotX, 1f));
-            ImGui.SetNextWindowSize(new System.Numerics.Vector2(w, h), ImGuiCond.Always);
+            bool resize = this.Settings.FreePosition && !this.Settings.LockPosition;
+            bool applySize = this.applyTrackerPosition;
+            float scale = this.UiScaleFactor();
+            h = Math.Min(ImGui.GetIO().DisplaySize.Y - 16f, Math.Max(h, (w < 480 * scale ? 240f : 190f) * scale));
+            this.PrepareTrackerPosition(new System.Numerics.Vector2(x, y), new System.Numerics.Vector2(pivotX, 1f));
+            ImGui.SetNextWindowSize(new System.Numerics.Vector2(w, h), resize && !applySize ? ImGuiCond.Appearing : ImGuiCond.Always);
             ImGui.SetNextWindowBgAlpha(Math.Clamp(this.Settings.BarOpacity, 0f, 1f));
-            const ImGuiWindowFlags flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoNav |
-                ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing |
+            var flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoNav |
+                ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBringToFrontOnFocus |
                 ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoScrollbar;
-            if (!ImGui.Begin("##loottracker_compact", flags))
+            flags = this.TrackerWindowFlags(flags);
+            if (resize) flags &= ~ImGuiWindowFlags.NoResize;
+            ImGui.SetNextWindowSizeConstraints(new System.Numerics.Vector2(Math.Min(320f, ImGui.GetIO().DisplaySize.X), 160 * scale), ImGui.GetIO().DisplaySize);
+            if (!ImGui.Begin(this.L("lt.move_window", "LootTracker · drag to move") + "###loottracker_compact", flags))
             {
                 ImGui.End();
                 return;
             }
 
-            float s = this.UiScaleFactor();
-            ImGui.SetWindowFontScale(s);
+            this.DrawCompactContents(h, this.UiScaleFactor());
 
+            if (resize)
+            {
+                var size = ImGui.GetWindowSize();
+                if (this.Settings.CompactWidth != size.X || this.Settings.CompactHeight != size.Y)
+                {
+                    this.Settings.CompactWidth = size.X;
+                    this.Settings.CompactHeight = size.Y;
+                    this.trackerPositionDirty = true;
+                }
+            }
+            this.RecordTrackerPosition();
+            ImGui.End();
+        }
+
+        private static readonly (string Key, string Short, string Name, string Art)[] ProfitUnits =
+        {
+            ("exalted", "Ex", "Exalted Orb", "CurrencyAddModToRare"),
+            ("chaos", "Ch", "Chaos Orb", "CurrencyRerollRare"),
+            ("greater_exalted", "Ex M", "Greater Exalted Orb", "CurrencyAddModToRare2"),
+            ("perfect_exalted", "Ex P", "Perfect Exalted Orb", "CurrencyAddModToRare3"),
+            ("divine", "Div", "Divine Orb", "CurrencyModValues"),
+            ("greater_chaos", "Ch M", "Greater Chaos Orb", "CurrencyRerollRare2"),
+            ("perfect_chaos", "Ch P", "Perfect Chaos Orb", "CurrencyRerollRare3"),
+        };
+
+        private int SelectedProfitUnits => (this.Settings.ProfitCurrencies & 127) != 0 ? this.Settings.ProfitCurrencies & 127 : 1;
+
+        private bool TryGetProfitRate(int unit, out double rate)
+        {
+            rate = 0;
+            if (unit == 0) { rate = 1; return true; }
+            if (unit == 4) rate = this.priceCache.DivineToExaltedRate;
+            if ((!double.IsFinite(rate) || rate <= 0) &&
+                !this.priceCache.TryGetExaltedPrice(ProfitUnits[unit].Name, out rate))
+                this.priceCache.TryGetPriceByArtId(ProfitUnits[unit].Art, out rate);
+            return double.IsFinite(rate) && rate > 0;
+        }
+
+        private string ProfitUnitLabel(int unit) => this.L("lt.currency." + ProfitUnits[unit].Key, ProfitUnits[unit].Name);
+
+        private string ProfitUnitShort(int unit) => this.L("lt.currency_short." + ProfitUnits[unit].Key, ProfitUnits[unit].Short);
+
+        private string FormatProfitCurrency(double exalted, int unit)
+        {
+            if (!this.TryGetProfitRate(unit, out var rate) || !double.IsFinite(exalted))
+                return "— " + this.ProfitUnitShort(unit);
+            double value = exalted / rate;
+            if (!double.IsFinite(value)) return "— " + this.ProfitUnitShort(unit);
+            return value.ToString(Math.Abs(value) < 1 && value != 0 ? "+0.####;-0.####;0" : "+0.##;-0.##;0") + " " + this.ProfitUnitShort(unit);
+        }
+
+        private void ProfitTooltip(double exalted)
+        {
+            if (!ImGui.IsItemHovered()) return;
+            ImGui.BeginTooltip();
+            for (int unit = 0; unit < ProfitUnits.Length; unit++)
+                if ((this.SelectedProfitUnits & (1 << unit)) != 0)
+                    ImGui.TextUnformatted(this.ProfitUnitLabel(unit) + " : " + this.FormatProfitCurrency(exalted, unit));
+            ImGui.TextDisabled(this.L("lt.conversion_hint", "Equivalent values using cached market prices; amounts are not added together."));
+            ImGui.EndTooltip();
+        }
+
+        private static void ContinueTrackerRow(float nextWidth)
+        {
+            float right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+            if (ImGui.GetItemRectMax().X + ImGui.GetStyle().ItemSpacing.X + nextWidth <= right)
+                ImGui.SameLine();
+        }
+
+        private void DrawProfitCurrencyControls()
+        {
+            for (int unit = 0; unit < ProfitUnits.Length; unit++)
+            {
+                string label = this.ProfitUnitShort(unit);
+                if (unit > 0) ContinueTrackerRow(ImGui.CalcTextSize(label).X + ImGui.GetStyle().FramePadding.X * 2);
+                bool selected = (this.SelectedProfitUnits & (1 << unit)) != 0;
+                if (selected) ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.20f, 0.37f, 0.61f, 1f));
+                if (ImGui.SmallButton(label + "##unit"))
+                {
+                    this.Settings.ProfitCurrencies = 1 << unit;
+                    this.SaveSettings();
+                }
+                if (selected) ImGui.PopStyleColor();
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.BeginTooltip();
+                    ImGui.TextUnformatted(this.ProfitUnitLabel(unit));
+                    ImGui.TextUnformatted(this.TryGetProfitRate(unit, out var rate)
+                        ? this.LF("lt.exchange_rate", "1 unit = {0:0.####} Ex", rate)
+                        : this.L("lt.rate_missing", "Market rate unavailable. Refresh prices in LootTracker settings."));
+                    ImGui.EndTooltip();
+                }
+            }
+            string multiple = this.L("lt.currencies", "Currencies...");
+            ContinueTrackerRow(ImGui.CalcTextSize(multiple).X + ImGui.GetStyle().FramePadding.X * 2);
+            if (ImGui.SmallButton(multiple)) ImGui.OpenPopup("profit_currencies");
+            if (ImGui.BeginPopup("profit_currencies"))
+            {
+                ImGui.TextUnformatted(this.L("lt.currencies_hint", "Select the profit values to display together."));
+                ImGui.Separator();
+                for (int unit = 0; unit < ProfitUnits.Length; unit++)
+                {
+                    bool selected = (this.SelectedProfitUnits & (1 << unit)) != 0;
+                    if (ImGui.Checkbox(this.ProfitUnitLabel(unit), ref selected))
+                    {
+                        int next = selected ? this.SelectedProfitUnits | (1 << unit) : this.SelectedProfitUnits & ~(1 << unit);
+                        if (next != 0) { this.Settings.ProfitCurrencies = next; this.SaveSettings(); }
+                    }
+                }
+                if (ImGui.Button(this.L("lt.all_currencies", "Show all")))
+                {
+                    this.Settings.ProfitCurrencies = 127;
+                    this.SaveSettings();
+                }
+                ImGui.TextDisabled(this.L("lt.rate_missing_hint", "— means the conversion rate is unavailable."));
+                ImGui.EndPopup();
+            }
+        }
+
+        private void DrawTrackerMetric(string label, string value, double? profit = null)
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextDisabled(label);
+            if (profit.HasValue)
+            {
+                ImGui.TextColored(profit.Value >= 0 ? GreenCol : RedCol, value);
+                this.ProfitTooltip(profit.Value);
+            }
+            else ImGui.TextWrapped(value);
+            ImGui.PopTextWrapPos();
+        }
+
+        private static readonly System.Numerics.Vector4[] ProfitUnitColors =
+        {
+            new(0.89f, 0.73f, 0.39f, 1f), new(0.91f, 0.56f, 0.59f, 1f),
+            new(0.98f, 0.64f, 0.38f, 1f), new(0.98f, 0.84f, 0.57f, 1f),
+            new(0.76f, 0.65f, 0.98f, 1f), new(0.46f, 0.80f, 0.78f, 1f),
+            new(0.52f, 0.71f, 0.97f, 1f),
+        };
+
+        private void DrawProfitBadge(double exalted, int unit, float scale, bool flow)
+        {
+            string label = this.ProfitUnitShort(unit);
+            string formatted = this.FormatProfitCurrency(exalted, unit);
+            string amount = formatted[..^(label.Length + 1)];
+            float pad = 6f * scale;
+            float labelWidth = ImGui.CalcTextSize(label).X;
+            float width = labelWidth + ImGui.CalcTextSize(amount).X + 5 * pad;
+            if (flow) ContinueTrackerRow(width);
+            var position = ImGui.GetCursorScreenPos();
+            float available = Math.Max(1f, ImGui.GetContentRegionAvail().X);
+            bool stacked = width > available;
+            width = Math.Min(width, available);
+            var size = new System.Numerics.Vector2(width, ImGui.GetTextLineHeight() * (stacked ? 2 : 1) + (stacked ? 3 : 2) * pad);
+            var draw = ImGui.GetWindowDrawList();
+            var accent = ProfitUnitColors[unit];
+            draw.AddRectFilled(position, position + size,
+                ImGui.ColorConvertFloat4ToU32(new(accent.X * 0.25f, accent.Y * 0.25f, accent.Z * 0.25f, 1f)), 4 * scale);
+            draw.AddRect(position, position + size,
+                ImGui.ColorConvertFloat4ToU32(new(accent.X, accent.Y, accent.Z, 0.65f)), 4 * scale);
+            draw.AddText(position + new System.Numerics.Vector2(pad, pad), ImGui.ColorConvertFloat4ToU32(accent), label);
+            float divider = position.X + labelWidth + 2 * pad;
+            var amountPosition = new System.Numerics.Vector2(divider + pad, position.Y + pad);
+            float amountSpace = width - labelWidth - 4 * pad;
+            if (stacked)
+            {
+                float line = position.Y + ImGui.GetTextLineHeight() + 1.5f * pad;
+                draw.AddLine(new(position.X + pad, line), new(position.X + width - pad, line),
+                    ImGui.ColorConvertFloat4ToU32(new(accent.X, accent.Y, accent.Z, 0.5f)));
+                amountPosition = new(position.X + pad, line + 0.5f * pad);
+                amountSpace = width - 2 * pad;
+            }
+            else draw.AddLine(new(divider, position.Y + pad), new(divider, position.Y + size.Y - pad),
+                ImGui.ColorConvertFloat4ToU32(new(accent.X, accent.Y, accent.Z, 0.5f)));
+            float fontSize = ImGui.GetFontSize() * Math.Min(1f, Math.Max(1f, amountSpace) / Math.Max(1f, ImGui.CalcTextSize(amount).X));
+            draw.AddText(ImGui.GetFont(), fontSize, amountPosition,
+                ImGui.ColorConvertFloat4ToU32(formatted.StartsWith("—", StringComparison.Ordinal)
+                    ? new System.Numerics.Vector4(0.65f, 0.68f, 0.74f, 1f) : exalted >= 0 ? GreenCol : RedCol), amount);
+            ImGui.Dummy(size);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(this.ProfitUnitLabel(unit) + " : " + formatted);
+        }
+
+        private void DrawCompactContents(float h, float s) => this.DrawTrackerContents(h, s, false);
+
+        private void DrawTrackerContents(float h, float s, bool showLoot)
+        {
+            ImGui.SetWindowFontScale(s);
+            float width = ImGui.GetContentRegionAvail().X;
             this.SessionTotals(out var totalActive, out var totalEx);
             int maps = this.completed.Count;
             double perHour = totalActive.TotalHours > 0 ? totalEx / totalActive.TotalHours : 0;
             TimeSpan avgTime = maps > 0 ? totalActive / maps : TimeSpan.Zero;
             double avgProfit = maps > 0 ? totalEx / maps : 0;
-            var rate = this.priceCache.DivineToExaltedRate;
-            float colGap = 28f * s;
+            int primaryUnit = 0;
+            while ((this.SelectedProfitUnits & (1 << primaryUnit)) == 0) primaryUnit++;
 
-            // Column 1 — per-map aggregates (with icons). The New-session button now lives in the
-            // plugin settings, so the bar is a pure read-out and the left band is freed for the table.
-            ImGui.BeginGroup();
-            if (this.DrawInlineIcon("Map")) ImGui.SameLine(0f, 5f);
-            ImGui.Text(this.LF("lt.maps", "Maps: {0}", maps));
-            if (this.DrawInlineIcon("Time")) ImGui.SameLine(0f, 5f);
-            ImGui.Text(this.LF("lt.avg_time", "AVG Time: {0}", FormatDuration(avgTime)));
-            if (this.DivineOnly)
+            // Bound the header independently so the history always retains most of the panel.
+            float headerLimit = Math.Max(1f, ImGui.GetContentRegionAvail().Y * 0.45f);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, System.Numerics.Vector2.Zero);
+            ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new System.Numerics.Vector2(4 * s, 2 * s));
+            ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new System.Numerics.Vector2(4 * s, 1 * s));
+            ImGui.SetNextWindowSizeConstraints(System.Numerics.Vector2.Zero, new System.Numerics.Vector2(float.MaxValue, headerLimit));
+            bool headerVisible = ImGui.BeginChild("tracker_header", System.Numerics.Vector2.Zero,
+                ImGuiChildFlags.AutoResizeY | ImGuiChildFlags.AlwaysAutoResize);
+            try
             {
-                if (this.DrawInlineIcon("Divine")) ImGui.SameLine(0f, 5f);
-                ImGui.Text(this.LF("lt.avg_profit_div", "AVG Profit: {0:0.##} Div", avgProfit / rate));
+                if (headerVisible)
+                {
+                    width = ImGui.GetContentRegionAvail().X;
+                    ImGui.TextColored(new System.Numerics.Vector4(0.48f, 0.69f, 1f, 1f), this.L("lt.dashboard", "LOOT TRACKER"));
+                    string timer = this.LF("lt.session_timer", "Session: {0}", FormatDuration(DateTime.UtcNow - this.sessionStartUtc));
+                    if (ImGui.GetItemRectSize().X + ImGui.CalcTextSize(timer).X + 20 * s < width)
+                    {
+                        ImGui.SameLine(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize(timer).X);
+                        ImGui.TextDisabled(timer);
+                    }
+                    this.DrawProfitCurrencyControls();
+                    string summary = this.L(this.Settings.ShowProfitSummary ? "lt.hide_summary" : "lt.show_summary",
+                        this.Settings.ShowProfitSummary ? "Hide summary" : "Show summary");
+                    ContinueTrackerRow(ImGui.CalcTextSize(summary).X + ImGui.GetStyle().FramePadding.X * 2);
+                    if (ImGui.SmallButton(summary))
+                    {
+                        this.Settings.ShowProfitSummary = !this.Settings.ShowProfitSummary;
+                        this.SaveSettings();
+                    }
+                    ImGui.Separator();
+
+                    if (this.Settings.ShowProfitSummary)
+                    {
+                        int columns = width >= 650 * s ? 4 : width >= 280 * s ? 2 : 1;
+                        if (ImGui.BeginTable("profit_summary", columns, ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.NoSavedSettings))
+                        {
+                            ImGui.TableNextColumn();
+                            this.DrawTrackerMetric(this.L("lt.total", "Total"), this.FormatProfitCurrency(totalEx, primaryUnit), totalEx);
+                            ImGui.TableNextColumn();
+                            this.DrawTrackerMetric(this.L("lt.hourly_profit", "Profit / hour"), this.FormatProfitCurrency(perHour, primaryUnit), perHour);
+                            ImGui.TableNextColumn();
+                            this.DrawTrackerMetric(this.L("lt.average_profit", "Average profit"), this.FormatProfitCurrency(avgProfit, primaryUnit), avgProfit);
+                            ImGui.TableNextColumn();
+                            this.DrawTrackerMetric(this.LF("lt.maps", "Maps: {0}", maps), this.LF("lt.avg_time", "AVG Time: {0}", FormatDuration(avgTime)));
+                            ImGui.EndTable();
+                        }
+                        ImGui.Separator();
+                    }
+
+                }
             }
-            else
+            finally
             {
-                if (this.DrawInlineIcon("Exalt")) ImGui.SameLine(0f, 5f);
-                ImGui.Text(this.LF("lt.avg_profit_ex", "AVG Profit: {0:0} Ex", avgProfit));
+                ImGui.EndChild();
+                ImGui.PopStyleVar(3);
             }
+            width = ImGui.GetContentRegionAvail().X;
 
-            ImGui.EndGroup();
-
-            // Column 2 — totals in Divine + the session clock (kept narrow so the table gets the width).
-            ImGui.SameLine(0f, colGap);
-            ImGui.BeginGroup();
-            var totalCol = totalEx >= 0 ? GreenCol : RedCol;
-            var hourCol = perHour >= 0 ? GreenCol : RedCol;
-            string totalDiv = rate > 0 ? $"{totalEx / rate:0.0}" : "—";
-            string hourDiv = rate > 0 ? $"{perHour / rate:0.0}" : "—";
-
-            // Total [div] <n>
-            ImGui.TextColored(totalCol, this.L("lt.total", "Total"));
-            ImGui.SameLine(0f, 5f);
-            if (this.DrawInlineIcon("Divine")) ImGui.SameLine(0f, 4f);
-            ImGui.TextColored(totalCol, totalDiv);
-
-            // [div] <n> / hour
-            if (this.DrawInlineIcon("Divine")) ImGui.SameLine(0f, 4f);
-            ImGui.TextColored(hourCol, this.LF("lt.per_hour_short", "{0} / hour", hourDiv));
-
-            // Session: <timer> (moved here from the old controls column so each band is 3 rows).
-            if (this.DrawInlineIcon("Time")) ImGui.SameLine(0f, 5f);
-            ImGui.Text(this.LF("lt.session_timer", "Session: {0}", FormatDuration(DateTime.UtcNow - this.sessionStartUtc)));
-            ImGui.EndGroup();
-
-            // Column 3 — completed-map table (newest first), filling the remaining width/height.
-            ImGui.SameLine(0f, colGap);
-            ImGui.BeginGroup();
-            if (ImGui.BeginTable("compact_runs", 3,
-                    ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY,
-                    new System.Numerics.Vector2(0f, h - (24f * s))))
+            int units = 0;
+            float profitWidth = 120 * s;
+            for (int unit = 0; unit < ProfitUnits.Length; unit++)
             {
-                ImGui.TableSetupColumn(this.L("lt.col_map", "Map"));
-                ImGui.TableSetupColumn(this.L("lt.col_time", "Time"), ImGuiTableColumnFlags.WidthFixed, 60f * s);
-                ImGui.TableSetupColumn(this.L("lt.col_profit", "Profit"), ImGuiTableColumnFlags.WidthFixed, 90f * s);
+                if ((this.SelectedProfitUnits & (1 << unit)) == 0) continue;
+                units++;
+                profitWidth = Math.Max(profitWidth, ImGui.CalcTextSize(this.FormatProfitCurrency(totalEx, unit)).X + 36 * s);
+            }
+            bool separateColumns = width >= 160 * s + 60 * s + units * profitWidth + (showLoot ? 64 * s : 0);
+            float tableHeight = Math.Max(ImGui.GetTextLineHeightWithSpacing() * 2, ImGui.GetContentRegionAvail().Y);
+            MapRun? toOpen = null;
+            if (ImGui.BeginTable($"compact_runs_{this.SelectedProfitUnits}_{separateColumns}_{showLoot}", (separateColumns ? 2 + units : 3) + (showLoot ? 1 : 0),
+                    ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY |
+                    ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.Resizable | ImGuiTableFlags.NoSavedSettings,
+                    new System.Numerics.Vector2(0, tableHeight)))
+            {
+                ImGui.TableSetupColumn(this.L("lt.col_map", "Map"), ImGuiTableColumnFlags.WidthStretch, separateColumns ? 2f : 1.4f);
+                ImGui.TableSetupColumn(this.L("lt.col_time", "Time"), ImGuiTableColumnFlags.WidthFixed, 56 * s);
+                if (separateColumns)
+                {
+                    for (int unit = 0; unit < ProfitUnits.Length; unit++)
+                        if ((this.SelectedProfitUnits & (1 << unit)) != 0)
+                            ImGui.TableSetupColumn(this.L("lt.col_profit", "Profit") + " · " + this.ProfitUnitShort(unit),
+                                ImGuiTableColumnFlags.WidthFixed, profitWidth);
+                }
+                else ImGui.TableSetupColumn(this.L("lt.col_profit", "Profit"), ImGuiTableColumnFlags.WidthStretch, 3f);
+                if (showLoot) ImGui.TableSetupColumn(this.L("lt.loot", "Loot"), ImGuiTableColumnFlags.WidthFixed, 64 * s);
+                ImGui.TableSetupScrollFreeze(0, 1);
                 ImGui.TableHeadersRow();
+                if (this.completed.Count == 0)
+                {
+                    ImGui.TableNextRow();
+                    ImGui.TableNextColumn();
+                    ImGui.TextWrapped(this.L("lt.no_maps", "No completed maps in this session yet."));
+                }
                 for (int i = this.completed.Count - 1; i >= 0; i--)
                 {
                     var r = this.completed[i];
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
-                    ImGui.TextUnformatted(r.Name);
+                    ImGui.TextWrapped(r.Name);
                     ImGui.TableNextColumn();
-                    ImGui.TextUnformatted(FormatDuration(r.ActiveTime));
-                    ImGui.TableNextColumn();
+                    ImGui.TextUnformatted(FormatDuration(this.RunDisplayTime(r)));
                     double ex = this.ValueOf(r.Gained, out _, out _);
-                    ImGui.TextColored(ex >= 0 ? GreenCol : RedCol, this.DivineOnly
-                        ? $"{ex / rate:+0.##;-0.##;0} div"
-                        : $"{ex:+0.0;-0.0;0} ex");
+                    for (int unit = 0, value = 0; unit < ProfitUnits.Length; unit++)
+                    {
+                        if ((this.SelectedProfitUnits & (1 << unit)) == 0) continue;
+                        if (separateColumns || value == 0) ImGui.TableNextColumn();
+                        this.DrawProfitBadge(ex, unit, s, !separateColumns && value > 0);
+                        value++;
+                    }
+                    if (showLoot)
+                    {
+                        ImGui.TableNextColumn();
+                        if (ImGui.SmallButton($"{this.L("lt.loot", "Loot")}##a{i}")) toOpen = r;
+                    }
                 }
-
                 ImGui.EndTable();
             }
-
-            ImGui.EndGroup();
-
-            ImGui.End();
+            if (toOpen != null)
+            {
+                this.lootMap = null;
+                this.lootRun = toOpen;
+            }
         }
 
         // Draws a loaded icon (icons\<key>.png) inline at the current text-line height so it lines up

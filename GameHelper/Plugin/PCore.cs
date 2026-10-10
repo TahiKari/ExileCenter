@@ -7,6 +7,8 @@ namespace GameHelper.Plugin
     using GameHelper.Localization;
     using System;
     using System.Collections.Generic;
+    using System.Numerics;
+    using ImGuiNET;
 
     /// <summary>
     ///     Interface for creating plugins.
@@ -31,6 +33,40 @@ namespace GameHelper.Plugin
         ///     Gets localized text from the plugin-owned Localization directory.
         /// </summary>
         protected PluginLocalization PluginText => this.pluginText ??= new PluginLocalization(this.DllDirectory);
+
+        /// <summary>Consistent, scrollable settings pages; only the selected page is drawn.</summary>
+        protected void DrawSettingsTabs(string id, params (string key, string title, Action draw)[] pages)
+        {
+            ImGui.PushID(id);
+            try
+            {
+                if (!ImGui.BeginTabBar("##SettingsPages", ImGuiTabBarFlags.FittingPolicyScroll)) return;
+                try
+                {
+                    foreach (var page in pages)
+                    {
+                        var title = OverlayLocalization.T("settings.section." + page.key, page.title);
+                        if (!ImGui.BeginTabItem(title + "###" + page.key)) continue;
+                        try
+                        {
+                            var visible = ImGui.BeginChild("##SettingsBody", Vector2.Zero);
+                            try
+                            {
+                                if (!visible) continue;
+                                ImGui.PushItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X * 0.35f, 120f, 250f));
+                                ImGui.PushTextWrapPos(0f);
+                                try { page.draw(); }
+                                finally { ImGui.PopTextWrapPos(); ImGui.PopItemWidth(); }
+                            }
+                            finally { ImGui.EndChild(); }
+                        }
+                        finally { ImGui.EndTabItem(); }
+                    }
+                }
+                finally { ImGui.EndTabBar(); }
+            }
+            finally { ImGui.PopID(); }
+        }
 
         /// <inheritdoc />
         public virtual string GetDescription() => this.PluginText.T("plugin.description", string.Empty);

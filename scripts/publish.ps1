@@ -12,12 +12,82 @@ param(
   # Letztes per-file Release vor ZIP-only (z. B. v1.1.10 Migrations-Patch).
     [switch]$LegacyManifest,
     [string]$MigrationTargetVersion = "1.2.0",
-    [string]$MaxAutoUpdateVersion = "1.1.10"
+    [string]$MaxAutoUpdateVersion = "1.1.10",
+    [switch]$LocalUpdate,
+    [string]$LocalSource,
+    [string]$LocalDestination = (Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'Gamehelpers\Maj GameHelper'),
+    [string]$LocalLabel
 )
 
 $DownloaderRemoteName = "GameHelperDownloader.exe"
 $ErrorActionPreference = "Stop"
 $Root = Split-Path $PSScriptRoot -Parent
+
+# Explicit local publication only: no GitHub, builds, or installed user settings touched.
+if ($LocalUpdate) {
+    if (-not $SkipBuild) { throw 'Use -LocalUpdate -SkipBuild after building and checking the changed projects.' }
+    if ([string]::IsNullOrWhiteSpace($LocalSource)) {
+        $LocalSource = Join-Path $Root 'GameHelper\bin\Release\net10.0-windows\win-x64'
+    }
+    $source = [IO.Path]::GetFullPath($LocalSource).TrimEnd([char]92, [char]47)
+    $destination = [IO.Path]::GetFullPath($LocalDestination).TrimEnd([char]92, [char]47)
+    if ($destination.Equals($source, [StringComparison]::OrdinalIgnoreCase) -or
+        $destination.StartsWith($source + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'The update folder must be outside the package source.'
+    }
+    foreach ($required in @('GameHelper.exe','GameHelper.dll','GameHelper.deps.json','GameHelper.runtimeconfig.json')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $source $required) -PathType Leaf)) { throw "Missing $required" }
+    }
+    [IO.Directory]::CreateDirectory($destination) | Out-Null
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $packageName = 'GameHelper-Maj-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0,8) + '.zip'
+    $packagePath = Join-Path $destination $packageName
+    $temporaryPackage = $packagePath + '.tmp'
+    $files = @{}
+    foreach ($file in Get-ChildItem -LiteralPath $source -Recurse -File) {
+        $relative = $file.FullName.Substring($source.Length+1).Replace('\','/')
+        $segments = $relative.Split('/')
+        if ($segments -icontains 'config' -or $segments -icontains 'configs' -or $file.Name -ieq 'settings.json') { continue }
+        if ($segments.Count -eq 1) {
+            if ($file.Extension -ine '.dll' -and $relative -notin @('GameHelper.exe','GameHelper.deps.json','GameHelper.runtimeconfig.json')) { continue }
+        } else {
+            if ($segments[0] -notin @('Plugins','Localization','fonts') -or
+                $file.Extension -in @('.zip','.rar','.7z','.pdb','.log','.bak','.old','.exe') -or $file.Name -match '(?i)dump') { continue }
+        }
+        $files[$relative] = $file.FullName
+    }
+    # Both entry points must load GameHelper.dll directly. Retaining an upstream
+    # GameHelper.App.exe would let existing shortcuts replace the personal build.
+    $files['GameHelper.App.exe'] = Join-Path $source 'GameHelper.exe'
+    $archive = [IO.Compression.ZipFile]::Open($temporaryPackage,[IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach ($relative in $files.Keys | Sort-Object) {
+            [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,$files[$relative],$relative,[IO.Compression.CompressionLevel]::Optimal)
+        }
+    } finally { $archive.Dispose() }
+    $archive = [IO.Compression.ZipFile]::OpenRead($temporaryPackage)
+    try {
+        foreach ($entry in $archive.Entries) {
+            $stream = $entry.Open()
+            $sha = [Security.Cryptography.SHA256]::Create()
+            try { $hash = [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','') }
+            finally { $stream.Dispose(); $sha.Dispose() }
+            if ($hash -ne (Get-FileHash -LiteralPath $files[$entry.FullName] -Algorithm SHA256).Hash) { throw "Changed during publication: $($entry.FullName)" }
+        }
+    } finally { $archive.Dispose() }
+    [IO.File]::Move($temporaryPackage,$packagePath)
+    $packageHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash
+    if ([string]::IsNullOrWhiteSpace($LocalLabel)) { $LocalLabel = 'GameHelper - ' + (Get-Date -Format 'dd/MM/yyyy HH:mm') }
+    $manifest = @{ Id=$packageHash; PackageFile=$packageName; Sha256=$packageHash; Label=$LocalLabel } | ConvertTo-Json
+    $manifestPath = Join-Path $destination 'GameHelper-Maj.json'
+    $temporaryManifest = $manifestPath + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
+    [IO.File]::WriteAllText($temporaryManifest,$manifest,[Text.UTF8Encoding]::new($false))
+    if (Test-Path -LiteralPath $manifestPath) { [IO.File]::Replace($temporaryManifest,$manifestPath,[NullString]::Value) }
+    else { [IO.File]::Move($temporaryManifest,$manifestPath) }
+    Write-Host "Local update published: $packagePath ($($files.Count) files)"
+    return
+}
 
 $configPath = Join-Path $Root "github.config.json"
 if (Test-Path $configPath) {

@@ -139,7 +139,7 @@ namespace LootTracker
                 return;
             }
 
-            if (!this.TryGetExperienceBarRect(out var xpPos, out var xpSize))
+            if (!this.TryGetExperienceBarRect(out var xpPos, out var xpSize) && !(this.Settings.FreePosition && this.Settings.OverlayPositionSaved))
             {
                 return;
             }
@@ -152,6 +152,12 @@ namespace LootTracker
             float anchorX = this.Settings.BarOnRight ? xpPos.X + xpSize.X : xpPos.X;
             float anchorY = xpPos.Y - this.Settings.BarBottomOffset - stripClear;
             var pivot = new Vector2(this.Settings.BarOnRight ? 1f : 0f, 1f);
+            if (this.Settings.FreePosition && this.Settings.OverlayPositionSaved && !this.Settings.SeparateWindow)
+            {
+                anchorX = this.Settings.OverlayPosition.X;
+                anchorY = this.Settings.OverlayPosition.Y - 8f;
+                pivot = new Vector2(0f, 1f);
+            }
 
             float maxAlpha = 0f;
             foreach (var t in this.activeToasts)

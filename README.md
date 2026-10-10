@@ -118,6 +118,34 @@ Plugins\<Name>\config\
 
 **Windows Defender / helper won't start** — Open Protection history, allow blocked `GameHelper` / `GameHelperUpdate` entries, or install from the [full ZIP](https://github.com/MordWraith/Gamehelper/releases/latest) into a new folder. Details: [SECURITY.md](SECURITY.md#windows-defender-and-antivirus-false-positives).
 
+## Personal local updates
+
+The personal build checks `Desktop\Gamehelpers\Maj GameHelper\GameHelper-Maj.json`
+at startup and every five seconds without pausing the game. **Updates** in the
+settings menu installs a verified package and restarts GameHelper. The official
+launcher is bypassed when this local folder or an installed local-update state
+exists. Personal packages also replace `GameHelper.App.exe` with an identical
+copy of the core apphost (`GameHelper.exe`), which loads `GameHelper.dll` directly.
+Existing shortcuts to either executable therefore open the personal build rather
+than the official updater. Keep this alias in every local update and bootstrap
+archive; omitting it leaves old official launchers active in existing folders.
+Configuration folders and plugin `settings.json` files are never packaged.
+Failed file replacement restores the previous files before restarting.
+
+After a requested change, build only the affected projects, check the result, then
+publish it to this folder. Do not publish intermediate or unverified builds:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish.ps1 -LocalUpdate -SkipBuild -LocalLabel "Description de la modification"
+```
+
+`-LocalSource` can point to a prepared complete runtime directory; the default is
+the Release output of GameHelper. `-LocalDestination` supports an isolated folder
+for checking publication. The ZIP is copied and verified before its manifest is
+atomically published. Updating never overwrites inventory protections, stash
+destinations or other saved settings. The first installation of this updater is
+manual; subsequent packages use the in-app button.
+
 ## Links
 
 - [Upstream GameHelper2](https://github.com/MordWraith/Gamehelper)

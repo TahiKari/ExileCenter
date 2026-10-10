@@ -4,6 +4,7 @@ namespace Autopot
     using System.Diagnostics;
     using System.IO;
     using System.Numerics;
+    using System.Runtime.InteropServices;
     using System.Threading.Tasks;
     using ClickableTransparentOverlay.Win32;
     using GameHelper;
@@ -28,6 +29,16 @@ namespace Autopot
         private bool safetyLogoutTriggered;
         private readonly Stopwatch safetyLogoutCooldown = new();
         private bool safetyLogoutWaitingRecovery;
+        private bool returnSawCharacterSelection;
+        private bool capturePlayPosition;
+        private bool captureKeyWasDown;
+        private int returnInputStep;
+        private bool returnControlHeld;
+        private readonly Stopwatch returnInputTimer = new();
+        private string returnStatus = "";
+        private NativePoint returnClickPoint;
+        private uint returnGamePid;
+        private IntPtr returnGameWindow;
 
         private ViGEmClient? _vigemClient;
         private IXbox360Controller? _vigemController;
@@ -40,6 +51,7 @@ namespace Autopot
 
         public override void OnDisable()
         {
+            ReleaseReturnControl();
             DisposeViGEm();
         }
 
@@ -126,15 +138,18 @@ namespace Autopot
         public override void DrawSettings()
         {
             RefreshVitals();
-            ImGui.Columns(2, "autopot_settings", false);
-
-            DrawVitalsColumn();
-            ImGui.NextColumn();
-            DrawConfigurationColumn();
-
-            ImGui.Columns(1);
+            UpdateServiceStatus();
+            ImGui.Checkbox("Activer les flacons automatiques##EnableAutoPot", ref Settings.EnableAutoPot);
+            ImGui.TextColored(serviceStatus == "Running" ? new Vector4(.35f, .85f, .6f, 1) : new Vector4(.7f, .72f, .77f, 1),
+                LocalizeServiceStatus(serviceStatus));
+            if (!string.IsNullOrEmpty(statusDetail)) ImGui.TextWrapped(LocalizeReason(statusDetail));
+            ImGui.Separator();
+            this.DrawSettingsTabs("AutopotSettings",
+                ("autopot_flasks", "Flacons", DrawConfigurationColumn),
+                ("autopot_safety", "Protection", DrawSafetySettings),
+                ("autopot_keys", "Touches", DrawKeySettings),
+                ("status", "État", DrawVitalsColumn));
         }
-
         public override void DrawUI()
         {
             // Keep ViGEm in sync with the bypass checkbox without needing a restart.
@@ -144,6 +159,7 @@ namespace Autopot
                 DisposeViGEm();
 
             RefreshVitals();
+            if (UpdateHideoutReturn()) return;
             UpdateServiceStatus();
 
             if (Settings.ShowVitalsOverlay && lastVitals.Valid)
@@ -172,96 +188,110 @@ namespace Autopot
 
         private void DrawVitalsColumn()
         {
-            ImGui.SeparatorText("Current Vitals");
-            DrawVitalBar("Life", lastVitals.HpPercent, new Vector4(0.85f, 0.15f, 0.15f, 1f));
-            DrawVitalBar("Energy Shield", lastVitals.EsPercent, new Vector4(0.92f, 0.92f, 0.92f, 1f));
-            DrawVitalBar("Mana", lastVitals.MpPercent, new Vector4(0.2f, 0.45f, 0.95f, 1f));
+            ImGui.SeparatorText("Ressources actuelles");
+            if (lastVitals.Valid)
+            {
+                DrawVitalBar("Vie", lastVitals.HpPercent, new Vector4(0.85f, 0.15f, 0.15f, 1f));
+                DrawVitalBar("Bouclier d'énergie", lastVitals.EsPercent, new Vector4(0.92f, 0.92f, 0.92f, 1f));
+                DrawVitalBar("Mana", lastVitals.MpPercent, new Vector4(0.2f, 0.45f, 0.95f, 1f));
+            }
+            else ImGui.TextWrapped("Ressources indisponibles : ouvre une zone du jeu pour les lire.");
 
             ImGui.Spacing();
-            ImGui.SeparatorText("Vitals Overlay");
-            ImGui.Checkbox("Show in game", ref Settings.ShowVitalsOverlay);
+            ImGui.SeparatorText("Affichage en jeu");
+            ImGui.Checkbox("Afficher les ressources en jeu", ref Settings.ShowVitalsOverlay);
 
             ImGui.Spacing();
-            ImGui.SeparatorText("Input Device");
+            ImGui.SeparatorText("Périphérique de contrôle");
             DrawDeviceStatus();
 
             ImGui.Spacing();
-            ImGui.SeparatorText("Bound Keys");
-            ImGui.Text($"Key 1: {Settings.Key1}");
-            ImGui.Text($"Key 2: {Settings.Key2}");
+            ImGui.SeparatorText("Touches configurées");
+            ImGui.Text($"Flacon 1 : {Settings.Key1}");
+            ImGui.Text($"Flacon 2 : {Settings.Key2}");
         }
 
         private void DrawConfigurationColumn()
         {
-            ImGui.SeparatorText("Configuration");
-            ImGui.Checkbox("Enable AutoPot", ref Settings.EnableAutoPot);
-            ImGui.SameLine();
-            var statusColor = Settings.EnableAutoPot && serviceStatus == "Running"
-                ? new Vector4(0.3f, 1f, 0.3f, 1f)
-                : new Vector4(0.7f, 0.7f, 0.7f, 1f);
-            ImGui.TextColored(statusColor,
-                $"Service Status: {LocalizeServiceStatus(serviceStatus)}");
-            if (!string.IsNullOrEmpty(statusDetail))
-                ImGuiHelper.ToolTip(LocalizeReason(statusDetail));
-
-            ImGui.Spacing();
+            ImGui.SeparatorText("Déclenchement des flacons");
+            ImGui.TextWrapped("Choisis les ressources à surveiller. Chaque flacon utilise sa propre touche et son délai.");
+            ImGui.SetNextItemWidth(Math.Min(360, ImGui.GetContentRegionAvail().X));
             DrawLogicModeCombo();
-
             ImGui.Spacing();
             DrawThresholdSliders();
-
             ImGui.Spacing();
-            ImGui.SeparatorText("Safety (Auto-Logout)");
-            ImGui.TextDisabled(
-                "Returns to character select via connection drop.");
-            DrawSafetyLogoutRow(ref Settings.HpDisconnectEnabled, ref Settings.HpDisconnectPercent, "##hpdc", "HP");
-            DrawSafetyLogoutRow(ref Settings.EsDisconnectEnabled, ref Settings.EsDisconnectPercent, "##esdc", "ES");
-            DrawSafetyLogoutRow(ref Settings.MpDisconnectEnabled, ref Settings.MpDisconnectPercent, "##mpdc", "MP");
-            ImGui.SetNextItemWidth(220);
-            ImGui.SliderInt(
-                "Cooldown after logout",
-                ref Settings.SafetyLogoutCooldownSeconds,
-                0,
-                600,
-                Settings.SafetyLogoutCooldownSeconds <= 0
-                    ? "Off"
-                    : $"{Settings.SafetyLogoutCooldownSeconds} s");
-            ImGuiHelper.ToolTip(
-                "Prevents instant re-logout after reconnecting with low life/mana. 0 disables the timer.");
-            ImGui.Checkbox(
-                "Re-arm only after vitals recover",
-                ref Settings.SafetyLogoutRequireRecovery);
-            ImGuiHelper.ToolTip(
-                "After a logout, auto-logout stays disabled until each enabled vital is above its threshold again.");
-
-            ImGui.Spacing();
-            ImGui.SeparatorText("Hotkeys");
-            DrawHotkeyRow("key1", "Key 1 (Life/Hybrid)",
-                ref Settings.Key1Enabled, ref Settings.Key1);
-            DrawHotkeyRow("key2", "Key 2 (Mana/Utility)",
-                ref Settings.Key2Enabled, ref Settings.Key2);
-
-            ImGui.Spacing();
-            ImGui.SeparatorText("Input Delays");
-            ImGui.SetNextItemWidth(220);
-            ImGui.SliderInt("Key1 Delay", ref Settings.Key1DelayMs, 100, 10000,
-                $"{Settings.Key1DelayMs} ms");
-            ImGui.SetNextItemWidth(220);
-            ImGui.SliderInt("Key2 Delay", ref Settings.Key2DelayMs, 100, 10000,
-                $"{Settings.Key2DelayMs} ms");
-
-            ImGui.Spacing();
-            ImGui.Checkbox("Run in hideout", ref Settings.RunInHideout);
+            ImGui.Checkbox("Utiliser aussi les flacons dans le repaire", ref Settings.RunInHideout);
+            ImGui.TextWrapped("La déconnexion d'urgence se règle séparément dans « Protection ».");
         }
 
+        private void DrawSafetySettings()
+        {
+            ImGui.SeparatorText("Déconnexion d'urgence");
+            ImGui.TextWrapped("La connexion est coupée dès qu'une ressource activée atteint son seuil. Cette protection fonctionne même si les flacons automatiques sont désactivés.");
+            if (ImGui.BeginTable("AutoPotSafety", 3, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.SizingStretchProp))
+            {
+                ImGui.TableSetupColumn("Actif", ImGuiTableColumnFlags.WidthFixed, 55);
+                ImGui.TableSetupColumn("Ressource");
+                ImGui.TableSetupColumn("Déconnexion à", ImGuiTableColumnFlags.WidthStretch, 1.5f);
+                ImGui.TableHeadersRow();
+                DrawSafetyLogoutRow(ref Settings.HpDisconnectEnabled, ref Settings.HpDisconnectPercent, "hpdc", "Vie");
+                DrawSafetyLogoutRow(ref Settings.EsDisconnectEnabled, ref Settings.EsDisconnectPercent, "esdc", "Bouclier d'énergie");
+                DrawSafetyLogoutRow(ref Settings.MpDisconnectEnabled, ref Settings.MpDisconnectPercent, "mpdc", "Mana");
+                ImGui.EndTable();
+            }
+            ImGui.Spacing();
+            ImGui.SeparatorText("Revenir en sécurité");
+            if (ImGui.Checkbox("Retour sécurisé au repaire", ref Settings.ReturnToHideoutAfterLogout))
+            {
+                if (!Settings.ReturnToHideoutAfterLogout) Settings.HideoutReturnPending = false;
+            }
+            ImGui.TextWrapped("Après la déconnexion, choisis ton personnage puis utilise « Retour au repaire » dans le panneau AutoPot. Ce bouton fait Ctrl + clic sur « Jouer ». Sans repaire disponible, le jeu te renvoie en ville.");
+            ImGui.TextWrapped("Une reprise de la carte sera interrompue tant que le retour au repaire est en attente.");
+            bool configured = HasReturnPosition(Settings.HideoutPlayPosition, Settings.HideoutPlayWindowSize);
+            ImGui.TextColored(configured ? new Vector4(.35f, .85f, .6f, 1) : new Vector4(1, .75f, .3f, 1),
+                configured ? "Bouton Jouer mémorisé" : "À configurer une seule fois");
+            if (ImGui.Button(configured ? "Repositionner le bouton Jouer" : "Mémoriser le bouton Jouer")) capturePlayPosition = true;
+            ImGui.TextWrapped("À la sélection du personnage : place le curseur au centre de « Jouer », puis appuie sur F8. Aucun clic ni connexion n'est effectué pendant ce réglage.");
+            if (!string.IsNullOrEmpty(returnStatus)) ImGui.TextWrapped(returnStatus);
+            ImGui.Spacing();
+            ImGui.SeparatorText("Réarmement de la protection");
+            ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
+            ImGui.TextUnformatted("Délai après déconnexion");
+            ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
+            ImGui.SliderInt("##SafetyLogoutCooldown", ref Settings.SafetyLogoutCooldownSeconds, 0, 600,
+                Settings.SafetyLogoutCooldownSeconds <= 0 ? "Désactivé" : "%d s");
+            ImGui.Checkbox("Réarmer après récupération", ref Settings.SafetyLogoutRequireRecovery);
+            ImGui.TextWrapped("Évite les déconnexions répétées lorsque tu te reconnectes avec une ressource encore sous son seuil.");
+        }
+
+        private void DrawKeySettings()
+        {
+            ImGui.SeparatorText("Touches des flacons");
+            DrawHotkeyRow("key1", "Flacon de vie / hybride", ref Settings.Key1Enabled, ref Settings.Key1);
+            ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
+            ImGui.TextUnformatted("Délai du flacon 1");
+            ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
+            ImGui.SliderInt("##Key1Delay", ref Settings.Key1DelayMs, 100, 10000, "%d ms");
+            ImGui.Spacing();
+            DrawHotkeyRow("key2", "Flacon de mana / utilitaire", ref Settings.Key2Enabled, ref Settings.Key2);
+            ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
+            ImGui.TextUnformatted("Délai du flacon 2");
+            ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
+            ImGui.SliderInt("##Key2Delay", ref Settings.Key2DelayMs, 100, 10000, "%d ms");
+            ImGui.Spacing();
+            ImGui.SeparatorText("Manette");
+            DrawDeviceStatus();
+        }
         private void DrawLogicModeCombo()
         {
-            if (ImGui.BeginCombo("Logic Mode", LogicModeLabels.Display(Settings.LogicMode)))
+            ImGui.TextUnformatted("Ressources surveillées");
+            ImGui.SetNextItemWidth(-1);
+            if (ImGui.BeginCombo("##LogicMode", DisplayLogicMode(Settings.LogicMode)))
             {
                 foreach (var mode in LogicModeLabels.All)
                 {
                     bool selected = Settings.LogicMode == mode;
-                    if (ImGui.Selectable(LogicModeLabels.Display(mode), selected))
+                    if (ImGui.Selectable(DisplayLogicMode(mode), selected))
                         Settings.LogicMode = mode;
                     if (selected)
                         ImGui.SetItemDefaultFocus();
@@ -284,72 +314,69 @@ namespace Autopot
                 {
                     LogicMode.EnergyShield => "ES",
                     LogicMode.ManaAndEs => "ES",
-                    LogicMode.HybridLifeEs => "Life+ES",
-                    _ => "HP",
+                    LogicMode.HybridLifeEs => "Vie + ES",
+                    _ => "Vie",
                 };
-                ImGui.SetNextItemWidth(220);
-                ImGui.SliderInt($"##hpthresh", ref Settings.HpThresholdPercent, 1, 99, $"{hpLabel} %d%%");
+                ImGui.TextUnformatted("Seuil du flacon 1");
+                ImGui.SetNextItemWidth(Math.Min(360, ImGui.GetContentRegionAvail().X));
+                ImGui.SliderInt("##hpthresh", ref Settings.HpThresholdPercent, 1, 99, $"{hpLabel} %d%%");
             }
 
             if (showMp)
             {
-                ImGui.SetNextItemWidth(220);
-                ImGui.SliderInt("##mpthresh", ref Settings.MpThresholdPercent, 1, 99, "MP %d%%");
+                ImGui.TextUnformatted("Seuil du flacon 2");
+                ImGui.SetNextItemWidth(Math.Min(360, ImGui.GetContentRegionAvail().X));
+                ImGui.SliderInt("##mpthresh", ref Settings.MpThresholdPercent, 1, 99, "Mana %d%%");
             }
         }
 
-        private static void DrawSafetyLogoutRow(
-            ref bool enabled,
-            ref int thresholdPercent,
-            string sliderId,
-            string vitalLabel)
+        private static void DrawSafetyLogoutRow(ref bool enabled, ref int thresholdPercent, string id, string label)
         {
-            ImGui.Checkbox($"##en{sliderId}", ref enabled);
-            ImGui.SameLine();
-            ImGui.Text("Logout at");
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(180);
-            ImGui.SliderInt(sliderId, ref thresholdPercent, 1, 99, $"%d%% {vitalLabel}");
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn(); ImGui.Checkbox("##enabled" + id, ref enabled);
+            ImGui.TableNextColumn(); ImGui.TextWrapped(label);
+            ImGui.TableNextColumn();
+            ImGui.BeginDisabled(!enabled);
+            ImGui.SetNextItemWidth(-1);
+            ImGui.SliderInt("##threshold" + id, ref thresholdPercent, 1, 99, "%d %%");
+            ImGui.EndDisabled();
         }
-
         private static void DrawHotkeyRow(string id, string label, ref bool enabled, ref VK key)
         {
-            ImGui.Checkbox($"##en{id}", ref enabled);
-            ImGui.SameLine();
-            ImGui.Text(label);
-            ImGui.SameLine();
+            ImGui.Checkbox(label + "##enabled" + id, ref enabled);
+            ImGui.BeginDisabled(!enabled);
+            ImGui.SetNextItemWidth(Math.Min(250, ImGui.GetContentRegionAvail().X));
             var tmp = key;
-            if (ImGuiHelper.NonContinuousEnumComboBox($"##{id}", ref tmp))
-                key = tmp;
+            if (ImGuiHelper.NonContinuousEnumComboBox("##" + id, ref tmp)) key = tmp;
+            ImGui.EndDisabled();
         }
-
         private void DrawDeviceStatus()
         {
             bool vigem = InputDeviceStatus.IsViGEmBusInstalled();
             if (vigem)
-                ImGui.TextColored(new Vector4(0.3f, 1f, 0.3f, 1f), "ViGEmBus: Installed");
+                ImGui.TextColored(new Vector4(0.3f, 1f, 0.3f, 1f), "Pilote manette virtuelle installé");
             else
             {
-                ImGui.TextColored(new Vector4(1f, 0.35f, 0.35f, 1f), "ViGEmBus: Not installed");
+                ImGui.TextColored(new Vector4(1f, 0.35f, 0.35f, 1f), "Pilote manette virtuelle absent");
                 ImGui.SameLine();
-                if (ImGui.SmallButton("[Download]"))
+                if (ImGui.SmallButton("Télécharger le pilote"))
                     System.Diagnostics.Process.Start(new ProcessStartInfo(InputDeviceStatus.ViGEmDownloadLink) { UseShellExecute = true });
             }
 
             if (InputDeviceStatus.IsControllerConnected())
-                ImGui.TextColored(new Vector4(0.3f, 1f, 0.3f, 1f), "Controller: Detected");
+                ImGui.TextColored(new Vector4(0.3f, 1f, 0.3f, 1f), "Manette détectée");
             else
-                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1f), "Controller: Not detected");
+                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1f), "Aucune manette détectée");
 
             ImGui.Spacing();
             if (Core.GHSettings.EnableControllerMode)
-                ImGui.TextColored(new Vector4(1f, 0.75f, 0.2f, 1f), "PoE2 UI: Controller mode");
+                ImGui.TextColored(new Vector4(1f, 0.75f, 0.2f, 1f), "Jeu en mode manette");
             else
-                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1f), "PoE2 UI: Keyboard mode");
-            ImGuiHelper.ToolTip("In controller mode PoE2 ignores keyboard events — enable Controller bypass below.");
+                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1f), "Jeu en mode clavier / souris");
+            ImGuiHelper.ToolTip("En mode manette, active la manette virtuelle pour envoyer les touches des flacons.");
 
             ImGui.Spacing();
-            ImGui.Checkbox("Controller bypass (ViGEmBus)", ref Settings.BypassControllerMode);
+            ImGui.Checkbox("Envoyer les flacons via la manette virtuelle", ref Settings.BypassControllerMode);
             ImGuiHelper.ToolTip(
                 "Creates a virtual Xbox 360 controller via ViGEmBus and injects button presses\n" +
                 "instead of keyboard events. Required when PoE2 is in controller mode.\n" +
@@ -365,9 +392,9 @@ namespace Autopot
                         $"ViGEm: {(_vigemStatus.Length > 0 ? _vigemStatus : "Initializing...")}");
 
                 ImGui.Spacing();
-                ImGui.TextDisabled("HP flask / Key1 button:");
+                ImGui.TextDisabled("Bouton du flacon de vie :");
                 DrawXboxButtonCombo("##ctrlbtn1", ref Settings.ControllerKey1Button);
-                ImGui.TextDisabled("MP flask / Key2 button:");
+                ImGui.TextDisabled("Bouton du flacon de mana :");
                 DrawXboxButtonCombo("##ctrlbtn2", ref Settings.ControllerKey2Button);
             }
         }
@@ -419,14 +446,14 @@ namespace Autopot
         {
             ImGui.SetNextWindowBgAlpha(0.55f);
             ImGui.SetNextWindowSize(new Vector2(220, 0), ImGuiCond.FirstUseEver);
-            if (!ImGui.Begin($"AutoPot Vitals###AutopotVitals",
+            if (!ImGui.Begin($"AutoPot · Ressources###AutopotVitals",
                     ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.AlwaysAutoResize))
             {
                 ImGui.End();
                 return;
             }
 
-            DrawVitalBar("Life", lastVitals.HpPercent, new Vector4(0.85f, 0.15f, 0.15f, 1f));
+            DrawVitalBar("Vie", lastVitals.HpPercent, new Vector4(0.85f, 0.15f, 0.15f, 1f));
             DrawVitalBar("ES", lastVitals.EsPercent, new Vector4(0.92f, 0.92f, 0.92f, 1f));
             DrawVitalBar("Mana", lastVitals.MpPercent, new Vector4(0.2f, 0.45f, 0.95f, 1f));
             ImGui.End();
@@ -523,9 +550,243 @@ namespace Autopot
             safetyLogoutCooldown.Restart();
             safetyLogoutWaitingRecovery = Settings.SafetyLogoutRequireRecovery;
             MiscHelper.KillTCPConnectionForProcess(Core.Process.Pid);
-            statusDetail = $"Auto-logout triggered ({vital}).";
+            Settings.HideoutReturnPending = Settings.ReturnToHideoutAfterLogout;
+            returnSawCharacterSelection = false;
+            PersistReturnState();
+            statusDetail = $"Déconnexion d'urgence déclenchée ({vital}).";
         }
 
+        private void PersistReturnState()
+        {
+            try { SaveSettings(); }
+            catch (Exception ex) { Console.WriteLine($"[AutoPot.Return] Could not save return state: {ex.Message}"); }
+        }
+
+        internal static bool HasReturnPosition(Vector2 point, Vector2 size) =>
+            float.IsFinite(point.X) && float.IsFinite(point.Y) && float.IsFinite(size.X) && float.IsFinite(size.Y) &&
+            size.X >= 160 && size.Y >= 100 && point.X >= 0 && point.Y >= 0 && point.X < size.X && point.Y < size.Y;
+
+        internal static bool ShouldProtectHideoutReturn(bool enabled, bool pending, bool sawSelection,
+            GameStateTypes state, bool alive, bool town, bool hideout) =>
+            enabled && pending && sawSelection && state == GameStateTypes.InGameState && alive && !town && !hideout;
+
+        private bool UpdateHideoutReturn()
+        {
+            if (!Settings.HideoutReturnPending && !capturePlayPosition && returnInputStep == 0 && !returnControlHeld) return false;
+            var state = Core.States.GameCurrentState;
+            var window = GetReturnGameWindow();
+            if (returnControlHeld && returnInputStep == 0) ReleaseReturnControl();
+            if (!Settings.ReturnToHideoutAfterLogout && Settings.HideoutReturnPending)
+            {
+                Settings.HideoutReturnPending = false;
+                PersistReturnState();
+            }
+            if (state == GameStateTypes.SelectCharacterState && Settings.HideoutReturnPending) returnSawCharacterSelection = true;
+            if (Settings.HideoutReturnPending && returnSawCharacterSelection && state == GameStateTypes.InGameState && lastVitals.Valid)
+            {
+                var area = Core.States.InGameStateObject.CurrentWorldInstance.AreaDetails;
+                if (area.IsTown || area.IsHideout)
+                {
+                    Settings.HideoutReturnPending = false;
+                    returnSawCharacterSelection = false;
+                    returnStatus = "Retour dans une zone sûre confirmé.";
+                    PersistReturnState();
+                }
+                else if (ShouldProtectHideoutReturn(Settings.ReturnToHideoutAfterLogout, Settings.HideoutReturnPending,
+                    returnSawCharacterSelection, state, lastVitals.HpPercent > 0, area.IsTown, area.IsHideout))
+                {
+                    // Returning normally resumes the map. Disconnect before resuming
+                    // combat, then leave the supported Ctrl+Play action to the user.
+                    returnSawCharacterSelection = false;
+                    safetyLogoutTriggered = true;
+                    MiscHelper.KillTCPConnectionForProcess(Core.Process.Pid);
+                    returnStatus = "Reprise de carte interrompue. Utilise « Retour au repaire » ou Ctrl + clic sur « Jouer ».";
+                    return true;
+                }
+            }
+            if (capturePlayPosition)
+            {
+                bool pressed = (ReturnKeyState(0x77) & 0x8000) != 0; // F8
+                if (pressed && !captureKeyWasDown && state == GameStateTypes.SelectCharacterState &&
+                    window != IntPtr.Zero && ReturnForegroundWindow() == window && ReturnGetCursor(out var cursor) &&
+                    ReturnScreenToClient(window, ref cursor) && ReturnClientRect(window, out var rect))
+                {
+                    var point = new Vector2(cursor.X, cursor.Y);
+                    var size = new Vector2(rect.Right - rect.Left, rect.Bottom - rect.Top);
+                    if (HasReturnPosition(point, size))
+                    {
+                        Settings.HideoutPlayPosition = point;
+                        Settings.HideoutPlayWindowSize = size;
+                        capturePlayPosition = false;
+                        returnStatus = "Bouton Jouer mémorisé. Le retour au repaire est prêt.";
+                        PersistReturnState();
+                    }
+                }
+                captureKeyWasDown = pressed;
+                if ((ReturnKeyState(0x1B) & 0x8000) != 0) capturePlayPosition = false;
+            }
+            if (returnInputStep > 0)
+            {
+                if (state != GameStateTypes.SelectCharacterState || window == IntPtr.Zero || ReturnForegroundWindow() != window)
+                {
+                    ReleaseReturnControl();
+                    returnInputStep = 0;
+                    return false;
+                }
+                if (returnInputTimer.ElapsedMilliseconds > 2000)
+                {
+                    ReleaseReturnControl();
+                    returnInputStep = 0;
+                    returnStatus = "Retour interrompu. Relâche les touches puis réessaie.";
+                }
+                else if (returnInputStep == 1 && returnInputTimer.ElapsedMilliseconds >= 120 && ReturnInputsReleased(false))
+                {
+                    if (!ReturnClientRect(window, out var rect) || !ReturnPositionMatches(rect))
+                    {
+                        returnInputStep = 0;
+                        returnStatus = "La taille du jeu a changé : mémorise à nouveau le bouton Jouer avec F8.";
+                    }
+                    else
+                    {
+                        var point = new NativePoint { X = (int)Settings.HideoutPlayPosition.X, Y = (int)Settings.HideoutPlayPosition.Y };
+                        if (!ReturnClientToScreen(window, ref point) || !ReturnSetCursor(point.X, point.Y) ||
+                            ReturnSendInput(1, new[] { ReturnKeyInput(0) }, Marshal.SizeOf<ReturnInput>()) != 1)
+                        {
+                            returnInputStep = 0;
+                            returnStatus = "Le jeu n'a pas accepté le retour. Utilise Ctrl + clic sur Jouer.";
+                        }
+                        else
+                        {
+                            returnControlHeld = true;
+                            returnClickPoint = point;
+                            returnInputStep = 2;
+                            returnInputTimer.Restart();
+                        }
+                    }
+                }
+                else if (returnInputStep == 2 && returnInputTimer.ElapsedMilliseconds >= 100)
+                {
+                    if (!ReturnGetCursor(out var cursor) || cursor.X != returnClickPoint.X || cursor.Y != returnClickPoint.Y ||
+                        !ReturnInputsReleased(true) || !ReturnClientRect(window, out var rect) || !ReturnPositionMatches(rect))
+                    {
+                        ReleaseReturnControl();
+                        returnInputStep = 0;
+                        returnStatus = "Retour annulé : le curseur ou une touche a changé.";
+                    }
+                    else
+                    {
+                        uint sent = ReturnSendInput(2, new[] { ReturnMouseInput(0x0002), ReturnMouseInput(0x0004) }, Marshal.SizeOf<ReturnInput>());
+                        if (sent != 2)
+                        {
+                            ReturnSendInput(1, new[] { ReturnMouseInput(0x0004) }, Marshal.SizeOf<ReturnInput>());
+                            ReleaseReturnControl();
+                            returnInputStep = 0;
+                            returnStatus = "Clic refusé. Utilise Ctrl + clic sur Jouer.";
+                        }
+                        else { returnInputStep = 3; returnInputTimer.Restart(); returnStatus = "Connexion au repaire demandée…"; }
+                    }
+                }
+                else if (returnInputStep == 3 && returnInputTimer.ElapsedMilliseconds >= 100)
+                {
+                    ReleaseReturnControl();
+                    returnInputStep = 0;
+                }
+                return true;
+            }
+            if (state == GameStateTypes.SelectCharacterState && (Settings.HideoutReturnPending || capturePlayPosition))
+                DrawHideoutReturnPanel();
+            return false;
+        }
+
+        private IntPtr GetReturnGameWindow()
+        {
+            uint pid = Core.Process.Pid;
+            if (pid == 0) { returnGamePid = 0; returnGameWindow = IntPtr.Zero; return IntPtr.Zero; }
+            if (pid != returnGamePid || returnGameWindow == IntPtr.Zero || !ReturnIsWindow(returnGameWindow))
+            {
+                returnGamePid = pid;
+                returnGameWindow = IntPtr.Zero;
+                try
+                {
+                    using var process = Process.GetProcessById((int)pid);
+                    returnGameWindow = process.MainWindowHandle;
+                }
+                catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException || ex is System.ComponentModel.Win32Exception) { }
+            }
+            return returnGameWindow;
+        }
+        private bool ReturnPositionMatches(NativeRect rect) =>
+            HasReturnPosition(Settings.HideoutPlayPosition, Settings.HideoutPlayWindowSize) &&
+            Settings.HideoutPlayWindowSize == new Vector2(rect.Right - rect.Left, rect.Bottom - rect.Top);
+
+        private static bool ReturnInputsReleased(bool ownsControl)
+        {
+            foreach (int key in new[] { 0x01, 0x02, 0x10, 0x11, 0x12, 0x5B, 0x5C })
+                if (!(key == 0x11 && ownsControl) && (ReturnKeyState(key) & 0x8000) != 0) return false;
+            return true;
+        }
+
+        private void ReleaseReturnControl()
+        {
+            if (returnControlHeld && ReturnSendInput(1, new[] { ReturnKeyInput(0x0002) }, Marshal.SizeOf<ReturnInput>()) == 1)
+                returnControlHeld = false;
+        }
+
+        private void DrawHideoutReturnPanel()
+        {
+            ImGui.SetNextWindowPos(new Vector2(ImGui.GetIO().DisplaySize.X * .5f, 30), ImGuiCond.Always, new Vector2(.5f, 0));
+            ImGui.SetNextWindowSize(new Vector2(Math.Min(490, ImGui.GetIO().DisplaySize.X - 24), 0), ImGuiCond.Always);
+            if (ImGui.Begin("AutoPot · Retour sécurisé###AutoPotReturn",
+                ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing |
+                ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse))
+            {
+                ImGui.TextColored(new Vector4(.45f, .75f, 1, 1), "Reconnexion au repaire");
+                ImGui.TextWrapped("Choisis ton personnage. Un clic normal sur « Jouer » peut reprendre la carte.");
+                if (capturePlayPosition || !HasReturnPosition(Settings.HideoutPlayPosition, Settings.HideoutPlayWindowSize))
+                {
+                    capturePlayPosition = true;
+                    ImGui.TextWrapped("Place le curseur au centre de « Jouer », puis appuie sur F8 pour mémoriser sa position.");
+                }
+                ImGui.BeginDisabled(!HasReturnPosition(Settings.HideoutPlayPosition, Settings.HideoutPlayWindowSize));
+                if (ImGui.Button("Retour au repaire", new Vector2(-1, 0)))
+                {
+                    var window = GetReturnGameWindow();
+                    if (window != IntPtr.Zero && Core.States.GameCurrentState == GameStateTypes.SelectCharacterState && ReturnSetForeground(window))
+                    {
+                        returnInputStep = 1;
+                        returnInputTimer.Restart();
+                    }
+                    else returnStatus = "Donne le focus au jeu, puis réessaie.";
+                }
+                ImGui.EndDisabled();
+                if (!string.IsNullOrEmpty(returnStatus)) ImGui.TextWrapped(returnStatus);
+                ImGui.TextWrapped("Tu peux aussi maintenir Ctrl et cliquer toi-même sur « Jouer ».");
+            }
+            ImGui.End();
+        }
+
+        [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
+        [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left, Top, Right, Bottom; }
+        [StructLayout(LayoutKind.Sequential)] private struct ReturnMouse { public int X, Y; public uint Data, Flags, Time; public UIntPtr Extra; }
+        [StructLayout(LayoutKind.Sequential)] private struct ReturnKey { public ushort Key, Scan; public uint Flags, Time; public UIntPtr Extra; }
+        [StructLayout(LayoutKind.Explicit)] private struct ReturnInputData
+        {
+            [FieldOffset(0)] public ReturnMouse Mouse;
+            [FieldOffset(0)] public ReturnKey Key;
+        }
+        [StructLayout(LayoutKind.Sequential)] private struct ReturnInput { public uint Type; public ReturnInputData Data; }
+        private static ReturnInput ReturnKeyInput(uint flags) => new() { Type = 1, Data = new ReturnInputData { Key = new ReturnKey { Key = 0x11, Flags = flags } } };
+        private static ReturnInput ReturnMouseInput(uint flags) => new() { Data = new ReturnInputData { Mouse = new ReturnMouse { Flags = flags } } };
+        [DllImport("user32.dll", EntryPoint = "SendInput")] private static extern uint ReturnSendInput(uint count, ReturnInput[] inputs, int size);
+        [DllImport("user32.dll", EntryPoint = "GetAsyncKeyState")] private static extern short ReturnKeyState(int key);
+        [DllImport("user32.dll", EntryPoint = "GetForegroundWindow")] private static extern IntPtr ReturnForegroundWindow();
+        [DllImport("user32.dll", EntryPoint = "SetForegroundWindow")] private static extern bool ReturnSetForeground(IntPtr window);
+        [DllImport("user32.dll", EntryPoint = "IsWindow")] private static extern bool ReturnIsWindow(IntPtr window);
+        [DllImport("user32.dll", EntryPoint = "GetCursorPos")] private static extern bool ReturnGetCursor(out NativePoint point);
+        [DllImport("user32.dll", EntryPoint = "SetCursorPos")] private static extern bool ReturnSetCursor(int x, int y);
+        [DllImport("user32.dll", EntryPoint = "ScreenToClient")] private static extern bool ReturnScreenToClient(IntPtr window, ref NativePoint point);
+        [DllImport("user32.dll", EntryPoint = "ClientToScreen")] private static extern bool ReturnClientToScreen(IntPtr window, ref NativePoint point);
+        [DllImport("user32.dll", EntryPoint = "GetClientRect")] private static extern bool ReturnClientRect(IntPtr window, out NativeRect rect);
         private bool IsSafetyLogoutRearmed()
         {
             if (Settings.SafetyLogoutCooldownSeconds > 0 &&
@@ -580,7 +841,7 @@ namespace Autopot
             }
 
             var area = Core.States.InGameStateObject.CurrentWorldInstance.AreaDetails;
-            if (area.IsTown)
+            if (area.IsTown || area.IsHideout)
             {
                 reason = "Player is in town.";
                 return false;
@@ -696,10 +957,22 @@ namespace Autopot
             return true;
         }
 
+        private static string DisplayLogicMode(LogicMode mode) => mode switch
+        {
+            LogicMode.ManaAndLife => "Vie + mana",
+            LogicMode.LifeOnly => "Vie",
+            LogicMode.EnergyShield => "Bouclier d'énergie",
+            LogicMode.HybridLifeEs => "Vie et bouclier combinés",
+            LogicMode.ManaOnly => "Mana",
+            LogicMode.ManaAndEs => "Bouclier + mana",
+            LogicMode.LifeEsMana => "Vie + bouclier + mana",
+            _ => mode.ToString()
+        };
+
         private static string LocalizeServiceStatus(string status) => status switch
         {
-            "Running" => "Running",
-            "Stopped" => "Stopped",
+            "Running" => "Surveillance active",
+            "Stopped" => "En pause",
             _ => status,
         };
 
@@ -708,17 +981,18 @@ namespace Autopot
             if (string.IsNullOrEmpty(reason))
                 return reason;
 
+            if (reason.StartsWith("Game state is ", StringComparison.Ordinal)) return "En attente du personnage dans une zone du jeu.";
             return reason switch
             {
-                "Enable AutoPot to start monitoring." => "Enable AutoPot to start monitoring.",
-                "Monitoring vitals and pressing configured keys." => "Monitoring vitals and pressing configured keys.",
-                "Game window is not in the foreground." => "Game window is not in the foreground.",
-                "Player is in town." => "Player is in town.",
-                "Cannot read player Life component." => "Cannot read player Life component.",
-                "Player is dead." => "Player is dead.",
-                "Player has grace period." => "Player has grace period.",
+                "Enable AutoPot to start monitoring." => "Active les flacons automatiques pour commencer.",
+                "Monitoring vitals and pressing configured keys." => "Les flacons suivent les seuils et les touches configurés.",
+                "Game window is not in the foreground." => "Le jeu est en arrière-plan.",
+                "Player is in town." => "Tu es dans une zone sûre.",
+                "Cannot read player Life component." => "Les ressources du personnage ne sont pas lisibles.",
+                "Player is dead." => "Le personnage est mort.",
+                "Player has grace period." => "Protection temporaire après le chargement.",
                 "Player is in hideout (enable 'Run in hideout' to allow)." =>
-                    "Player is in hideout (enable 'Run in hideout' to allow).",
+                    "Les flacons sont suspendus dans le repaire.",
                 _ => reason,
             };
         }

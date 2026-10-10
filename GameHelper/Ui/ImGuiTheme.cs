@@ -19,6 +19,41 @@ namespace GameHelper.Ui
         internal static readonly Vector4 Danger = new(0.85f, 0.35f, 0.35f, 1f);
         internal static readonly Vector4 SectionBg = new(0.14f, 0.15f, 0.19f, 1f);
 
+        // Scoped to the settings window: in-game plugin overlays keep their existing theme.
+        internal static void PushSettingsStyle()
+        {
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(18f, 16f));
+            ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(10f, 6f));
+            ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(10f, 9f));
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 8f);
+            ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 8f);
+            ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5f);
+            ImGui.PushStyleVar(ImGuiStyleVar.TabRounding, 5f);
+            ImGui.PushStyleVar(ImGuiStyleVar.SelectableTextAlign, new Vector2(0f, 0.5f));
+            ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.075f, 0.085f, 0.105f, 0.98f));
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.105f, 0.12f, 0.15f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(0.24f, 0.28f, 0.35f, 0.55f));
+            ImGui.PushStyleColor(ImGuiCol.FrameBg, new Vector4(0.15f, 0.175f, 0.22f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, new Vector4(0.20f, 0.235f, 0.30f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.FrameBgActive, new Vector4(0.23f, 0.28f, 0.36f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.18f, 0.215f, 0.28f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.25f, 0.32f, 0.43f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.ButtonActive, AccentMuted);
+            ImGui.PushStyleColor(ImGuiCol.Header, new Vector4(0.18f, 0.24f, 0.34f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.HeaderHovered, new Vector4(0.24f, 0.31f, 0.43f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.HeaderActive, AccentMuted);
+            ImGui.PushStyleColor(ImGuiCol.TabSelected, new Vector4(0.19f, 0.27f, 0.39f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.TabSelectedOverline, Accent);
+            ImGui.PushStyleColor(ImGuiCol.MenuBarBg, new Vector4(0.09f, 0.105f, 0.135f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.TitleBgActive, new Vector4(0.11f, 0.14f, 0.19f, 1f));
+        }
+
+        internal static void PopSettingsStyle()
+        {
+            ImGui.PopStyleColor(16);
+            ImGui.PopStyleVar(8);
+        }
+
         internal static void Apply()
         {
             ImGui.StyleColorsDark();
@@ -74,12 +109,14 @@ namespace GameHelper.Ui
         {
             ImGui.Spacing();
             ImGui.PushStyleColor(ImGuiCol.Text, Accent);
-            ImGui.Text(title);
+            ImGui.TextUnformatted(title);
             ImGui.PopStyleColor();
             if (!string.IsNullOrEmpty(subtitle))
             {
                 ImGui.PushStyleColor(ImGuiCol.Text, TextMuted);
-                ImGui.TextWrapped(subtitle);
+                ImGui.PushTextWrapPos(0);
+                ImGui.TextUnformatted(subtitle);
+                ImGui.PopTextWrapPos();
                 ImGui.PopStyleColor();
             }
 

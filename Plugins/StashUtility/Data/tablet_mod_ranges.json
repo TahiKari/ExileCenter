@@ -1,799 +1,1125 @@
 {
   "_meta": {
-    "purpose": "Value ranges for Precursor Tablet modifiers, used for min/max slider bounds and labels. Editable: update after a patch changes rolls; the plugin also auto-widens a range if it ever reads a higher value in-game.",
-    "source": "https://poe2db.tw/us/Tablet",
-    "patch": "0.5",
-    "unit_values": "percent | flat | seconds | none",
-    "id_note": "id is the internal mod id (matched to the plugin catalog). The additional-X family and Ritual Rare/Magic naming are best-effort and should be confirmed against the in-game debug dump, which reports the real mod id per line.",
-    "types_note": "Real in-game tablet types (0.5): overseer, temple, abyss, breach, delirium, ritual, plus the generic Precursor Tablet and the unique tablets (Irradiated tablets exist only as uniques). Expedition tablets are NOT obtainable, so their mods were removed.",
-    "count": 83
+    "source": "https://repoe-fork.github.io/poe2/mods.json",
+    "base_source": "https://repoe-fork.github.io/poe2/mods_by_base.json",
+    "translations": "https://poe2db.tw/fr/Tablet",
+    "verified": "2026-10-07",
+    "count": 86
   },
   "mods": [
     {
-      "id": "TowerDroppedItemRarityIncrease",
-      "affix": "prefix",
-      "min": 8,
-      "max": 12,
-      "unit": "percent",
-      "text": "increased Rarity of Items found in Map"
-    },
-    {
-      "id": "TowerAdditionalStoneCircle",
-      "affix": "prefix",
-      "min": 1,
-      "max": 1,
-      "unit": "flat",
-      "text": "Map contains 1 additional Summoning Circle"
-    },
-    {
-      "id": "TowerAdditionalExile",
-      "affix": "prefix",
-      "min": 1,
-      "max": 1,
-      "unit": "percent",
-      "text": "% increased Quantity of Waystones found in Map Map is inhabited by 1 additional Rogue Exiles"
-    },
-    {
-      "id": "TowerAdditionalAzmeriWisp",
-      "affix": "suffix",
-      "min": 1,
-      "max": 2,
-      "unit": "flat",
-      "text": "Map contains additional Azmeri Spirits"
-    },
-    {
-      "id": "TowerMonsterEffectiveness",
-      "affix": "prefix",
-      "min": 10,
-      "max": 15,
-      "unit": "percent",
-      "text": "Monsters have  increased Effectiveness"
-    },
-    {
-      "id": "TowerRareChestCount",
-      "affix": "prefix",
-      "min": 2,
-      "max": 3,
-      "unit": "flat",
-      "text": "Map contains additional Rare Chests"
-    },
-    {
-      "id": "TowerExperienceGainIncrease",
-      "affix": "prefix",
-      "min": 12,
-      "max": 18,
-      "unit": "percent",
-      "text": "increased Experience gain in Map"
-    },
-    {
-      "id": "TowerDroppedGoldIncrease",
-      "affix": "prefix",
-      "min": 25,
-      "max": 35,
-      "unit": "percent",
-      "text": "increased Gold found in Map"
-    },
-    {
-      "id": "TowerMonsterRarityIncrease",
-      "affix": "prefix",
-      "min": 15,
-      "max": 20,
-      "unit": "percent",
-      "text": "Map has  increased Monster Rarity"
-    },
-    {
-      "id": "TowerRarePackIncrease",
-      "affix": "prefix",
-      "min": 25,
-      "max": 35,
-      "unit": "percent",
-      "text": "Map has  increased number of Rare Monsters"
-    },
-    {
-      "id": "TowerMagicPackIncrease",
-      "affix": "prefix",
-      "min": 30,
-      "max": 40,
-      "unit": "percent",
-      "text": "Map has  increased Magic Monsters"
-    },
-    {
-      "id": "TowerPackSizeIncrease",
-      "affix": "prefix",
-      "min": 5,
-      "max": 7,
-      "unit": "percent",
-      "text": "increased Pack Size in Map"
-    },
-    {
-      "id": "TowerDeliriumAdditionalShardsChance",
-      "affix": "suffix",
-      "min": 12,
-      "max": 26,
-      "unit": "percent",
-      "text": "Delirium Fog in Map spawns  increased MirrorShards"
-    },
-    {
-      "id": "TowerMapBossExperience",
-      "affix": "suffix",
-      "min": 40,
-      "max": 80,
-      "unit": "percent",
-      "text": "Map Bosses grant  increased Experience"
-    },
-    {
-      "id": "TowerMapBossWaystoneChance",
-      "affix": "suffix",
-      "min": 18,
-      "max": 30,
-      "unit": "percent",
-      "text": "increased Quantity of Waystones dropped by Map Bosses"
-    },
-    {
-      "id": "TowerMapBossAdditionalSpirit",
-      "affix": "prefix",
-      "min": 1,
-      "max": 1,
-      "unit": "percent",
-      "text": "% increased Quantity of Waystones found in Map Map contains 1 additional Azmeri Spirits"
-    },
-    {
-      "id": "TowerMapBossAdditionalEssence",
-      "affix": "prefix",
-      "min": 1,
-      "max": 1,
-      "unit": "percent",
-      "text": "Map contains 1 additional Essences % increased Quantity of Waystones found in Map"
-    },
-    {
-      "id": "TowerAdditionalEssence",
-      "affix": "suffix",
-      "min": 1,
-      "max": 2,
-      "unit": "flat",
-      "text": "Map contains additional Essences"
-    },
-    {
-      "id": "TowerMapBossAdditionalShrine",
-      "affix": "suffix",
-      "min": 1,
-      "max": 2,
-      "unit": "flat",
-      "text": "Map contains additional Shrines"
-    },
-    {
-      "id": "TowerAdditionalShrine",
-      "affix": "suffix",
-      "min": 1,
-      "max": 1,
-      "unit": "percent",
-      "text": "% reduced Pack Size in Map % increased Quantity of Waystones found in Map Map contains 1 additional Shrines"
-    },
-    {
-      "id": "TowerMapBossAdditionalStrongbox",
-      "affix": "suffix",
-      "min": 1,
-      "max": 2,
-      "unit": "flat",
-      "text": "Map contains additional Strongboxes"
-    },
-    {
-      "id": "TowerAdditionalStrongbox",
-      "affix": "suffix",
-      "min": 1,
-      "max": 1,
-      "unit": "percent",
-      "text": "% reduced Pack Size in Map % increased Quantity of Waystones found in Map Map contains 1 additional Strongboxes"
-    },
-    {
-      "id": "TowerRitualOmenChance",
-      "affix": "suffix",
-      "min": 35,
-      "max": 70,
-      "unit": "percent",
-      "text": "Ritual Favours in Map have  increased chance to be Omens"
-    },
-    {
-      "id": "TowerMapBossRarity",
-      "affix": "suffix",
-      "min": 35,
-      "max": 60,
-      "unit": "percent",
-      "text": "increased Rarity of Items dropped by Map Bosses"
-    },
-    {
-      "id": "TowerRitualMagicMonsters",
-      "affix": "suffix",
-      "min": 25,
-      "max": 40,
-      "unit": "percent",
-      "text": "Revived Monsters from Ritual Altars in Map have  increased chance to be Rare"
-    },
-    {
-      "id": "TowerRitualRareMonsters",
-      "affix": "suffix",
-      "min": 35,
-      "max": 70,
-      "unit": "percent",
-      "text": "Revived Monsters from Ritual Altars in Map have  increased chance to be Magic"
-    },
-    {
-      "id": "TowerRitualChanceForNoCost",
-      "affix": "suffix",
-      "min": 3,
-      "max": 6,
-      "unit": "percent",
-      "text": "Favours Rerolled at Ritual Altars in Map have  chance to cost no Tribute"
-    },
-    {
-      "id": "TowerRitualAdditionalReroll",
-      "affix": "suffix",
-      "min": 1,
-      "max": 3,
-      "unit": "flat",
-      "text": "Ritual Altars in Map allow rerolling Favours additional times"
-    },
-    {
-      "id": "TowerRitualDeferSpeed",
-      "affix": "suffix",
-      "min": 25,
-      "max": 40,
-      "unit": "percent",
-      "text": "Favours Deferred at Ritual Altars in Map reappear  sooner"
-    },
-    {
-      "id": "TowerRitualDeferCostIncrease",
-      "affix": "suffix",
-      "min": 20,
-      "max": 30,
-      "unit": "percent",
-      "text": "Deferring Favours at Ritual Altars in Map costs  reduced Tribute"
-    },
-    {
-      "id": "TowerRitualRerollCostIncrease",
-      "affix": "suffix",
-      "min": 20,
-      "max": 30,
-      "unit": "percent",
-      "text": "Rerolling Favours at Ritual Altars in Map costs  reduced Tribute"
-    },
-    {
-      "id": "TowerRitualTributeIncrease",
-      "affix": "suffix",
-      "min": 18,
-      "max": 30,
-      "unit": "percent",
-      "text": "Monsters Sacrificed at Ritual Altars in Map grant  increased Tribute"
-    },
-    {
-      "id": "TowerIncursionRareChestChance",
-      "affix": "suffix",
-      "min": 30,
-      "max": 60,
-      "unit": "percent",
-      "text": "increased chance Vaal Beacon Chests are Rare in Map"
-    },
-    {
-      "id": "TowerAbyss4AdditionalChance",
-      "affix": "suffix",
-      "min": 20,
-      "max": 40,
-      "unit": "percent",
-      "text": "Map has  chance to contain four additional Abysses"
-    },
-    {
-      "id": "TowerIncursionBossChance",
-      "affix": "suffix",
-      "min": 10,
-      "max": 25,
-      "unit": "percent",
-      "text": "chance to add a Vaal Beacon Unique Monster to the Map"
-    },
-    {
-      "id": "TowerIncursionTokenChance",
-      "affix": "suffix",
-      "min": 5,
-      "max": 10,
-      "unit": "percent",
-      "text": "chance to gain an additional Crystal from Vaal Beacons in Map"
-    },
-    {
-      "id": "TowerIncursionSecondaryEncounters",
-      "affix": "suffix",
-      "min": 25,
-      "max": 50,
-      "unit": "percent",
-      "text": "increased chance Vaal Beacons summon additional Monsters in Map"
-    },
-    {
-      "id": "TowerIncursionExtraPacksChance",
-      "affix": "suffix",
-      "min": 30,
-      "max": 60,
-      "unit": "percent",
-      "text": "chance for an extra packs of Monsters around Vaal Beacons in Map"
-    },
-    {
-      "id": "TowerIncursionExtraPacks",
-      "affix": "suffix",
-      "min": 1,
-      "max": 1,
-      "unit": "flat",
-      "text": "1 extra packs of Monsters around Vaal Beacons in Map"
-    },
-    {
-      "id": "TowerIncursionPackSize",
-      "affix": "suffix",
-      "min": 10,
-      "max": 30,
-      "unit": "percent",
-      "text": "increased Pack Size for Monsters around Vaal Beacons in Map"
-    },
-    {
-      "id": "TowerAbyssExtraTickets",
-      "affix": "suffix",
-      "min": 20,
-      "max": 30,
-      "unit": "percent",
-      "text": "increased chance for Desecrated Currency from Abysses in Map"
-    },
-    {
-      "id": "TowerAbyssExtraModifiers",
-      "affix": "suffix",
-      "min": 20,
-      "max": 30,
-      "unit": "percent",
-      "text": "increased chance for Abyssal monsters in Map to have Abyssal Modifiers"
-    },
-    {
-      "id": "TowerMapBossQuantity",
-      "affix": "suffix",
-      "min": 13,
-      "max": 20,
-      "unit": "percent",
-      "text": "increased Quantity of Items dropped by Map Bosses"
-    },
-    {
-      "id": "TowerAbyssIncreasedRewards",
-      "affix": "suffix",
-      "min": 0,
-      "max": 0,
-      "unit": "none",
-      "text": "Abyss Pits in Map are twice as likely to have Rewards"
-    },
-    {
-      "id": "TowerAbyssAdditionalChance",
-      "affix": "suffix",
-      "min": 1,
-      "max": 1,
-      "unit": "flat",
-      "text": "Map contains 1 additional Abysses"
-    },
-    {
-      "id": "TowerAbyssDepthsChance",
-      "affix": "suffix",
-      "min": 10,
-      "max": 20,
-      "unit": "percent",
-      "text": "Abysses in Map have  increased chance to lead to an Abyssal Depths"
-    },
-    {
-      "id": "TowerAbyssEffectivenessPerChasm",
-      "affix": "suffix",
-      "min": 8,
-      "max": 12,
-      "unit": "percent",
-      "text": "Abyssal Monsters have  increased Effectiveness for each closed Pit, up to 100%"
-    },
-    {
-      "id": "TowerAbyssEnhancedMonstersPerChasm",
-      "affix": "suffix",
-      "min": 0,
-      "max": 0,
-      "unit": "none",
-      "text": "Abyssal Monsters in Map have increased Difficulty and Reward for each closed Pit"
-    },
-    {
-      "id": "TowerAbyssRareMonsterIncrease",
-      "affix": "suffix",
-      "min": 1,
-      "max": 2,
-      "unit": "flat",
-      "text": "additional Rare Monsters are spawned from Abysses in Map"
-    },
-    {
-      "id": "TowerAbyssMonsterIncrease",
-      "affix": "suffix",
-      "min": 20,
-      "max": 30,
-      "unit": "percent",
-      "text": "Abysses in Map spawn  increased Monsters"
-    },
-    {
-      "id": "TowerAdditionalExileChance",
-      "affix": "suffix",
-      "min": 70,
-      "max": 100,
-      "unit": "percent",
-      "text": "Map has  increased chance to contain Rogue Exiles"
-    },
-    {
-      "id": "TowerBreachAdditionalRares",
-      "affix": "suffix",
-      "min": 1,
-      "max": 3,
-      "unit": "flat",
-      "text": "Unstable Breaches in Map spawn additional Rare Monsters when Stabilised"
-    },
-    {
-      "id": "TowerBreachBossChance",
-      "affix": "suffix",
-      "min": 20,
-      "max": 50,
-      "unit": "percent",
-      "text": "Unstable Breaches in Map have  increased chance to contain Vruun, Marshal of Xesht"
-    },
-    {
-      "id": "TowerBreachWombgiftLevelChance",
-      "affix": "suffix",
-      "min": 10,
-      "max": 30,
-      "unit": "percent",
-      "text": "Wombgifts have  chance to drop one Level higher in Map"
-    },
-    {
-      "id": "TowerBreachWombgiftQuantity",
-      "affix": "suffix",
-      "min": 30,
-      "max": 60,
-      "unit": "percent",
-      "text": "increased Quantity of Wombgifts found in Map"
-    },
-    {
-      "id": "TowerBreachHivebloodQuantity",
-      "affix": "suffix",
-      "min": 30,
-      "max": 60,
-      "unit": "percent",
-      "text": "increased Quantity of Hiveblood found in Map"
-    },
-    {
-      "id": "TowerMapAdditionalUniqueMonsterModifier",
-      "affix": "suffix",
-      "min": 1,
-      "max": 1,
-      "unit": "flat",
-      "text": "Unique Monsters have 1 additional Rare Modifiers"
-    },
-    {
-      "id": "TowerMapAdditionalModifier",
-      "affix": "suffix",
-      "min": 1,
-      "max": 2,
-      "unit": "flat",
-      "text": "Map has additional random Modifiers"
-    },
-    {
-      "id": "TowerStoneCircleChance",
-      "affix": "suffix",
-      "min": 70,
-      "max": 100,
-      "unit": "percent",
-      "text": "Map has  increased chance to contain a Summoning Circle"
-    },
-    {
-      "id": "TowerBreachRareMonsterPotency",
-      "affix": "suffix",
-      "min": 5,
-      "max": 20,
-      "unit": "percent",
-      "text": "increased Effectiveness of Rare Breach Monsters in Map"
-    },
-    {
-      "id": "TowerAdditionalSpiritChance",
-      "affix": "suffix",
-      "min": 70,
-      "max": 100,
-      "unit": "percent",
-      "text": "Map has  increased chance to contain Azmeri Spirits"
-    },
-    {
-      "id": "TowerAdditionalEssenceChance",
-      "affix": "suffix",
-      "min": 70,
-      "max": 100,
-      "unit": "percent",
-      "text": "Map has  increased chance to contain Essences"
-    },
-    {
-      "id": "TowerAdditionalStrongboxChance",
-      "affix": "suffix",
-      "min": 70,
-      "max": 100,
-      "unit": "percent",
-      "text": "Map has  increased chance to contain Strongboxes"
-    },
-    {
-      "id": "TowerAdditionalShrineChance",
-      "affix": "suffix",
-      "min": 70,
-      "max": 100,
-      "unit": "percent",
-      "text": "Map has  increased chance to contain Shrines"
-    },
-    {
-      "id": "TowerRareAdditionalModChance",
-      "affix": "suffix",
-      "min": 50,
-      "max": 80,
-      "unit": "percent",
-      "text": "Rare Monsters in Map have a  Surpassing chance to have an additional Modifier"
-    },
-    {
-      "id": "TowerMapDroppedMapsIncrease",
-      "affix": "suffix",
-      "min": 30,
-      "max": 40,
-      "unit": "percent",
-      "text": "increased Quantity of Waystones found in Map"
-    },
-    {
-      "id": "TowerExpeditionRelicModEffect",
-      "affix": "suffix",
-      "min": 12,
-      "max": 18,
-      "unit": "percent",
-      "text": "increased Effect of Expedition Remnants in Map"
-    },
-    {
-      "id": "TowerDeliriumRareMonsterPause",
-      "affix": "suffix",
-      "min": 3,
-      "max": 5,
-      "unit": "seconds",
-      "text": "Slaying Rare Monsters in Map pauses the Delirium Mirror Timer for seconds"
-    },
-    {
-      "id": "TowerDeliriumDoodadsIncrease",
-      "affix": "suffix",
-      "min": 15,
-      "max": 30,
-      "unit": "percent",
-      "text": "Delirium Fog in Map spawns  increased Fracturing Mirrors"
-    },
-    {
-      "id": "TowerDeliriumPackSizeIncrease",
-      "affix": "suffix",
-      "min": 15,
-      "max": 30,
-      "unit": "percent",
-      "text": "Delirium Monsters in Map have  increased Pack Size"
-    },
-    {
-      "id": "TowerDeliriumDifficultyIncrease",
-      "affix": "suffix",
-      "min": 15,
-      "max": 30,
-      "unit": "percent",
-      "text": "Delirium Fog in Map applies  increased Deliriousness to Players"
-    },
-    {
-      "id": "TowerDeliriumFogPersistence",
-      "affix": "suffix",
-      "min": 20,
-      "max": 30,
-      "unit": "percent",
-      "text": "Delirium Fog in Map dissipates  slower"
-    },
-    {
-      "id": "TowerDeliriumFogDissipationDelayNew",
-      "affix": "suffix",
-      "min": 6,
-      "max": 12,
-      "unit": "seconds",
-      "text": "Delirium Fog in Map lasts additional seconds before dissipating"
-    },
-    {
-      "id": "TowerDeliriumMonsterSplinterIncrease",
-      "affix": "suffix",
-      "min": 15,
-      "max": 30,
-      "unit": "percent",
-      "text": "increased Stack size of Simulacrum Splinters found in Map"
-    },
-    {
-      "id": "TowerExpeditionRunicMonsters",
-      "affix": "suffix",
-      "min": 15,
-      "max": 30,
-      "unit": "percent",
-      "text": "Map contains  increased number of Runic Monster Markers"
-    },
-    {
-      "id": "TowerDeliriumBossChance",
-      "affix": "suffix",
-      "min": 15,
-      "max": 30,
-      "unit": "percent",
-      "text": "Delirium Encounters in Map are  more likely to spawn Unique Bosses"
-    },
-    {
-      "id": "TowerExpeditionRareMonsters",
-      "affix": "suffix",
-      "min": 25,
-      "max": 40,
-      "unit": "percent",
-      "text": "increased number of Rare Expedition Monsters in Map"
-    },
-    {
-      "id": "TowerExpeditionLogbookIncrease",
-      "affix": "suffix",
-      "min": 15,
-      "max": 30,
-      "unit": "percent",
-      "text": "increased Quantity of Expedition Logbooks dropped by Runic Monsters in Map"
-    },
-    {
-      "id": "TowerExpeditionExplosionRadius",
-      "affix": "suffix",
-      "min": 15,
-      "max": 30,
-      "unit": "percent",
-      "text": "increased Expedition Explosive Radius in Map"
-    },
-    {
-      "id": "TowerExpeditionRelicIncrease",
-      "affix": "suffix",
-      "min": 1,
-      "max": 2,
-      "unit": "flat",
-      "text": "Expeditions in Map have +Remnants"
-    },
-    {
-      "id": "TowerExpeditionExplosionPlacement",
-      "affix": "suffix",
-      "min": 15,
-      "max": 30,
-      "unit": "percent",
-      "text": "increased Expedition Explosive Placement Range in Map"
-    },
-    {
-      "id": "TowerExpeditionArtifactIncrease",
-      "affix": "suffix",
-      "min": 15,
-      "max": 30,
-      "unit": "percent",
-      "text": "increased quantity of Expedition Artifacts dropped by Monsters in Map"
-    },
-    {
-      "id": "TowerBreachMonsterQuantity",
-      "affix": "suffix",
-      "min": 5,
-      "max": 15,
-      "unit": "percent",
-      "text": "Breaches in Map have  increased Pack Size"
-    }
-  ],
-  "uniques": [
-    {
-      "unique": "Wraeclast Besieged",
-      "type": "Breach",
-      "text": "Breach Hives have additional waves of Hiveborn Monsters",
-      "min": 2,
-      "max": 5,
-      "unit": "flat"
-    },
-    {
-      "unique": "Wraeclast Besieged",
-      "type": "Breach",
-      "text": "Breaches have reduced Pack Size",
-      "min": -10,
-      "max": 20,
-      "unit": "percent"
-    },
-    {
-      "unique": "Wraeclast Besieged",
-      "type": "Breach",
-      "text": "Unstable Breaches take 120 additional seconds to collapse",
-      "min": 120,
-      "max": 120,
-      "unit": "seconds"
-    },
-    {
-      "unique": "Wraeclast Besieged",
-      "type": "Breach",
-      "text": "Unstable Breaches spawn additional Rare Monsters when Stabilised",
-      "min": 2,
-      "max": 5,
-      "unit": "flat"
-    },
-    {
-      "unique": "Clear Skies",
-      "type": "Delirium",
-      "text": "Delirium Fog never dissipates",
-      "min": 0,
-      "max": 0,
-      "unit": "none"
-    },
-    {
-      "unique": "Clear Skies",
-      "type": "Delirium",
-      "text": "Delirium Fog applies reduced Deliriousness to Players",
-      "min": -10,
-      "max": 10,
-      "unit": "percent"
-    },
-    {
-      "unique": "Freedom of Faith",
-      "type": "Ritual",
-      "text": "Favours at Ritual Altars cost increased Tribute",
-      "min": 10,
-      "max": 15,
-      "unit": "percent"
-    },
-    {
-      "unique": "Freedom of Faith",
-      "type": "Ritual",
-      "text": "Can Reroll Favours twice as many times",
-      "min": 0,
-      "max": 0,
-      "unit": "none"
-    },
-    {
-      "unique": "The Grand Project",
-      "type": "Irradiated",
-      "text": "Can only be applied to Precursor Tower Maps; completing makes all nearby Maps accessible",
-      "min": 0,
-      "max": 0,
-      "unit": "none"
-    },
-    {
-      "unique": "Visions of Paradise",
-      "type": "Irradiated",
-      "text": "If Map was not previously Irradiated, completing adds Irradiation instead",
-      "min": 0,
-      "max": 0,
-      "unit": "none"
-    },
-    {
-      "unique": "Mastered Domain",
-      "type": "Irradiated",
-      "text": "Map also counts as a Water Map",
-      "min": 0,
-      "max": 0,
-      "unit": "none"
-    },
-    {
-      "unique": "Season of the Hunt",
-      "type": "Overseer",
-      "text": "Map Bosses are Hunted by Azmeri Spirits",
-      "min": 0,
-      "max": 0,
-      "unit": "none"
-    },
-    {
-      "unique": "Cruel Hegemony",
-      "type": "Overseer",
-      "text": "Map Bosses have 1 additional Modifiers",
-      "min": 1,
-      "max": 1,
-      "unit": "flat"
-    },
-    {
-      "unique": "Unforeseen Consequences",
-      "type": "Abyss",
-      "text": "Map contains additional Abysses",
-      "min": 14,
-      "max": 18,
-      "unit": "flat"
-    },
-    {
-      "unique": "Unforeseen Consequences",
-      "type": "Abyss",
-      "text": "Map is overrun by the Abyssal (quantity +% final)",
-      "min": -75,
-      "max": -75,
-      "unit": "percent"
+      "Id": "TowerMonsterEffectiveness",
+      "Name": "Monsters have (10-15)% increased Effectiveness",
+      "Affix": "prefix",
+      "MinRoll": 10,
+      "MaxRoll": 15,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerDroppedItemRarityIncrease",
+      "Name": "(8-12)% increased Rarity of Items found in Map",
+      "Affix": "prefix",
+      "MinRoll": 8,
+      "MaxRoll": 12,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerPackSizeIncrease",
+      "Name": "(5-7)% increased Pack Size in Map",
+      "Affix": "prefix",
+      "MinRoll": 5,
+      "MaxRoll": 7,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerMagicPackIncrease",
+      "Name": "Map has (30-40)% increased Magic Monsters",
+      "Affix": "prefix",
+      "MinRoll": 30,
+      "MaxRoll": 40,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerRarePackIncrease",
+      "Name": "Map has (25-35)% increased number of Rare Monsters",
+      "Affix": "prefix",
+      "MinRoll": 25,
+      "MaxRoll": 35,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerMonsterRarityIncrease",
+      "Name": "Map has (15-20)% increased Monster Rarity",
+      "Affix": "prefix",
+      "MinRoll": 15,
+      "MaxRoll": 20,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerDroppedGoldIncrease",
+      "Name": "(25-35)% increased Gold found in Map",
+      "Affix": "prefix",
+      "MinRoll": 25,
+      "MaxRoll": 35,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExperienceGainIncrease",
+      "Name": "(12-18)% increased Experience gain in Map",
+      "Affix": "prefix",
+      "MinRoll": 12,
+      "MaxRoll": 18,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerRareChestCount",
+      "Name": "Map contains (2-3) additional Rare Chests",
+      "Affix": "prefix",
+      "MinRoll": 2,
+      "MaxRoll": 3,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAdditionalEssence",
+      "Name": "Map contains an additional Essence",
+      "Affix": "prefix",
+      "MinRoll": 1,
+      "MaxRoll": 1,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAdditionalAzmeriWisp",
+      "Name": "Map contains 1 additional Azmeri Spirit",
+      "Affix": "prefix",
+      "MinRoll": 1,
+      "MaxRoll": 1,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAdditionalExile",
+      "Name": "Map is inhabited by 1 additional Rogue Exile",
+      "Affix": "prefix",
+      "MinRoll": 1,
+      "MaxRoll": 1,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAdditionalStoneCircle",
+      "Name": "Map contains an additional Summoning Circle",
+      "Affix": "prefix",
+      "MinRoll": 1,
+      "MaxRoll": 1,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerMapDroppedMapsIncrease",
+      "Name": "(30-40)% increased Quantity of Waystones found in Map",
+      "Affix": "suffix",
+      "MinRoll": 30,
+      "MaxRoll": 40,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAdditionalShrineChance",
+      "Name": "Map has (70-100)% increased chance to contain Shrines",
+      "Affix": "suffix",
+      "MinRoll": 70,
+      "MaxRoll": 100,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAdditionalShrine",
+      "Name": "Map contains an additional Shrine",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 1,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAdditionalStrongboxChance",
+      "Name": "Map has (70-100)% increased chance to contain Strongboxes",
+      "Affix": "suffix",
+      "MinRoll": 70,
+      "MaxRoll": 100,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAdditionalStrongbox",
+      "Name": "Map contains an additional Strongbox",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 1,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAdditionalEssenceChance",
+      "Name": "Map has (70-100)% increased chance to contain Essences",
+      "Affix": "suffix",
+      "MinRoll": 70,
+      "MaxRoll": 100,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAdditionalSpiritChance",
+      "Name": "Map has (70-100)% increased chance to contain Azmeri Spirits",
+      "Affix": "suffix",
+      "MinRoll": 70,
+      "MaxRoll": 100,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAdditionalExileChance",
+      "Name": "Map has (70-100)% increased chance to contain Rogue Exiles",
+      "Affix": "suffix",
+      "MinRoll": 70,
+      "MaxRoll": 100,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerStoneCircleChance",
+      "Name": "Map has (70-100)% increased chance to contain a Summoning Circle",
+      "Affix": "suffix",
+      "MinRoll": 70,
+      "MaxRoll": 100,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerMapAdditionalModifier",
+      "Name": "Map has (1-2) additional random Modifiers",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 2,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerMapAdditionalUniqueMonsterModifier",
+      "Name": "Unique Monsters have 1 additional Rare Modifier",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 1,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet",
+        "Expedition Tablet",
+        "Delirium Tablet",
+        "Ritual Tablet",
+        "Irradiated Tablet",
+        "Overseer Tablet",
+        "Abyss Tablet",
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerBreachHivebloodQuantity",
+      "Name": "(30-60)% increased Quantity of Hiveblood found in Map",
+      "Affix": "suffix",
+      "MinRoll": 30,
+      "MaxRoll": 60,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet"
+      ]
+    },
+    {
+      "Id": "TowerBreachWombgiftQuantity",
+      "Name": "(30-60)% increased Quantity of Wombgifts found in Map",
+      "Affix": "suffix",
+      "MinRoll": 30,
+      "MaxRoll": 60,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet"
+      ]
+    },
+    {
+      "Id": "TowerBreachWombgiftLevelChance",
+      "Name": "Wombgifts have (10-30)% chance to drop one Level higher in Map",
+      "Affix": "suffix",
+      "MinRoll": 10,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet"
+      ]
+    },
+    {
+      "Id": "TowerBreachBossChance",
+      "Name": "Unstable Breaches in Map have (20-50)% increased chance to contain Vruun, Marshal of Xesht",
+      "Affix": "suffix",
+      "MinRoll": 20,
+      "MaxRoll": 50,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet"
+      ]
+    },
+    {
+      "Id": "TowerBreachAdditionalRares",
+      "Name": "Unstable Breaches in Map spawn (1-2) additional Rare Monsters when Stabilised",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 2,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet"
+      ]
+    },
+    {
+      "Id": "TowerBreachRareMonsterPotency",
+      "Name": "(5-20)% increased Effectiveness of Rare Breach Monsters in Map",
+      "Affix": "suffix",
+      "MinRoll": 5,
+      "MaxRoll": 20,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet"
+      ]
+    },
+    {
+      "Id": "TowerBreachMonsterQuantity",
+      "Name": "Breaches in Map have (5-15)% increased Pack Size",
+      "Affix": "suffix",
+      "MinRoll": 5,
+      "MaxRoll": 15,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Breach Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExpeditionExplosionRadius",
+      "Name": "(5-10)% increased Expedition Explosive Area of Effect in Map",
+      "Affix": "suffix",
+      "MinRoll": 5,
+      "MaxRoll": 10,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Expedition Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExpeditionLogbookIncrease",
+      "Name": "(15-25)% increased Quantity of Expedition Logbooks dropped by Runic Monsters in Map",
+      "Affix": "suffix",
+      "MinRoll": 15,
+      "MaxRoll": 25,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Expedition Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExpeditionRunicMonsters",
+      "Name": "Map contains (15-25)% increased number of Runic Monster Markers",
+      "Affix": "suffix",
+      "MinRoll": 15,
+      "MaxRoll": 25,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Expedition Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExpeditionIncreasedVerisium",
+      "Name": "Monsters from Verisium Remnants drop (15-25)% increased Verisium",
+      "Affix": "suffix",
+      "MinRoll": 15,
+      "MaxRoll": 25,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Expedition Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExpeditionUnearthedRares",
+      "Name": "The first (1-2) unearthed Runic Monsters will be Rare Monsters in Map",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 2,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Expedition Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExpeditionAdditionalSentinels",
+      "Name": "Expeditions contain (1-2) Additional Verisium Sentries in Map",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 2,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Expedition Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExpeditionIncreasedMonsterRarity",
+      "Name": "(15-25)% increased Expedition Monster Rarity in Map",
+      "Affix": "suffix",
+      "MinRoll": 15,
+      "MaxRoll": 25,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Expedition Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExpeditionFrozenBosses",
+      "Name": "Expeditions contain (1-2) Additional Bosses encased in ice in Map",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 2,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Expedition Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExpeditionBuriedStrongboxes",
+      "Name": "Expeditions contain (1-2) buried Strongboxes in Map",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 2,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Expedition Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExpeditionVaalRemnants",
+      "Name": "Expeditions contain (1-2) Vaal Relics in Map",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 2,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Expedition Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExpeditionChanceForVerisiumRemnant",
+      "Name": "Expeditions have +(30-40)% Surpassing chance to contain an additional Verisium Remnant",
+      "Affix": "suffix",
+      "MinRoll": 30,
+      "MaxRoll": 40,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Expedition Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExpeditionChanceForTwinnedElites",
+      "Name": "Expeditions have +(30-40)% Surpassing chance to Duplicate Runic Monsters in Map",
+      "Affix": "suffix",
+      "MinRoll": 30,
+      "MaxRoll": 40,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Expedition Tablet"
+      ]
+    },
+    {
+      "Id": "TowerExpedition2RunicModPassoverChance",
+      "Name": "Verisium Remnants have +(25-35)% chance to add an additional Runic Modifier in Map",
+      "Affix": "suffix",
+      "MinRoll": 25,
+      "MaxRoll": 35,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Expedition Tablet"
+      ]
+    },
+    {
+      "Id": "TowerDeliriumMonsterSplinterIncrease",
+      "Name": "(15-30)% increased Stack size of Simulacrum Splinters found in Map",
+      "Affix": "suffix",
+      "MinRoll": 15,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Delirium Tablet"
+      ]
+    },
+    {
+      "Id": "TowerDeliriumFogDissipationDelayNew",
+      "Name": "Delirium Fog in Map lasts (6-12) additional seconds before dissipating",
+      "Affix": "suffix",
+      "MinRoll": 6,
+      "MaxRoll": 12,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Delirium Tablet"
+      ]
+    },
+    {
+      "Id": "TowerDeliriumFogPersistence",
+      "Name": "Delirium Fog in Map dissipates (30-20)% slower",
+      "Affix": "suffix",
+      "MinRoll": 20,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Delirium Tablet"
+      ]
+    },
+    {
+      "Id": "TowerDeliriumDifficultyIncrease",
+      "Name": "Delirium Fog in Map applies (15-30)% increased Deliriousness to Players",
+      "Affix": "suffix",
+      "MinRoll": 15,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Delirium Tablet"
+      ]
+    },
+    {
+      "Id": "TowerDeliriumPackSizeIncrease",
+      "Name": "Delirium Monsters in Map have (15-30)% increased Pack Size",
+      "Affix": "suffix",
+      "MinRoll": 15,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Delirium Tablet"
+      ]
+    },
+    {
+      "Id": "TowerDeliriumDoodadsIncrease",
+      "Name": "Delirium Fog in Map spawns (15-30)% increased Fracturing Mirrors",
+      "Affix": "suffix",
+      "MinRoll": 15,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Delirium Tablet"
+      ]
+    },
+    {
+      "Id": "TowerDeliriumRareMonsterPause",
+      "Name": "Slaying Rare Monsters in Map pauses the Delirium Mirror Timer for (3-5) seconds",
+      "Affix": "suffix",
+      "MinRoll": 3,
+      "MaxRoll": 5,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Delirium Tablet"
+      ]
+    },
+    {
+      "Id": "TowerDeliriumBossChance",
+      "Name": "Delirium Encounters in Map are (15-30)% more likely to spawn Unique Bosses",
+      "Affix": "suffix",
+      "MinRoll": 15,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Delirium Tablet"
+      ]
+    },
+    {
+      "Id": "TowerDeliriumAdditionalShardsChance",
+      "Name": "Delirium Fog in Map spawns (12-26)% increased Mirror Shards",
+      "Affix": "suffix",
+      "MinRoll": 12,
+      "MaxRoll": 26,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Delirium Tablet"
+      ]
+    },
+    {
+      "Id": "TowerRitualTributeIncrease",
+      "Name": "Monsters Sacrificed at Ritual Altars in Map grant (18-30)% increased Tribute",
+      "Affix": "suffix",
+      "MinRoll": 18,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Ritual Tablet"
+      ]
+    },
+    {
+      "Id": "TowerRitualRerollCostIncrease",
+      "Name": "Rerolling Favours at Ritual Altars in Map costs (30-20)% reduced Tribute",
+      "Affix": "suffix",
+      "MinRoll": 20,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Ritual Tablet"
+      ]
+    },
+    {
+      "Id": "TowerRitualDeferCostIncrease",
+      "Name": "Deferring Favours at Ritual Altars in Map costs (30-20)% reduced Tribute",
+      "Affix": "suffix",
+      "MinRoll": 20,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Ritual Tablet"
+      ]
+    },
+    {
+      "Id": "TowerRitualDeferSpeed",
+      "Name": "Favours Deferred at Ritual Altars in Map reappear (25-40)% sooner",
+      "Affix": "suffix",
+      "MinRoll": 25,
+      "MaxRoll": 40,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Ritual Tablet"
+      ]
+    },
+    {
+      "Id": "TowerRitualAdditionalReroll",
+      "Name": "Ritual Altars in Map allow rerolling Favours (1-3) additional times",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 3,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Ritual Tablet"
+      ]
+    },
+    {
+      "Id": "TowerRitualChanceForNoCost",
+      "Name": "Favours Rerolled at Ritual Altars in Map have (3-6)% chance to cost no Tribute",
+      "Affix": "suffix",
+      "MinRoll": 300,
+      "MaxRoll": 600,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Ritual Tablet"
+      ]
+    },
+    {
+      "Id": "TowerRitualRareMonsters",
+      "Name": "Revived Monsters from Ritual Altars in Map have (35-70)% increased chance to be Magic",
+      "Affix": "suffix",
+      "MinRoll": 35,
+      "MaxRoll": 70,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Ritual Tablet"
+      ]
+    },
+    {
+      "Id": "TowerRitualMagicMonsters",
+      "Name": "Revived Monsters from Ritual Altars in Map have (25-40)% increased chance to be Rare",
+      "Affix": "suffix",
+      "MinRoll": 25,
+      "MaxRoll": 40,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Ritual Tablet"
+      ]
+    },
+    {
+      "Id": "TowerRitualOmenChance",
+      "Name": "Ritual Favours in Map have (35-70)% increased chance to be Omens",
+      "Affix": "suffix",
+      "MinRoll": 35,
+      "MaxRoll": 70,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Ritual Tablet"
+      ]
+    },
+    {
+      "Id": "TowerMapBossAdditionalStrongbox",
+      "Name": "Map contains (1-2) additional Strongboxes",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 2,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Overseer Tablet"
+      ]
+    },
+    {
+      "Id": "TowerMapBossAdditionalShrine",
+      "Name": "Map contains (1-2) additional Shrines",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 2,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Overseer Tablet"
+      ]
+    },
+    {
+      "Id": "TowerMapBossAdditionalEssence",
+      "Name": "Map contains (1-2) additional Essences",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 2,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Overseer Tablet"
+      ]
+    },
+    {
+      "Id": "TowerMapBossAdditionalSpirit",
+      "Name": "Map contains (1-2) additional Azmeri Spirits",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 2,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Overseer Tablet"
+      ]
+    },
+    {
+      "Id": "TowerMapBossWaystoneChance",
+      "Name": "(18-30)% increased Quantity of Waystones dropped by Map Bosses",
+      "Affix": "suffix",
+      "MinRoll": 18,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Overseer Tablet"
+      ]
+    },
+    {
+      "Id": "TowerMapBossExperience",
+      "Name": "Map Bosses grant (40-80)% increased Experience",
+      "Affix": "suffix",
+      "MinRoll": 40,
+      "MaxRoll": 80,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Overseer Tablet"
+      ]
+    },
+    {
+      "Id": "TowerMapBossRarity",
+      "Name": "(35-60)% increased Rarity of Items dropped by Map Bosses",
+      "Affix": "suffix",
+      "MinRoll": 35,
+      "MaxRoll": 60,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Overseer Tablet"
+      ]
+    },
+    {
+      "Id": "TowerMapBossQuantity",
+      "Name": "(13-20)% increased Quantity of Items dropped by Map Bosses",
+      "Affix": "suffix",
+      "MinRoll": 13,
+      "MaxRoll": 20,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Overseer Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAbyssMonsterIncrease",
+      "Name": "Abysses in Map spawn (20-30)% increased Monsters",
+      "Affix": "suffix",
+      "MinRoll": 20,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Abyss Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAbyssRareMonsterIncrease",
+      "Name": "(2-3) additional Rare Monsters are spawned from Abysses in Map",
+      "Affix": "suffix",
+      "MinRoll": 2,
+      "MaxRoll": 3,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Abyss Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAbyssEffectivenessPerChasm",
+      "Name": "Abyssal Monsters have (8-12)% increased Effectiveness for each closed Pit, up to 100%",
+      "Affix": "suffix",
+      "MinRoll": 8,
+      "MaxRoll": 12,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Abyss Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAbyssDepthsChance",
+      "Name": "Abysses in Map have (10-20)% increased chance to lead to an Abyssal Depths",
+      "Affix": "suffix",
+      "MinRoll": 10,
+      "MaxRoll": 20,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Abyss Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAbyssAdditionalChance",
+      "Name": "Map contains an additional Abyss",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 1,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Abyss Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAbyssIncreasedRewards",
+      "Name": "Abyss Pits in Map are twice as likely to have Rewards",
+      "Affix": "suffix",
+      "MinRoll": 50,
+      "MaxRoll": 50,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Abyss Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAbyss4AdditionalChance",
+      "Name": "Map has (20-40)% chance to contain four additional Abysses",
+      "Affix": "suffix",
+      "MinRoll": 20,
+      "MaxRoll": 40,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Abyss Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAbyssExtraModifiers",
+      "Name": "(20-30)% increased chance for Abyssal monsters in Map to have Abyssal Modifiers",
+      "Affix": "suffix",
+      "MinRoll": 20,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Abyss Tablet"
+      ]
+    },
+    {
+      "Id": "TowerAbyssExtraTickets",
+      "Name": "(20-30)% increased chance for Desecrated Currency from Abysses in Map",
+      "Affix": "suffix",
+      "MinRoll": 20,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Abyss Tablet"
+      ]
+    },
+    {
+      "Id": "TowerIncursionPackSize",
+      "Name": "(10-30)% increased Pack Size for Monsters around Vaal Beacons in Map",
+      "Affix": "suffix",
+      "MinRoll": 10,
+      "MaxRoll": 30,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerIncursionExtraPacks",
+      "Name": "1 extra pack of Monsters around Vaal Beacons in Map",
+      "Affix": "suffix",
+      "MinRoll": 1,
+      "MaxRoll": 1,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerIncursionExtraPacksChance",
+      "Name": "(30-60)% chance for an extra packs of Monsters around Vaal Beacons in Map",
+      "Affix": "suffix",
+      "MinRoll": 30,
+      "MaxRoll": 60,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerIncursionSecondaryEncounters",
+      "Name": "(25-50)% increased chance Vaal Beacons summon additional Monsters in Map",
+      "Affix": "suffix",
+      "MinRoll": 25,
+      "MaxRoll": 50,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerIncursionTokenChance",
+      "Name": "(5-10)% chance to gain an additional Crystal from Vaal Beacons in Map",
+      "Affix": "suffix",
+      "MinRoll": 5,
+      "MaxRoll": 10,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerIncursionBossChance",
+      "Name": "(10-25)% chance to add a Vaal Beacon Unique Monster to the Map",
+      "Affix": "suffix",
+      "MinRoll": 10,
+      "MaxRoll": 25,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Temple Tablet"
+      ]
+    },
+    {
+      "Id": "TowerIncursionRareChestChance",
+      "Name": "(30-60)% increased chance Vaal Beacon Chests are Rare in Map",
+      "Affix": "suffix",
+      "MinRoll": 30,
+      "MaxRoll": 60,
+      "RollValueIndex": 0,
+      "TabletTypes": [
+        "Temple Tablet"
+      ]
     }
   ]
 }

@@ -15,6 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <AuraLocalization Include="Localization\*.json" />
     <None Update="config\AuraTracker.settings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -34,6 +35,9 @@
   <Target Name="CopyFiles" AfterTargets="Build">
     <Copy SourceFiles="$(OutDir)$(TargetName)$(TargetExt);$(OutDir)$(TargetName).pdb"
           DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(AuraLocalization)"
+          DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)\Localization"
           SkipUnchangedFiles="true" />
   </Target>
 

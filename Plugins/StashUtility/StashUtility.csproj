@@ -29,14 +29,22 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="Data\jewel_mod_ranges.json">
+    <EmbeddedResource Include="Data\jewel_mod_ranges.json;Data\tablet_mod_ranges.json" />
+    <None Update="Data\jewel_mod_ranges.json;Data\tablet_mod_ranges.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 
   <Target Name="CopyFiles" AfterTargets="Build">
+    <Copy SourceFiles="@(StashLocalizationFiles)" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)\Localization" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(StashTabletIcons)" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)\images" SkipUnchangedFiles="true" />
     <Copy SourceFiles="$(OutDir)$(TargetName)$(TargetExt);$(OutDir)$(TargetName).pdb;" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\Data\jewel_mod_ranges.json" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)\Data" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\Data\jewel_mod_ranges.json;$(MSBuildProjectDirectory)\Data\tablet_mod_ranges.json" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)\Data" SkipUnchangedFiles="true" />
   </Target>
+
+  <ItemGroup>
+    <StashLocalizationFiles Include="Localization\*.json" />
+    <StashTabletIcons Include="images\Tablet*.webp" />
+  </ItemGroup>
 
 </Project>

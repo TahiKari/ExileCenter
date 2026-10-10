@@ -132,185 +132,195 @@ namespace SekhemaHelper
 
         public override void DrawSettings()
         {
-            // ---- Profile ----
-            ImGui.SeparatorText(this.L("sk.profile", "Profile"));
-            if (ImGui.BeginCombo(this.L("sk.active_profile", "Active Profile"), Settings.CurrentProfile))
-            {
-                foreach (var name in Settings.Profiles.Keys)
+            
+            this.DrawSettingsTabs("SekhemaHelperSettings",
+                ("profiles", "Profiles", () =>
                 {
-                    bool sel = name == Settings.CurrentProfile;
-                    if (ImGui.Selectable(name, sel))
-                        Settings.CurrentProfile = name;
-                    if (sel)
-                        ImGui.SetItemDefaultFocus();
-                }
-                ImGui.EndCombo();
-            }
-
-            // ---- Weights — {profile} (Reset + Room types / Afflictions / Rewards) ----
-            DrawWeightSettings();
-
-            ImGui.Checkbox(this.L("sk.debug", "Debug (show weights)"), ref Settings.DebugEnable);
-            if (Settings.DebugEnable)
-            {
-                // Debug/RE dump tooling below is developer-facing (references config file paths) — left in English.
-                ColorSwatch("Debug Text Color", ref Settings.TextColor);
-                ColorSwatch("Debug Background", ref Settings.BackgroundColor);
-                // Force the Death-crystal route through an explicit crystal-id set (ignores active/collected
-                // state + room filter), to reproduce a routing bug with a known crystal set.
-                ImGui.InputText("Force Crystal IDs (route override)", ref Settings.HazardDebugCrystalIds, 128);
-                ImGuiHelper.ToolTip("Comma/space separated crystal entity ids (read from the yellow/grey id labels). Empty = normal room route.");
-                ImGui.Checkbox("Paint Walkable Grid (where can I walk)", ref Settings.HazardDebugDrawWalkable);
-                ImGuiHelper.ToolTip("Green = cells the game marks walkable, around the player. Shows why an A* leg goes straight (player on a non-walkable cell).");
-                if (Settings.HazardDebugDrawWalkable)
-                    ImGui.SliderFloat("Walkable Paint Radius", ref Settings.HazardDebugWalkableRadius, 50f, 1200f, "%.0f");
-                // Dump every room's content FK pairs (+ the FloorData content vector) to
-                // config\fk_dump.txt on the next frame the Trial map is open.
-                if (ImGui.Button("Dump FK -> config\\fk_dump.txt"))
-                    this.dumpRequested = true;
-                if (ImGui.Button("Dump Honour candidates -> config\\honour_scan.txt"))
-                    this.scanHonourRequested = true;
-                ImGui.InputInt("Honour current", ref this.honourScanCur);
-                ImGui.InputInt("Honour max", ref this.honourScanMax);
-                if (ImGui.Button("Locate Honour by value -> config\\honour_byvalue.txt") &&
-                    this.honourScanCur > 0 && this.honourScanMax > 0)
-                    this.scanHonourByValueRequested = true;
-                if (ImGui.Button("Dump UI fingerprints -> config\\ui_fp_dump.txt"))
-                    this.dumpUiFpRequested = true;
-
-                // Whole-floor read (SanctumPlugin picks + placement records): draw every room (incl.
-                // UI-hidden) on the large map, and dump the floor + raw door bytes for edge-graph RE.
-                ImGui.Checkbox("Draw floor plots (all rooms on large map)", ref Settings.DebugDrawFloorPlots);
-                ImGuiHelper.ToolTip("Reads the client's terrain layout: every room's type+reward at its world position, incl. rooms the UI hides. Open the large map to see it.");
-                if (ImGui.Button("Dump floor -> config\\sekhema_floor_dump.txt"))
-                    this.dumpFloorRequested = true;
-
-                // --- Node->physical-room mapping research (open the Trial map for each action) ---
-                ImGui.SeparatorText("Room-mapping research");
-                ImGuiHelper.ToolTip("Collect ground-truth to reverse the server's (layer,room)->physical-room assignment. Keep the Trial map OPEN when pressing these.\n1) enter a fresh floor -> New floor snapshot\n2) in each room you visit -> Record current room\n3) at floor end -> Save floor\nRepeat for 8-15 floors; data lands in config\\sekhema_research\\dataset.jsonl.");
-                if (ImGui.Button("1) New floor snapshot"))
-                    this.researchNewFloorRequested = true;
-                ImGui.SameLine();
-                if (ImGui.Button("2) Record current room"))
-                    this.researchRecordRoomRequested = true;
-                ImGui.SameLine();
-                if (ImGui.Button("3) Save floor -> dataset.jsonl"))
-                    this.researchSaveFloorRequested = true;
-                ImGui.TextDisabled(FloorResearch.Status);
-            }
-
-            // ---- Display ----
-            ImGui.SeparatorText(this.L("sk.display", "Display"));
-            ImGui.Checkbox(this.L("sk.draw_best_path", "Draw Best Path"), ref Settings.DrawBestPath);
-            ImGui.SliderFloat(this.L("sk.frame_thickness", "Frame Thickness"), ref Settings.FrameThickness, 1f, 10f);
-            ColorSwatch(this.L("sk.best_path_color", "Best Path Color"), ref Settings.BestPathColor);
-
-            // ---- Overlay POI (Portals / Levers / Crystals) ----
-            if (ImGui.CollapsingHeader(this.Loc.Title("sk.overlay_poi", "Overlay POI", "sk_overlay_poi")))
-            {
-                ImGui.Indent();
-
-                ImGui.Checkbox(this.L("sk.show_portals", "Show Portals (Ritual)"), ref Settings.ShowPortals);
-                ImGuiHelper.ToolTip(this.L("sk.show_portals_hint", "Mark ACTIVE hazard Portals on the large map. Removed once a portal closes."));
-                if (Settings.ShowPortals)
-                    ColorSwatch(this.L("sk.portal_color", "Portal Color"), ref Settings.PortalColor);
-
-                ImGui.Checkbox(this.L("sk.show_levers", "Show Levers (Gauntlet)"), ref Settings.ShowLevers);
-                ImGuiHelper.ToolTip(this.L("sk.show_levers_hint", "Mark the un-activated Sanctum lever on the large map. Removed once pulled."));
-                if (Settings.ShowLevers)
-                    ColorSwatch(this.L("sk.lever_color", "Lever Color"), ref Settings.LeverColor);
-
-                if (Settings.ShowPortals || Settings.ShowLevers)
-                    ImGui.SliderFloat(this.L("sk.poi_marker_radius", "POI Marker Radius"), ref Settings.RoomObjectMarkerRadius, 4f, 20f);
-
-                ImGui.Spacing();
-                ImGui.Checkbox(this.L("sk.show_crystals", "Show Crystals (Escape)"), ref Settings.DrawHazardRoute);
-                ImGuiHelper.ToolTip(this.L("sk.show_crystals_hint", "Death-crystal (HourglassLethal) collection route + markers on the map overlay."));
-                if (Settings.DrawHazardRoute)
-                {
-                    ImGui.Checkbox(this.L("sk.follow_walkable", "Follow Walkable Terrain (A*)"), ref Settings.HazardWalkableRoute);
-                    ImGuiHelper.ToolTip(this.L("sk.follow_walkable_hint", "On: route follows the walkable path like Radar. Off: straight lines."));
-                    ColorSwatch(this.L("sk.route_line_color", "Route Line Color"), ref Settings.HazardRouteColor);
-                    ImGui.SameLine();
-                    ColorSwatch(this.L("sk.crystal_marker_color", "Crystal Marker Color"), ref Settings.HazardMarkerColor);
-                    ImGui.SliderFloat(this.L("sk.route_thickness", "Route Thickness"), ref Settings.HazardRouteThickness, 1f, 8f);
-                    ImGui.SliderFloat(this.L("sk.marker_radius", "Marker Radius"), ref Settings.HazardMarkerRadius, 3f, 20f);
-                    ImGui.SliderFloat(this.L("sk.max_grid_distance", "Max Grid Distance (0 = all)"), ref Settings.HazardMaxGridDistance, 0f, 500f, "%.0f");
-                    ImGui.SliderInt(this.L("sk.room_id_gap", "Room ID Gap (0 = off)"), ref Settings.HazardIdGroupGap, 0, 200);
-                    ImGuiHelper.ToolTip(this.L("sk.room_id_gap_hint", "Crystals of one room share contiguous entity ids; a larger gap = another room. Only the player's room is routed."));
-                    ImGui.SliderFloat(this.L("sk.room_margin", "Room Margin (in-room gate)"), ref Settings.HazardRoomMargin, 0f, 800f, "%.0f");
-                    ImGuiHelper.ToolTip(this.L("sk.room_margin_hint", "Route shows only when the player is within the crystal room's bounding box + this margin. Prevents it appearing from an adjacent room."));
-                }
-
-                ImGui.Unindent();
-            }
-
-            ImGui.Separator();
-
-            // ---- Final-room chest priority ----
-            ImGui.Checkbox(this.L("sk.mark_best_chests", "Mark Best Chests by Keys"), ref Settings.DrawChestPriority);
-            ImGuiHelper.ToolTip(this.L("sk.mark_best_chests_hint", "In the reward room, marks the best chests on the large map. For each key\n" +
-                "tier it highlights the top-N chests by content priority, where N = your live\n" +
-                "Bronze/Silver/Gold key count."));
-            if (Settings.DrawChestPriority)
-            {
-                ColorSwatch(this.L("sk.selected_marker_color", "Selected Marker Color"), ref Settings.ChestMarkerColor);
-                ImGui.SliderFloat(this.L("sk.chest_marker_radius", "Chest Marker Radius"), ref Settings.ChestMarkerRadius, 4f, 24f);
-                Settings.ChestPriorityOrder ??= ChestPriority.DefaultOrder();
-                Settings.ChestDisabledContent ??= new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-                if (ImGui.TreeNode(this.Loc.Title("sk.content_priority", "Content priority (top = best)", "sk_content_priority")))
-                {
-                    ImGui.TextDisabled(this.L("sk.content_priority_hint", "Tick a type to track it; higher in the list = higher priority.\n" +
-                        "Un-tick types you don't want marked (to track only a few, un-tick the rest).\n" +
-                        "Use the arrows to reorder."));
-                    var order = Settings.ChestPriorityOrder;
-                    var off = Settings.ChestDisabledContent;
-                    int moveFrom = -1, moveTo = -1;
-                    if (ImGui.BeginTable("chestPrio", 2,
-                        ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.SizingFixedFit))
+                    // ---- Profile ----
+                    ImGui.SeparatorText(this.L("sk.profile", "Profile"));
+                    if (ImGui.BeginCombo(this.L("sk.active_profile", "Active Profile"), Settings.CurrentProfile))
                     {
-                        ImGui.TableSetupColumn("##move", ImGuiTableColumnFlags.WidthFixed, 64f);
-                        ImGui.TableSetupColumn(this.L("sk.col_content", "Content"), ImGuiTableColumnFlags.WidthStretch);
-                        for (int i = 0; i < order.Count; i++)
+                        foreach (var name in Settings.Profiles.Keys)
                         {
-                            ImGui.TableNextRow();
-                            ImGui.TableSetColumnIndex(0);
-                            ImGui.PushID(i);
-                            if (ImGui.ArrowButton("up", ImGuiDir.Up) && i > 0)
-                            {
-                                moveFrom = i; moveTo = i - 1;
-                            }
-                            ImGui.SameLine();
-                            if (ImGui.ArrowButton("down", ImGuiDir.Down) && i < order.Count - 1)
-                            {
-                                moveFrom = i; moveTo = i + 1;
-                            }
-                            ImGui.TableSetColumnIndex(1);
-                            bool enabled = !off.Contains(order[i]);
-                            if (ImGui.Checkbox($"{i + 1}.  {order[i]}", ref enabled))
-                            {
-                                if (enabled) off.Remove(order[i]);
-                                else off.Add(order[i]);
-                            }
-                            ImGui.PopID();
+                            bool sel = name == Settings.CurrentProfile;
+                            if (ImGui.Selectable(name, sel))
+                                Settings.CurrentProfile = name;
+                            if (sel)
+                                ImGui.SetItemDefaultFocus();
                         }
-                        ImGui.EndTable();
+                        ImGui.EndCombo();
                     }
-                    // Apply at most one move per frame (after the loop, so the table isn't mutated mid-draw).
-                    if (moveFrom >= 0 && moveTo >= 0)
+                    
+                    // ---- Weights — {profile} (Reset + Room types / Afflictions / Rewards) ----
+                    DrawWeightSettings();
+                }),
+                ("appearance", "Appearance", () =>
+                {
+                    // ---- Display ----
+                    ImGui.SeparatorText(this.L("sk.display", "Display"));
+                    ImGui.Checkbox(this.L("sk.draw_best_path", "Draw Best Path"), ref Settings.DrawBestPath);
+                    ImGui.SliderFloat(this.L("sk.frame_thickness", "Frame Thickness"), ref Settings.FrameThickness, 1f, 10f);
+                    ColorSwatch(this.L("sk.best_path_color", "Best Path Color"), ref Settings.BestPathColor);
+                    
+                    // ---- Overlay POI (Portals / Levers / Crystals) ----
+                    if (ImGui.CollapsingHeader(this.Loc.Title("sk.overlay_poi", "Overlay POI", "sk_overlay_poi")))
                     {
-                        var item = order[moveFrom];
-                        order.RemoveAt(moveFrom);
-                        order.Insert(moveTo, item);
+                        ImGui.Indent();
+                    
+                        ImGui.Checkbox(this.L("sk.show_portals", "Show Portals (Ritual)"), ref Settings.ShowPortals);
+                        ImGuiHelper.ToolTip(this.L("sk.show_portals_hint", "Mark ACTIVE hazard Portals on the large map. Removed once a portal closes."));
+                        if (Settings.ShowPortals)
+                            ColorSwatch(this.L("sk.portal_color", "Portal Color"), ref Settings.PortalColor);
+                    
+                        ImGui.Checkbox(this.L("sk.show_levers", "Show Levers (Gauntlet)"), ref Settings.ShowLevers);
+                        ImGuiHelper.ToolTip(this.L("sk.show_levers_hint", "Mark the un-activated Sanctum lever on the large map. Removed once pulled."));
+                        if (Settings.ShowLevers)
+                            ColorSwatch(this.L("sk.lever_color", "Lever Color"), ref Settings.LeverColor);
+                    
+                        if (Settings.ShowPortals || Settings.ShowLevers)
+                            ImGui.SliderFloat(this.L("sk.poi_marker_radius", "POI Marker Radius"), ref Settings.RoomObjectMarkerRadius, 4f, 20f);
+                    
+                        ImGui.Spacing();
+                        ImGui.Checkbox(this.L("sk.show_crystals", "Show Crystals (Escape)"), ref Settings.DrawHazardRoute);
+                        ImGuiHelper.ToolTip(this.L("sk.show_crystals_hint", "Death-crystal (HourglassLethal) collection route + markers on the map overlay."));
+                        if (Settings.DrawHazardRoute)
+                        {
+                            ImGui.Checkbox(this.L("sk.follow_walkable", "Follow Walkable Terrain (A*)"), ref Settings.HazardWalkableRoute);
+                            ImGuiHelper.ToolTip(this.L("sk.follow_walkable_hint", "On: route follows the walkable path like Radar. Off: straight lines."));
+                            ColorSwatch(this.L("sk.route_line_color", "Route Line Color"), ref Settings.HazardRouteColor);
+                            ImGui.SameLine();
+                            ColorSwatch(this.L("sk.crystal_marker_color", "Crystal Marker Color"), ref Settings.HazardMarkerColor);
+                            ImGui.SliderFloat(this.L("sk.route_thickness", "Route Thickness"), ref Settings.HazardRouteThickness, 1f, 8f);
+                            ImGui.SliderFloat(this.L("sk.marker_radius", "Marker Radius"), ref Settings.HazardMarkerRadius, 3f, 20f);
+                            ImGui.SliderFloat(this.L("sk.max_grid_distance", "Max Grid Distance (0 = all)"), ref Settings.HazardMaxGridDistance, 0f, 500f, "%.0f");
+                            ImGui.SliderInt(this.L("sk.room_id_gap", "Room ID Gap (0 = off)"), ref Settings.HazardIdGroupGap, 0, 200);
+                            ImGuiHelper.ToolTip(this.L("sk.room_id_gap_hint", "Crystals of one room share contiguous entity ids; a larger gap = another room. Only the player's room is routed."));
+                            ImGui.SliderFloat(this.L("sk.room_margin", "Room Margin (in-room gate)"), ref Settings.HazardRoomMargin, 0f, 800f, "%.0f");
+                            ImGuiHelper.ToolTip(this.L("sk.room_margin_hint", "Route shows only when the player is within the crystal room's bounding box + this margin. Prevents it appearing from an adjacent room."));
+                        }
+                    
+                        ImGui.Unindent();
                     }
-                    if (ImGui.Button(this.L("sk.reset_chest_priority", "Reset chest priority order")))
+                }),
+                ("rewards", "Rewards", () =>
+                {
+                    // ---- Final-room chest priority ----
+                    ImGui.Checkbox(this.L("sk.mark_best_chests", "Mark Best Chests by Keys"), ref Settings.DrawChestPriority);
+                    ImGuiHelper.ToolTip(this.L("sk.mark_best_chests_hint", "In the reward room, marks the best chests on the large map. For each key\n" +
+                        "tier it highlights the top-N chests by content priority, where N = your live\n" +
+                        "Bronze/Silver/Gold key count."));
+                    if (Settings.DrawChestPriority)
                     {
-                        Settings.ChestPriorityOrder = ChestPriority.DefaultOrder();
-                        Settings.ChestDisabledContent = ChestPriority.DefaultDisabled();
+                        ColorSwatch(this.L("sk.selected_marker_color", "Selected Marker Color"), ref Settings.ChestMarkerColor);
+                        ImGui.SliderFloat(this.L("sk.chest_marker_radius", "Chest Marker Radius"), ref Settings.ChestMarkerRadius, 4f, 24f);
+                        Settings.ChestPriorityOrder ??= ChestPriority.DefaultOrder();
+                        Settings.ChestDisabledContent ??= new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+                        if (ImGui.TreeNode(this.Loc.Title("sk.content_priority", "Content priority (top = best)", "sk_content_priority")))
+                        {
+                            ImGui.TextDisabled(this.L("sk.content_priority_hint", "Tick a type to track it; higher in the list = higher priority.\n" +
+                                "Un-tick types you don't want marked (to track only a few, un-tick the rest).\n" +
+                                "Use the arrows to reorder."));
+                            var order = Settings.ChestPriorityOrder;
+                            var off = Settings.ChestDisabledContent;
+                            int moveFrom = -1, moveTo = -1;
+                            if (ImGui.BeginTable("chestPrio", 2,
+                                ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.SizingFixedFit))
+                            {
+                                ImGui.TableSetupColumn("##move", ImGuiTableColumnFlags.WidthFixed, 64f);
+                                ImGui.TableSetupColumn(this.L("sk.col_content", "Content"), ImGuiTableColumnFlags.WidthStretch);
+                                for (int i = 0; i < order.Count; i++)
+                                {
+                                    ImGui.TableNextRow();
+                                    ImGui.TableSetColumnIndex(0);
+                                    ImGui.PushID(i);
+                                    if (ImGui.ArrowButton("up", ImGuiDir.Up) && i > 0)
+                                    {
+                                        moveFrom = i; moveTo = i - 1;
+                                    }
+                                    ImGui.SameLine();
+                                    if (ImGui.ArrowButton("down", ImGuiDir.Down) && i < order.Count - 1)
+                                    {
+                                        moveFrom = i; moveTo = i + 1;
+                                    }
+                                    ImGui.TableSetColumnIndex(1);
+                                    bool enabled = !off.Contains(order[i]);
+                                    if (ImGui.Checkbox($"{i + 1}.  {order[i]}", ref enabled))
+                                    {
+                                        if (enabled) off.Remove(order[i]);
+                                        else off.Add(order[i]);
+                                    }
+                                    ImGui.PopID();
+                                }
+                                ImGui.EndTable();
+                            }
+                            // Apply at most one move per frame (after the loop, so the table isn't mutated mid-draw).
+                            if (moveFrom >= 0 && moveTo >= 0)
+                            {
+                                var item = order[moveFrom];
+                                order.RemoveAt(moveFrom);
+                                order.Insert(moveTo, item);
+                            }
+                            if (ImGui.Button(this.L("sk.reset_chest_priority", "Reset chest priority order")))
+                            {
+                                Settings.ChestPriorityOrder = ChestPriority.DefaultOrder();
+                                Settings.ChestDisabledContent = ChestPriority.DefaultDisabled();
+                            }
+                            ImGui.TreePop();
+                        }
                     }
-                    ImGui.TreePop();
-                }
-            }
+                }),
+                ("diagnostics", "Diagnostics", () =>
+                {
+                    ImGui.Checkbox(this.L("sk.debug", "Debug (show weights)"), ref Settings.DebugEnable);
+                    if (Settings.DebugEnable)
+                    {
+                        // Debug/RE dump tooling below is developer-facing (references config file paths) — left in English.
+                        ColorSwatch("Debug Text Color", ref Settings.TextColor);
+                        ColorSwatch("Debug Background", ref Settings.BackgroundColor);
+                        // Force the Death-crystal route through an explicit crystal-id set (ignores active/collected
+                        // state + room filter), to reproduce a routing bug with a known crystal set.
+                        ImGui.InputText("Force Crystal IDs (route override)", ref Settings.HazardDebugCrystalIds, 128);
+                        ImGuiHelper.ToolTip("Comma/space separated crystal entity ids (read from the yellow/grey id labels). Empty = normal room route.");
+                        ImGui.Checkbox("Paint Walkable Grid (where can I walk)", ref Settings.HazardDebugDrawWalkable);
+                        ImGuiHelper.ToolTip("Green = cells the game marks walkable, around the player. Shows why an A* leg goes straight (player on a non-walkable cell).");
+                        if (Settings.HazardDebugDrawWalkable)
+                            ImGui.SliderFloat("Walkable Paint Radius", ref Settings.HazardDebugWalkableRadius, 50f, 1200f, "%.0f");
+                        // Dump every room's content FK pairs (+ the FloorData content vector) to
+                        // config\fk_dump.txt on the next frame the Trial map is open.
+                        if (ImGui.Button("Dump FK -> config\\fk_dump.txt"))
+                            this.dumpRequested = true;
+                        if (ImGui.Button("Dump Honour candidates -> config\\honour_scan.txt"))
+                            this.scanHonourRequested = true;
+                        ImGui.InputInt("Honour current", ref this.honourScanCur);
+                        ImGui.InputInt("Honour max", ref this.honourScanMax);
+                        if (ImGui.Button("Locate Honour by value -> config\\honour_byvalue.txt") &&
+                            this.honourScanCur > 0 && this.honourScanMax > 0)
+                            this.scanHonourByValueRequested = true;
+                        if (ImGui.Button("Dump UI fingerprints -> config\\ui_fp_dump.txt"))
+                            this.dumpUiFpRequested = true;
+                    
+                        // Whole-floor read (SanctumPlugin picks + placement records): draw every room (incl.
+                        // UI-hidden) on the large map, and dump the floor + raw door bytes for edge-graph RE.
+                        ImGui.Checkbox("Draw floor plots (all rooms on large map)", ref Settings.DebugDrawFloorPlots);
+                        ImGuiHelper.ToolTip("Reads the client's terrain layout: every room's type+reward at its world position, incl. rooms the UI hides. Open the large map to see it.");
+                        if (ImGui.Button("Dump floor -> config\\sekhema_floor_dump.txt"))
+                            this.dumpFloorRequested = true;
+                    
+                        // --- Node->physical-room mapping research (open the Trial map for each action) ---
+                        ImGui.SeparatorText("Room-mapping research");
+                        ImGuiHelper.ToolTip("Collect ground-truth to reverse the server's (layer,room)->physical-room assignment. Keep the Trial map OPEN when pressing these.\n1) enter a fresh floor -> New floor snapshot\n2) in each room you visit -> Record current room\n3) at floor end -> Save floor\nRepeat for 8-15 floors; data lands in config\\sekhema_research\\dataset.jsonl.");
+                        if (ImGui.Button("1) New floor snapshot"))
+                            this.researchNewFloorRequested = true;
+                        ImGui.SameLine();
+                        if (ImGui.Button("2) Record current room"))
+                            this.researchRecordRoomRequested = true;
+                        ImGui.SameLine();
+                        if (ImGui.Button("3) Save floor -> dataset.jsonl"))
+                            this.researchSaveFloorRequested = true;
+                        ImGui.TextDisabled(FloorResearch.Status);
+                    }
+                }));
+            
         }
 
         // Edit the active profile's weights in place. Everything lives in Settings.Profiles, which is

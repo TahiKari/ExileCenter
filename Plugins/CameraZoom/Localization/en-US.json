@@ -1,0 +1,20 @@
+{
+    "plugin.description":  "Unlocks the camera zoom-out limit and restores the original setting when disabled.",
+    "help":  "Enable extended camera zoom, choose your limits, then use the game\u0027s mouse wheel. Disable this option to restore the game limits. The modification is also removed when GameHelper exits normally. Distances are saved; activation remains manual on each launch.",
+    "enable":  "Enable custom camera limits",
+    "detect":  "Check game compatibility",
+    "no_game":  "Open the game before checking the camera.",
+    "incompatible":  "The camera signature is missing, ambiguous or incompatible. No changes were made.",
+    "changed":  "The camera code changed. The operation was cancelled.",
+    "status.idle":  "Extended zoom is disabled. Open the game to check compatibility.",
+    "status.ready":  "Compatible camera detected. Extended zoom can be enabled.",
+    "status.active":  "Custom limits are active. Use the game\u0027s mouse wheel to adjust the distance between both limits.",
+    "status.restored":  "Original camera limit restored. Scroll the wheel to move the camera closer if necessary.",
+    "status.failed":  "Activation or compatibility check failed. Extended zoom is disabled.",
+    "status.restore_failed":  "Restoration failed. Try disabling extended zoom again; restarting the game restores the original camera.",
+    "minimum":  "Minimum distance (maximum zoom)",
+    "maximum":  "Maximum distance (maximum zoom-out)",
+    "limits_help":  "100% is the original zoom-out limit. Higher values move the camera further away. Changes apply while custom limits are enabled. The minimum limit respects the game\u0027s closest supported zoom.",
+    "reset":  "Restore original distances",
+    "invalid_distance":  "Invalid camera distance. Extended zoom has been stopped."
+}

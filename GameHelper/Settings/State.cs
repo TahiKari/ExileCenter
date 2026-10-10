@@ -74,6 +74,13 @@ namespace GameHelper.Settings
         /// </summary>
         public bool HideSettingWindowOnStart = false;
 
+        public bool SettingsOnSeparateWindow = false;
+        public bool SettingsWindowPositionSaved = false;
+        public int SettingsWindowX = 0;
+        public int SettingsWindowY = 0;
+        public int SettingsWindowWidth = 1100;
+        public int SettingsWindowHeight = 800;
+
         /// <summary>
         ///     Gets the language used by the main overlay UI.
         /// </summary>

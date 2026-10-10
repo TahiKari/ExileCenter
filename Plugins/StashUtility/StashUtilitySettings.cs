@@ -10,8 +10,30 @@ namespace StashUtility
         public bool EnableWaystoneManager = true;
         public bool EnableTabletManager = true;
         public bool EnableTabletUI = true;
+        public bool HideTabletHighlightsOnItemHover = true;
         public bool DisableBadTabletHighlight = false;
         public bool ShowOverlayInBackground = false;
+        public HashSet<int> ProtectedInventoryCells = new();
+        public int AffinityTransferDelayMs = 60;
+        public bool ShowInventoryTransferButton = true;
+        public bool InventoryTransferButtonLocked = true;
+        public Vector2 InventoryTransferButtonOffset = Vector2.Zero;
+        public bool ShowInventorySortButton = true;
+        public bool ShowStashSortButton = true;
+        public Vector2 StashToolbarOffset = Vector2.Zero;
+        public bool SortByType = true;
+        public bool SortGemsByLevel = true;
+
+        // Only names and folder paths are saved; game addresses are never restored.
+        public List<StashDestination> ScannedStashTabs = new();
+
+        // Stable group keys; custom tab/folder names are stored without translation.
+        public Dictionary<string, StashDestination> TransferDestinations = new()
+        {
+            ["Equipment"] = new(),
+            ["Accessories"] = new(),
+            ["Other"] = new()
+        };
 
         // UI path for the waystone stash tab
         public string PathString = "2,0,0,0,1,1,45,0,1";
@@ -146,10 +168,29 @@ namespace StashUtility
         };
 
         public Dictionary<string, TabletProfile> TabletProfiles = new();
+        public int TabletFarmPresetVersion;
+    }
+
+    public class StashDestination
+    {
+        public string TabName = string.Empty;
+        public List<string> OverflowTabNames = new();
+        public string FolderName = string.Empty;
+        public List<string> FolderPath = new();
+        public string ExampleItemName = string.Empty;
+        public bool IsAutomatic;
+        public bool Disabled;
+
+        public void SetFolders(List<string> folders)
+        {
+            FolderPath = new List<string>(folders);
+            FolderName = string.Join(" / ", folders);
+        }
     }
 
     public class TabletProfile
-    {
+    {        public Dictionary<string, string> ModRanks = new();
+
         public List<string> GoodModPatterns = new();
         public List<string> BadModPatterns = new();
         public List<string> GodModPatterns = new();

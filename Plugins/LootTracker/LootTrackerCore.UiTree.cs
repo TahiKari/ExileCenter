@@ -22,6 +22,59 @@ namespace LootTracker
     // forks' GameOffsets builds.
     public sealed partial class LootTrackerCore
     {
+        private DateTime nextMapCompletionCheckUtc;
+
+        private void UpdateMapCompletion()
+        {
+            if (!this.onMapArea || this.current == null || this.current.IsFinished) return;
+            var now = DateTime.UtcNow;
+            if (now < this.nextMapCompletionCheckUtc) return;
+            this.nextMapCompletionCheckUtc = now.AddMilliseconds(250);
+            var ui = Core.States.InGameStateObject?.GameUi;
+            if (ui == null || ui.Address == IntPtr.Zero || !this.EnsureProcess()) return;
+            // Chat and inventory/Atlas text are not the current map's completion HUD.
+            EnsureGameUiReflection(ui);
+            var excluded = new System.Collections.Generic.HashSet<IntPtr>
+            { ui.ChatParent.Address, ui.LeftPanel.Address, ui.RightPanel.Address };
+            if (atlasProp?.GetValue(ui) is GameHelper.RemoteObjects.UiElement.UiElementBase atlas) excluded.Add(atlas.Address);
+            if (worldMapProp?.GetValue(ui) is GameHelper.RemoteObjects.UiElement.UiElementBase world) excluded.Add(world.Address);
+            if (this.HasMapCompletionLabel(ui.Address, excluded)) this.FinishCurrentMap(now);
+        }
+
+        private bool HasMapCompletionLabel(IntPtr root, System.Collections.Generic.HashSet<IntPtr> excluded)
+        {
+            var pending = new System.Collections.Generic.Stack<(IntPtr address, int depth)>();
+            var visited = new System.Collections.Generic.HashSet<IntPtr>();
+            pending.Push((root, 0));
+            while (pending.Count > 0 && visited.Count < 2048)
+            {
+                var (address, depth) = pending.Pop();
+                if (address == IntPtr.Zero || depth > 16 || excluded.Contains(address) || !visited.Add(address) ||
+                    !this.TryReadFlagsRaw(address, out var flags) || (depth > 0 && (flags & UiIsVisibleMask) == 0)) continue;
+                string id = this.ReadStdWString(address + 0x98);
+                if ((id == "label" || id.EndsWith("_label", StringComparison.Ordinal)) &&
+                    IsMapCompletionText(this.ReadStdWString(address + 0x360))) return true;
+                if (!this.TryReadStdVector(address + UiChildrenOffset, out var first, out var last)) continue;
+                long count = ((long)last - (long)first) / IntPtr.Size;
+                if (count < 1 || count > 1024) continue;
+                for (int i = (int)count - 1; i >= 0 && pending.Count < 2048; i--)
+                    pending.Push((this.ReadPtr(first + i * IntPtr.Size), depth + 1));
+            }
+            return false;
+        }
+
+        private static bool IsMapCompletionText(string text)
+        {
+            // Match an explicit full label, never a substring of a quest/chat/item tooltip.
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]*>", string.Empty);
+            var normalized = new System.Text.StringBuilder();
+            foreach (char c in text.Normalize(System.Text.NormalizationForm.FormD))
+                if (char.IsLetter(c)) normalized.Append(char.ToLowerInvariant(c));
+            return normalized.ToString() is "mapcomplete" or "mapcompleted" or "mapobjectivecomplete" or "mapobjectivecompleted" or "carteterminee" or
+                "carteachevee" or "carteaccomplie" or "cartecompletee" or "cartevalidee" or "cartereussie" or "objectifdelacarteaccompli";
+        }
+
         private static readonly uint[] ExpBarFingerprints = { 0x005026F1, 0x004426F3 };
 
         // 0.5.5: every UiElementBase field after ParentPtr moved -0x18 (vtable / Self / children /

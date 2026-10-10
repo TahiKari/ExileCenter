@@ -153,208 +153,216 @@
 
         public override void DrawSettings()
         {
-            #region SettingsUI
-            ImGui.SeparatorText("Search Maps");
-            ImGui.InputTextWithHint("Search Map", "You can search multiple maps at once using a comma separator ','", ref Settings.SearchQuery, 256);
-            ImGui.SameLine();
-            if (ImGui.SmallButton("Clear"))
-                Settings.SearchQuery = string.Empty;
-            ImGui.SeparatorText("Show shortest path to");
-            DrawUnifiedCategories();
-
-            ImGui.SliderFloat("Path Thickness", ref Settings.PathLineThickness, 1.0f, 8.0f);
-
-            ImGui.SeparatorText("Atlas Settings");
-            ImGui.Checkbox("Hide Completed Maps", ref Settings.HideCompletedMaps);
-            ImGui.Checkbox("Hide Not Accessible Maps", ref Settings.HideNotAccessibleMaps);
-            ImGui.Checkbox("Show Map Counts", ref Settings.ShowMapCounts);
-            ImGuiHelper.ToolTip("Draw connected-node and badge counts under each map label on the Atlas.");
-            ImGui.Checkbox("Show Content", ref Settings.ShowContent);
-            ImGuiHelper.ToolTip("Draw the node's content under each map label, using the known names.");
-            ImGui.SameLine();
-            ImGui.Checkbox("Show Node Index (debug/RE)", ref Settings.ShowNodeIndex);
-            if (Settings.ShowContent)
-            {
-                ImGui.Indent();
-                ImGui.Checkbox("Show Content Icons", ref Settings.ShowContentIcons);
-                if (Settings.ShowContentIcons)
-                    ImGui.SliderFloat("Content Icon Size", ref Settings.ContentIconSize, 16f, 64f);
-                ImGui.Checkbox("Debug Content", ref Settings.ShowContentDebug);
-                ImGuiHelper.ToolTip("Also show unmapped content as its raw 0x value (for identifying new content).");
-                ImGui.Unindent();
-            }
-            ImGui.Checkbox("Show Biome Border", ref Settings.ShowBiomeBorder);
-            if (Settings.ShowBiomeBorder)
-                if (ImGui.TreeNode("Biome Settings"))
+            
+            this.DrawSettingsTabs("Atlas2Settings",
+                ("search", "Search", () =>
                 {
-                    ImGui.SetNextItemWidth(180);
-                    ImGui.SliderFloat("Biome Border Thickness", ref Settings.BiomeBorderThickness, 1.0f, 6.0f);
-
-                    if (ImGui.BeginTable("split", 3))
+                    ImGui.SeparatorText("Search Maps");
+                    ImGui.InputTextWithHint("Search Map", "You can search multiple maps at once using a comma separator ','", ref Settings.SearchQuery, 256);
+                    ImGui.SameLine();
+                    if (ImGui.SmallButton("Clear"))
+                        Settings.SearchQuery = string.Empty;
+                    ImGui.SeparatorText("Show shortest path to");
+                    DrawUnifiedCategories();
+                    
+                    ImGui.SliderFloat("Path Thickness", ref Settings.PathLineThickness, 1.0f, 8.0f);
+                }),
+                ("appearance", "Appearance", () =>
+                {
+                    ImGui.SeparatorText("Atlas Settings");
+                    ImGui.Checkbox("Hide Completed Maps", ref Settings.HideCompletedMaps);
+                    ImGui.Checkbox("Hide Not Accessible Maps", ref Settings.HideNotAccessibleMaps);
+                    ImGui.Checkbox("Show Map Counts", ref Settings.ShowMapCounts);
+                    ImGuiHelper.ToolTip("Draw connected-node and badge counts under each map label on the Atlas.");
+                    ImGui.Checkbox("Show Content", ref Settings.ShowContent);
+                    ImGuiHelper.ToolTip("Draw the node's content under each map label, using the known names.");
+                    ImGui.SameLine();
+                    ImGui.Checkbox("Show Node Index (debug/RE)", ref Settings.ShowNodeIndex);
+                    if (Settings.ShowContent)
                     {
-                        foreach (var biome in Biomes)
-                        {
-                            ImGui.TableNextColumn();
-                            var id = biome.Key;
-                            var info = biome.Value;
-
-                            if (!Settings.BiomeOverrides.TryGetValue(id, out var ov))
-                            {
-                                ov = new ContentOverride();
-                                Settings.BiomeOverrides[id] = ov;
-                            }
-
-                            bool show = ov.Show ?? info.Show;
-                            if (ImGui.Checkbox($"##Show##{id}", ref show))
-                            {
-                                ov.Show = show;
-                                ApplyBiomeOverrides();
-                            }
-
-                            var border = ov.BorderColor ?? info.BdColor;
-                            ImGui.SameLine();
-                            ColorSwatch($"Border Color##Biome{id}", ref border);
-                            if (!ColorsEqual(border, ov.BorderColor ?? info.BdColor))
-                            {
-                                ov.BorderColor = border;
-                                ApplyBiomeOverrides();
-                            }
-
-                            var label = string.IsNullOrWhiteSpace(info.Label) ? $"Biome {id}" : info.Label;
-                            ImGui.SameLine();
-                            ImGui.Text(label);
-                        }
-                        ImGui.EndTable();
+                        ImGui.Indent();
+                        ImGui.Checkbox("Show Content Icons", ref Settings.ShowContentIcons);
+                        if (Settings.ShowContentIcons)
+                            ImGui.SliderFloat("Content Icon Size", ref Settings.ContentIconSize, 16f, 64f);
+                        ImGui.Checkbox("Debug Content", ref Settings.ShowContentDebug);
+                        ImGuiHelper.ToolTip("Also show unmapped content as its raw 0x value (for identifying new content).");
+                        ImGui.Unindent();
                     }
-
-                    ImGui.TreePop();
-                }
-
-            ImGui.Checkbox("Show Atlas Graph", ref Settings.ShowAtlasGraph);
-            if (Settings.ShowAtlasGraph)
-            {
-                ImGui.SameLine();
-                ColorSwatch("##AtlasGraphLineColor", ref Settings.AtlasGraphLineColor);
-                ImGui.SliderFloat("Graph X-Offset", ref Settings.AtlasGraphOffsetX, -200f, 200f);
-                ImGui.SliderFloat("Graph Y-Offset", ref Settings.AtlasGraphOffsetY, -200f, 200f);
-            }
-
-            if (ImGui.TreeNode("Uncharted Waters"))
-            {
-                ImGui.Checkbox("Highlight hovered ship leylines", ref Settings.ShowUnchartedLeylines);
-                ImGuiHelper.ToolTip("Highlights the atlas nodes and connections revealed by the hovered Uncharted Waters ship.");
-                if (Settings.ShowUnchartedLeylines)
+                    ImGui.Checkbox("Show Biome Border", ref Settings.ShowBiomeBorder);
+                    if (Settings.ShowBiomeBorder)
+                        if (ImGui.TreeNode("Biome Settings"))
+                        {
+                            ImGui.SetNextItemWidth(180);
+                            ImGui.SliderFloat("Biome Border Thickness", ref Settings.BiomeBorderThickness, 1.0f, 6.0f);
+                    
+                            if (ImGui.BeginTable("split", 3))
+                            {
+                                foreach (var biome in Biomes)
+                                {
+                                    ImGui.TableNextColumn();
+                                    var id = biome.Key;
+                                    var info = biome.Value;
+                    
+                                    if (!Settings.BiomeOverrides.TryGetValue(id, out var ov))
+                                    {
+                                        ov = new ContentOverride();
+                                        Settings.BiomeOverrides[id] = ov;
+                                    }
+                    
+                                    bool show = ov.Show ?? info.Show;
+                                    if (ImGui.Checkbox($"##Show##{id}", ref show))
+                                    {
+                                        ov.Show = show;
+                                        ApplyBiomeOverrides();
+                                    }
+                    
+                                    var border = ov.BorderColor ?? info.BdColor;
+                                    ImGui.SameLine();
+                                    ColorSwatch($"Border Color##Biome{id}", ref border);
+                                    if (!ColorsEqual(border, ov.BorderColor ?? info.BdColor))
+                                    {
+                                        ov.BorderColor = border;
+                                        ApplyBiomeOverrides();
+                                    }
+                    
+                                    var label = string.IsNullOrWhiteSpace(info.Label) ? $"Biome {id}" : info.Label;
+                                    ImGui.SameLine();
+                                    ImGui.Text(label);
+                                }
+                                ImGui.EndTable();
+                            }
+                    
+                            ImGui.TreePop();
+                        }
+                    
+                    ImGui.SeparatorText("Layout Settings");
+                    var nudge = Settings.AnchorNudge;
+                    if (ImGui.SliderFloat2("Layout Nudge (px)", ref nudge, -60f, 60f))
+                        Settings.AnchorNudge = nudge;
+                    ImGui.SliderFloat("Scale Multiplier", ref Settings.ScaleMultiplier, 0.5f, 3.0f);
+                }),
+                ("tools", "Tools", () =>
                 {
-                    ImGui.ColorEdit4("Leyline Color", ref Settings.UnchartedLeylineColor);
-                    ImGui.SliderFloat("Leyline Thickness", ref Settings.UnchartedLeylineThickness, 1f, 12f);
-                }
-
-                ImGui.Checkbox("Show ships in fog", ref Settings.ShowShipsInFog);
-                ImGuiHelper.ToolTip("Marks Uncharted Waters ships that the game is not currently rendering.");
-                if (Settings.ShowShipsInFog)
-                    ImGui.SliderFloat("Ship Icon Size", ref Settings.ShipIconSize, 16f, 96f);
-                ImGui.TreePop();
-            }
-
-            if (ImGui.TreeNode("Ritual Atlas Line"))
-            {
-                ImGui.Checkbox("Predict Ritual mods", ref Settings.ShowRitualPrediction);
-                ImGuiHelper.ToolTip("Predicts the deterministic Rite modifiers for eligible Ritual-line routes.");
-                ImGui.Checkbox("Head of the King planner", ref Settings.ShowRitualPlanner);
-                ImGuiHelper.ToolTip("Lists and highlights Ritual routes and their predicted rewards while line mode is active.");
-                if (Settings.ShowRitualPlanner)
-                    DrawRewardWeightsTable();
-                ImGui.TreePop();
-            }
-
-            ImGui.SeparatorText("Layout Settings");
-            var nudge = Settings.AnchorNudge;
-            if (ImGui.SliderFloat2("Layout Nudge (px)", ref nudge, -60f, 60f))
-                Settings.AnchorNudge = nudge;
-            ImGui.SliderFloat("Scale Multiplier", ref Settings.ScaleMultiplier, 0.5f, 3.0f);
-
-            if (false && ImGui.TreeNode("Legacy Map Groups"))
-            {
-                ImGui.InputTextWithHint("##MapGroupName", "group name", ref Settings.GroupNameInput, 256);
-                ImGui.SameLine();
-                if (ImGui.Button("Add new map group"))
-                {
-                    Settings.MapGroups.Add(new MapGroupSettings(Settings.GroupNameInput, Settings.DefaultBackgroundColor, Settings.DefaultFontColor));
-                    Settings.GroupNameInput = string.Empty;
-                }
-
-                for (int i = 0; i < Settings.MapGroups.Count; i++)
-                {
-                    var mapGroup = Settings.MapGroups[i];
-                    if (ImGui.TreeNode($"{mapGroup.Name}##MapGroup{i}"))
+                    ImGui.Checkbox("Show Atlas Graph", ref Settings.ShowAtlasGraph);
+                    if (Settings.ShowAtlasGraph)
                     {
-                        float buttonSize = ImGui.GetFrameHeight();
-                        if (TriangleButton($"##Up{i}", buttonSize, new Vector4(1, 1, 1, 1), true))
+                        ImGui.SameLine();
+                        ColorSwatch("##AtlasGraphLineColor", ref Settings.AtlasGraphLineColor);
+                        ImGui.SliderFloat("Graph X-Offset", ref Settings.AtlasGraphOffsetX, -200f, 200f);
+                        ImGui.SliderFloat("Graph Y-Offset", ref Settings.AtlasGraphOffsetY, -200f, 200f);
+                    }
+                    
+                    if (ImGui.TreeNode("Uncharted Waters"))
+                    {
+                        ImGui.Checkbox("Highlight hovered ship leylines", ref Settings.ShowUnchartedLeylines);
+                        ImGuiHelper.ToolTip("Highlights the atlas nodes and connections revealed by the hovered Uncharted Waters ship.");
+                        if (Settings.ShowUnchartedLeylines)
                         {
-                            MoveMapGroup(i, -1);
+                            ImGui.ColorEdit4("Leyline Color", ref Settings.UnchartedLeylineColor);
+                            ImGui.SliderFloat("Leyline Thickness", ref Settings.UnchartedLeylineThickness, 1f, 12f);
                         }
+                    
+                        ImGui.Checkbox("Show ships in fog", ref Settings.ShowShipsInFog);
+                        ImGuiHelper.ToolTip("Marks Uncharted Waters ships that the game is not currently rendering.");
+                        if (Settings.ShowShipsInFog)
+                            ImGui.SliderFloat("Ship Icon Size", ref Settings.ShipIconSize, 16f, 96f);
+                        ImGui.TreePop();
+                    }
+                    
+                    if (ImGui.TreeNode("Ritual Atlas Line"))
+                    {
+                        ImGui.Checkbox("Predict Ritual mods", ref Settings.ShowRitualPrediction);
+                        ImGuiHelper.ToolTip("Predicts the deterministic Rite modifiers for eligible Ritual-line routes.");
+                        ImGui.Checkbox("Head of the King planner", ref Settings.ShowRitualPlanner);
+                        ImGuiHelper.ToolTip("Lists and highlights Ritual routes and their predicted rewards while line mode is active.");
+                        if (Settings.ShowRitualPlanner)
+                            DrawRewardWeightsTable();
+                        ImGui.TreePop();
+                    }
+                    
+                    if (false && ImGui.TreeNode("Legacy Map Groups"))
+                    {
+                        ImGui.InputTextWithHint("##MapGroupName", "group name", ref Settings.GroupNameInput, 256);
                         ImGui.SameLine();
-                        if (TriangleButton($"##Down{i}", buttonSize, new Vector4(1, 1, 1, 1), false))
+                        if (ImGui.Button("Add new map group"))
                         {
-                            MoveMapGroup(i, 1);
+                            Settings.MapGroups.Add(new MapGroupSettings(Settings.GroupNameInput, Settings.DefaultBackgroundColor, Settings.DefaultFontColor));
+                            Settings.GroupNameInput = string.Empty;
                         }
-                        ImGui.SameLine();
-                        if (ImGui.Button($"Rename Group##{i}"))
+                    
+                        for (int i = 0; i < Settings.MapGroups.Count; i++)
                         {
-                            NewGroupName = mapGroup.Name;
-                            ImGui.OpenPopup($"RenamePopup##{i}");
-                        }
-                        ImGui.SameLine();
-                        if (ImGui.Button($"Delete Group##{i}"))
-                        {
-                            DeleteMapGroup(i);
-                        }
-                        ImGui.SameLine();
-                        ColorSwatch($"##MapGroupBackgroundColor{i}", ref mapGroup.BackgroundColor);
-                        ImGui.SameLine();
-                        ImGui.Text("Background Color");
-                        ImGui.SameLine();
-                        ColorSwatch($"##MapGroupFontColor{i}", ref mapGroup.FontColor);
-                        ImGui.SameLine(); ImGui.Text("Font Color");
-
-                        for (int j = 0; j < mapGroup.Maps.Count; j++)
-                        {
-                            var mapName = mapGroup.Maps[j];
-                            if (ImGui.InputTextWithHint($"##MapName{i}-{j}", "map name", ref mapName, 256))
-                                mapGroup.Maps[j] = mapName;
-
-                            ImGui.SameLine();
-                            if (ImGui.Button($"Delete##MapNameDelete{i}-{j}"))
+                            var mapGroup = Settings.MapGroups[i];
+                            if (ImGui.TreeNode($"{mapGroup.Name}##MapGroup{i}"))
                             {
-                                mapGroup.Maps.RemoveAt(j);
-                                break;
+                                float buttonSize = ImGui.GetFrameHeight();
+                                if (TriangleButton($"##Up{i}", buttonSize, new Vector4(1, 1, 1, 1), true))
+                                {
+                                    MoveMapGroup(i, -1);
+                                }
+                                ImGui.SameLine();
+                                if (TriangleButton($"##Down{i}", buttonSize, new Vector4(1, 1, 1, 1), false))
+                                {
+                                    MoveMapGroup(i, 1);
+                                }
+                                ImGui.SameLine();
+                                if (ImGui.Button($"Rename Group##{i}"))
+                                {
+                                    NewGroupName = mapGroup.Name;
+                                    ImGui.OpenPopup($"RenamePopup##{i}");
+                                }
+                                ImGui.SameLine();
+                                if (ImGui.Button($"Delete Group##{i}"))
+                                {
+                                    DeleteMapGroup(i);
+                                }
+                                ImGui.SameLine();
+                                ColorSwatch($"##MapGroupBackgroundColor{i}", ref mapGroup.BackgroundColor);
+                                ImGui.SameLine();
+                                ImGui.Text("Background Color");
+                                ImGui.SameLine();
+                                ColorSwatch($"##MapGroupFontColor{i}", ref mapGroup.FontColor);
+                                ImGui.SameLine(); ImGui.Text("Font Color");
+                    
+                                for (int j = 0; j < mapGroup.Maps.Count; j++)
+                                {
+                                    var mapName = mapGroup.Maps[j];
+                                    if (ImGui.InputTextWithHint($"##MapName{i}-{j}", "map name", ref mapName, 256))
+                                        mapGroup.Maps[j] = mapName;
+                    
+                                    ImGui.SameLine();
+                                    if (ImGui.Button($"Delete##MapNameDelete{i}-{j}"))
+                                    {
+                                        mapGroup.Maps.RemoveAt(j);
+                                        break;
+                                    }
+                                }
+                    
+                                if (ImGui.Button($"Add new map##AddNewMap{i}"))
+                                    mapGroup.Maps.Add(string.Empty);
+                    
+                                if (ImGui.BeginPopupModal($"RenamePopup##{i}", ImGuiWindowFlags.AlwaysAutoResize))
+                                {
+                                    ImGui.InputText("New Name", ref NewGroupName, 256);
+                                    if (ImGui.Button("OK"))
+                                    {
+                                        mapGroup.Name = NewGroupName;
+                                        ImGui.CloseCurrentPopup();
+                                    }
+                                    ImGui.SameLine();
+                                    if (ImGui.Button("Cancel"))
+                                    {
+                                        ImGui.CloseCurrentPopup();
+                                    }
+                                    ImGui.EndPopup();
+                                }
+                                ImGui.TreePop();
                             }
-                        }
-
-                        if (ImGui.Button($"Add new map##AddNewMap{i}"))
-                            mapGroup.Maps.Add(string.Empty);
-
-                        if (ImGui.BeginPopupModal($"RenamePopup##{i}", ImGuiWindowFlags.AlwaysAutoResize))
-                        {
-                            ImGui.InputText("New Name", ref NewGroupName, 256);
-                            if (ImGui.Button("OK"))
-                            {
-                                mapGroup.Name = NewGroupName;
-                                ImGui.CloseCurrentPopup();
-                            }
-                            ImGui.SameLine();
-                            if (ImGui.Button("Cancel"))
-                            {
-                                ImGui.CloseCurrentPopup();
-                            }
-                            ImGui.EndPopup();
                         }
                         ImGui.TreePop();
                     }
-                }
-                ImGui.TreePop();
-            }
-            #endregion
+                }));
+            
         }
 
         public override void DrawUI()

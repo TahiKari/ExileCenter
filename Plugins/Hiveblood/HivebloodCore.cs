@@ -68,84 +68,90 @@ namespace Hiveblood
 
         public override void DrawSettings()
         {
-            ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1f, 0.92f, 0.2f, 1f));
-            ImGui.TextWrapped(
-                "Tracks Hiveblood: syncs from Genesis Tree (+ Breach popups). Visit the tree once to calibrate.");
-            ImGui.PopStyleColor();
-
-            ImGui.Separator();
-            ImGui.Checkbox("Only when inventory is open", ref this.Settings.ShowOnlyWithInventory);
-            ImGui.Checkbox("Also show when inventory is closed", ref this.Settings.ShowAlways);
-            ImGui.SliderFloat("Font scale", ref this.Settings.OverlayFontScale, 0.75f, 1.6f, "%.2f");
-
-            var anchorIndex = (int)this.Settings.OverlayAnchor;
-            if (ImGui.Combo(
-                    "Position anchor",
-                    ref anchorIndex,
-                    "Inventory top-left\0" +
-                    "Inventory bottom (near gold)\0" +
-                    "Custom screen position\0"))
-            {
-                this.Settings.OverlayAnchor = (HivebloodOverlayAnchor)anchorIndex;
-            }
-
-            ImGui.DragFloat2(
-                "Offset from anchor (px)",
-                ref this.Settings.OverlayOffset,
-                1f,
-                -400f,
-                400f,
-                "%.0f");
-            ImGuiHelper.ToolTip(
-                "Bottom anchor: left edge of the inventory panel, just above the gold line. Drag X/Y to fine-tune.");
-
-            ImGui.Checkbox(
-                "Show position dummy (drag, then disable)",
-                ref this.Settings.ShowPositionDummy);
-            ImGuiHelper.ToolTip(
-                "Shows a draggable preview in-game and saves a fixed screen position. Switches to custom screen position.");
-
-            if (this.Settings.ShowPositionDummy ||
-                this.Settings.OverlayAnchor == HivebloodOverlayAnchor.CustomScreen)
-            {
-                ImGui.DragFloat2(
-                    "Screen position (px)",
-                    ref this.Settings.OverlayScreenPosition,
-                    1f,
-                    0f,
-                    4000f,
-                    "%.0f");
-            }
-            ImGui.ColorEdit4("Text color", ref this.Settings.TextColor);
-            ImGui.Checkbox("Warn near cap (100,000)", ref this.Settings.WarnNearCap);
-            ImGui.SliderInt("Warn from amount", ref this.Settings.WarnThreshold, 80_000, 100_000);
-            ImGuiHelper.ToolTip(
-                "Above the threshold the overlay text turns orange-red and blinks. It is also shown while the inventory is closed (at the last in-inventory position).");
-            ImGui.Checkbox("Show gains since last tree sync", ref this.Settings.ShowSessionGains);
-            ImGui.Checkbox("Debug status line", ref this.Settings.DebugStatusLine);
-            ImGui.SliderInt("UI scan interval (ms)", ref this.Settings.ScanIntervalMs, 150, 1000);
-            ImGuiHelper.ToolTip(
-                "How often the plugin reads the game UI tree. Lower values react faster but use more CPU (default 300).");
-
-            ImGui.Separator();
-            this.DrawStatusBlock();
-
-            if (ImGui.Button("Reset tracker"))
-            {
-                this.Settings.EstimatedAmount = 0;
-                this.Settings.HasSyncedOnce = false;
-                this.Settings.LastTreeSyncUtc = DateTime.MinValue;
-                this.Settings.SessionGainSinceSync = 0;
-                this.recentGainKeys.Clear();
-                this.QueueTrackerSave(immediate: true);
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button("Save now"))
-            {
-                this.FlushPendingTrackerSave(force: true);
-                this.SaveSettings();
-            }
+            
+            this.DrawSettingsTabs("HivebloodSettings",
+                ("tracking", "Tracking", () =>
+                {
+                    ImGui.TextWrapped(
+                        "Tracks Hiveblood: syncs from Genesis Tree (+ Breach popups). Visit the tree once to calibrate.");
+                    ImGui.Checkbox("Only when inventory is open", ref this.Settings.ShowOnlyWithInventory);
+                    ImGui.Checkbox("Also show when inventory is closed", ref this.Settings.ShowAlways);
+                    ImGui.Checkbox("Warn near cap (100,000)", ref this.Settings.WarnNearCap);
+                    ImGui.SliderInt("Warn from amount", ref this.Settings.WarnThreshold, 80_000, 100_000);
+                    ImGuiHelper.ToolTip(
+                        "Above the threshold the overlay text turns orange-red and blinks. It is also shown while the inventory is closed (at the last in-inventory position).");
+                    ImGui.Checkbox("Show gains since last tree sync", ref this.Settings.ShowSessionGains);
+                    this.DrawStatusBlock();
+                }),
+                ("appearance", "Appearance", () =>
+                {
+                    ImGui.SliderFloat("Font scale", ref this.Settings.OverlayFontScale, 0.75f, 1.6f, "%.2f");
+                    
+                    var anchorIndex = (int)this.Settings.OverlayAnchor;
+                    if (ImGui.Combo(
+                            "Position anchor",
+                            ref anchorIndex,
+                            "Inventory top-left\0" +
+                            "Inventory bottom (near gold)\0" +
+                            "Custom screen position\0"))
+                    {
+                        this.Settings.OverlayAnchor = (HivebloodOverlayAnchor)anchorIndex;
+                    }
+                    
+                    ImGui.DragFloat2(
+                        "Offset from anchor (px)",
+                        ref this.Settings.OverlayOffset,
+                        1f,
+                        -400f,
+                        400f,
+                        "%.0f");
+                    ImGuiHelper.ToolTip(
+                        "Bottom anchor: left edge of the inventory panel, just above the gold line. Drag X/Y to fine-tune.");
+                    
+                    ImGui.Checkbox(
+                        "Show position dummy (drag, then disable)",
+                        ref this.Settings.ShowPositionDummy);
+                    ImGuiHelper.ToolTip(
+                        "Shows a draggable preview in-game and saves a fixed screen position. Switches to custom screen position.");
+                    
+                    if (this.Settings.ShowPositionDummy ||
+                        this.Settings.OverlayAnchor == HivebloodOverlayAnchor.CustomScreen)
+                    {
+                        ImGui.DragFloat2(
+                            "Screen position (px)",
+                            ref this.Settings.OverlayScreenPosition,
+                            1f,
+                            0f,
+                            4000f,
+                            "%.0f");
+                    }
+                    ImGui.ColorEdit4("Text color", ref this.Settings.TextColor);
+                }),
+                ("diagnostics", "Diagnostics", () =>
+                {
+                    ImGui.Checkbox("Debug status line", ref this.Settings.DebugStatusLine);
+                    ImGui.SliderInt("UI scan interval (ms)", ref this.Settings.ScanIntervalMs, 150, 1000);
+                    ImGuiHelper.ToolTip(
+                        "How often the plugin reads the game UI tree. Lower values react faster but use more CPU (default 300).");
+                    
+                    if (ImGui.Button("Reset tracker"))
+                    {
+                        this.Settings.EstimatedAmount = 0;
+                        this.Settings.HasSyncedOnce = false;
+                        this.Settings.LastTreeSyncUtc = DateTime.MinValue;
+                        this.Settings.SessionGainSinceSync = 0;
+                        this.recentGainKeys.Clear();
+                        this.QueueTrackerSave(immediate: true);
+                    }
+                    
+                    ImGui.SameLine();
+                    if (ImGui.Button("Save now"))
+                    {
+                        this.FlushPendingTrackerSave(force: true);
+                        this.SaveSettings();
+                    }
+                }));
+            
         }
 
         public override void DrawUI()

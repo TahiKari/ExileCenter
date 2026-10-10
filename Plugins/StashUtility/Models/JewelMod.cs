@@ -10,6 +10,8 @@ namespace StashUtility.Models
         public string GameModId { get; set; }
         public float MinRoll { get; set; } = 0f;
         public float MaxRoll { get; set; } = 0f;
+        public int RollValueIndex { get; set; }
+        public float RollDivisor { get; set; } = 1f;
 
         public JewelMod(string id, string name)
         {
