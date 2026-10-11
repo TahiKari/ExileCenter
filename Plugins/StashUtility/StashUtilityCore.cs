@@ -124,6 +124,7 @@ namespace StashUtility
         private int affinityUnrouted;
         private string affinityTabletCategory;
         private bool affinityTabletUsesSpecializedPage;
+        private bool affinityTabletSectionSelected;
         private TabletPlacement affinityTabletPlacement;
         private DateTime affinityTabletReadDeadline;
         private DateTime affinityTabletNavigationReadDeadline;
@@ -2540,6 +2541,7 @@ namespace StashUtility
                 affinityUnrouted = 0;
                 affinityTabletCategory = null;
                 affinityTabletUsesSpecializedPage = false;
+                affinityTabletSectionSelected = false;
                 affinityTabletPlacement = null;
                 affinityOpenedPage = IntPtr.Zero;
                 affinityRouteIssue = string.Empty;
@@ -2850,6 +2852,7 @@ namespace StashUtility
                     affinityUniqueFallbackDestination = null;
                     affinityTabletCategory = null;
                     affinityTabletUsesSpecializedPage = false;
+                    affinityTabletSectionSelected = false;
                     affinityTabletReadDeadline = default;
                     affinityTabletNavigationReadDeadline = default;
                     string itemKind = GetItemKind(path);
@@ -3186,6 +3189,34 @@ namespace StashUtility
             return plan;
         }
 
+        private IntPtr FindNativeTabletSectionButton(IntPtr page)
+        {
+            // Native Fragment/Tablet/Trial selectors have no UI id. Their content is
+            // loaded on selection, so the six unique categories may not exist yet.
+            var selectors = ResolvePath(page, new[] { 0, 1 });
+            if (!IsElementVisible(selectors)) return IntPtr.Zero;
+            var vector = ReadMemory<UiElementBaseOffset>(selectors).ChildrensPtr;
+            if (vector.TotalElements(IntPtr.Size) != 3) return IntPtr.Zero;
+            var buttons = ReadStdVector<IntPtr>(vector);
+            var sections = new HashSet<string>();
+            var target = IntPtr.Zero;
+            foreach (var button in buttons)
+            {
+                if (!IsElementVisible(button) ||
+                    !TryReadUiString(ResolvePath(button, new[] { 0 }), 0x360, out var text)) return IntPtr.Zero;
+                string section = NormalizeModSearch(text).Trim() switch
+                {
+                    "fragments" => "Fragments",
+                    "tablets" or "tablettes" => "Tablets",
+                    "trials" or "epreuves" => "Trials",
+                    _ => null
+                };
+                if (section == null || !sections.Add(section)) return IntPtr.Zero;
+                if (section == "Tablets") target = button;
+            }
+            return target;
+        }
+
         private bool EnsureUniqueTabletCategory()
         {
             var plan = UniqueTabletNavigation(ReadStashUiBranch(affinityOpenedPage), affinityTabletCategory);
@@ -3198,6 +3229,23 @@ namespace StashUtility
             if (plan == null && !expectsFragment) return true;
             if (plan == null)
             {
+                if (!affinityTabletSectionSelected)
+                {
+                    var button = FindNativeTabletSectionButton(affinityOpenedPage);
+                    if (button != IntPtr.Zero)
+                    {
+                        if (affinityCtrlHeld || affinityShiftHeld)
+                            throw new InvalidOperationException(PluginText.T("stashutility.transfer.equipment_target_changed", "The destination changed before the click."));
+                        NavigateStashControl(button);
+                        // Navigation first positions the cursor, then clicks next frame.
+                        if (affinityNavigationElement == IntPtr.Zero)
+                        {
+                            affinityTabletSectionSelected = true;
+                            affinityTabletNavigationReadDeadline = DateTime.UtcNow.AddSeconds(3);
+                        }
+                        return false;
+                    }
+                }
                 // A newly selected tab can still expose the previous tab's controls.
                 // Retry discovery before abandoning any of the six tablet categories.
                 var now = DateTime.UtcNow;

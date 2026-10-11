@@ -16,7 +16,7 @@ L'utilisateur autorise la publication locale et sur GitHub après chaque mise à
 2. Envoyer les sources sur `TahiKari/Gamehelper2`, créer un nouveau tag et laisser le workflow GitHub compiler le paquet complet sur le runner Windows standard du dépôt public.
 3. Vérifier le résultat de la CI, le ZIP et son SHA256, puis publier la nouvelle Release publique avec les changements expliqués. Un simple push ou une Release laissée en brouillon ne suffit pas.
 4. Préparer et publier aussi la mise à jour locale dans `C:\Users\tahka\Desktop\Gamehelpers\Maj GameHelper`, sans modifier l'installation en cours ni ses réglages.
-5. Garder le nom affiché **GameHelper P-V1**, les liens de téléchargement visibles et les identifiants techniques compatibles avec les versions déjà installées. La version intégrée au binaire doit correspondre au tag publié.
+5. Faire évoluer la version dans le nom affiché à chaque Release : **GameHelper P-V1.0**, **GameHelper P-V1.1**, etc. Augmenter le dernier numéro pour une correction et choisir la progression adaptée aux changements. Conserver les liens de téléchargement visibles et les identifiants techniques compatibles avec les versions déjà installées. La version intégrée au binaire doit correspondre au tag publié.
 
 Pour une modification limitée à la documentation ou aux libellés GitHub, ne pas reconstruire l'application ni créer une nouvelle Release binaire inutile.
 
