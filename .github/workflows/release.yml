@@ -58,7 +58,7 @@ jobs:
           $expected = 'EF67411C6456DE8E92179ED8DB55ADC043D086B072ED37AE52E1109F966F9B93'
           if ((Get-FileHash $offsets -Algorithm SHA256).Hash -ne $expected) { throw 'GameOffsets.dll a changé.' }
           $targets = Join-Path $PWD '.github/ci/PreserveOffsets.targets'
-          $properties = @("-p:DirectoryBuildTargetsPath=$targets", "-p:PinnedGameOffsetsPath=$offsets")
+          $properties = @("-p:DirectoryBuildTargetsPath=$targets", "-p:PinnedGameOffsetsPath=$offsets", "-p:GameHelperReleaseTag=$env:RELEASE_TAG")
           $plugins = [regex]::Matches((Get-Content GameOverlay.sln -Raw), '"(Plugins\\[^"\r\n]+\.csproj)"') |
             ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
           if (!$plugins) { throw 'Aucun plugin dans la solution.' }
@@ -123,6 +123,8 @@ jobs:
           GameHelper personnalisé pour Windows x64. Extraire le ZIP dans un dossier puis lancer GameHelper.exe.
           Nécessite le runtime .NET 10 Desktop x64. GameOffsets.dll est conservée sans recompilation.
           Les paramètres personnels ne sont pas inclus. Le code correspondant est disponible au tag $env:RELEASE_TAG.
+          Après cette première installation, les nouvelles Releases sont proposées au démarrage (Oui/Non) ou signalées dans l'application.
+          Le bouton « Mettre à jour et redémarrer » télécharge, vérifie et installe la mise à jour en conservant vos réglages.
           "@ | Set-Content "$output/notes.txt" -Encoding utf8NoBOM
           "RELEASE_OUTPUT=$output" >> $env:GITHUB_ENV
 

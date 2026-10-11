@@ -11,10 +11,13 @@ namespace GameHelper
     using System.IO.Compression;
     using System.Linq;
     using System.Numerics;
+    using System.Net.Http;
+    using System.Reflection;
     using System.Security.Cryptography;
     using System.Text;
     using System.Text.Json;
     using System.Threading.Tasks;
+    using System.Threading;
     using ImGuiNET;
     using L = GameHelper.Localization.OverlayLocalization;
     using Utils;
@@ -76,7 +79,7 @@ namespace GameHelper
         }
     }
 
-    // Local packages are published last via their manifest; partial copies never become offers.
+    // Local packages take priority; public GitHub releases use the same verified installer.
     internal static class LocalUpdates
     {
         internal static readonly string UpdateDirectory = Path.Combine(
@@ -84,12 +87,23 @@ namespace GameHelper
         private static readonly string InstallDirectory = Path.GetFullPath(AppContext.BaseDirectory);
         private const string StateName = "local-update-state.json";
         private const string ErrorName = "local-update-error.txt";
-        private sealed record Package(string Id, string PackageFile, string Sha256, string Label);
+        private const string Repository = "TahiKari/Gamehelper2";
+        private const string GitHubPackageName = "GameHelper-Personnalise-win-x64.zip";
+        private static readonly HttpClient GitHubClient = new() { Timeout = TimeSpan.FromSeconds(8) };
+        private static readonly string? CurrentReleaseTag = typeof(Program).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => attribute.Key == "GameHelperReleaseTag")?.Value;
+        private sealed record Package(string Id, string PackageFile, string Sha256, string Label)
+        {
+            public string? DownloadUrl { get; init; }
+            public long DownloadSize { get; init; }
+        }
         private sealed record CheckResult(Package? Offer, string? Error);
         private static Task<CheckResult>? checkTask;
         private static Task<string>? prepareTask;
         private static Package? offer;
         private static DateTime nextCheck;
+        private static DateTime nextGitHubCheck;
+        private static CheckResult githubResult = new(null, null);
         private static DateTime toastUntil;
         private static string? lastNotified;
         private static string? error;
@@ -97,17 +111,19 @@ namespace GameHelper
         internal static bool IsLocalInstallation => Directory.Exists(UpdateDirectory) || File.Exists(Path.Combine(InstallDirectory, StateName));
         internal static bool IsAvailable => offer != null;
 
-        internal static async Task<bool> InstallBeforeStartupAsync()
+        internal static async Task<bool> InstallBeforeStartupAsync(Func<string, bool>? confirm = null)
         {
-            if (!IsLocalInstallation) return false;
-            var result = await Task.Run(() => Check(UpdateDirectory, InstallDirectory));
+            var result = await CheckAvailableAsync();
             offer = result.Offer;
             error = result.Error;
             // A failed installer restarts the old version. Leave retries to the update page.
             if (offer == null || error != null) return false;
+            lastNotified = offer.Id;
+            var question = L.F("updates.startup_question", "{0}\n\nInstall this update before starting GameHelper?\nChoose No to continue with the current version. Your settings are preserved.", offer.Label);
+            if (!(confirm?.Invoke(question) ?? (StartupMessageBox(IntPtr.Zero, question, "GameHelper", 0x124) == 6))) return false;
             try
             {
-                var stage = await Task.Run(() => Prepare(offer, InstallDirectory, UpdateDirectory, Environment.ProcessId));
+                var stage = await PreparePackageAsync(offer, InstallDirectory, UpdateDirectory, Environment.ProcessId);
                 StartInstaller(stage);
                 installerStarted = true;
                 return true;
@@ -120,6 +136,94 @@ namespace GameHelper
             }
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "MessageBoxW", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern int StartupMessageBox(IntPtr owner, string text, string caption, uint flags);
+
+        private static Version? ReleaseVersion(string? tag)
+        {
+            if (tag == null) return null;
+            var match = System.Text.RegularExpressions.Regex.Match(tag, @"^v(\d+\.\d+\.\d+)(?:-personnalise\.(\d+))?$");
+            return match.Success && Version.TryParse(match.Groups[1].Value + "." +
+                (match.Groups[2].Success ? match.Groups[2].Value : "0"), out var version) ? version : null;
+        }
+
+        private static Package? ParseGitHubRelease(JsonElement release, string? installedTag)
+        {
+            if (release.GetProperty("draft").GetBoolean() || release.GetProperty("prerelease").GetBoolean()) return null;
+            var tag = release.GetProperty("tag_name").GetString();
+            var current = ReleaseVersion(installedTag);
+            var available = ReleaseVersion(tag);
+            if (current == null || available == null || available <= current) return null;
+            var assets = release.GetProperty("assets").EnumerateArray().Where(asset =>
+                asset.GetProperty("name").GetString() == GitHubPackageName && asset.GetProperty("state").GetString() == "uploaded").ToArray();
+            if (assets.Length != 1) return null;
+            var asset = assets[0];
+            var url = $"https://github.com/{Repository}/releases/download/{Uri.EscapeDataString(tag!)}/{GitHubPackageName}";
+            var digest = asset.GetProperty("digest").GetString();
+            long size = asset.GetProperty("size").GetInt64();
+            if (asset.GetProperty("browser_download_url").GetString() != url || size <= 0 || size > 128L * 1024 * 1024 ||
+                digest == null || !digest.StartsWith("sha256:", StringComparison.Ordinal) || digest.Length != 71 || !digest[7..].All(Uri.IsHexDigit))
+                throw new InvalidDataException("Invalid GitHub release package.");
+            return new("github:" + tag, GitHubPackageName, digest[7..], release.GetProperty("name").GetString() ?? tag!)
+                { DownloadUrl = url, DownloadSize = size };
+        }
+
+        private static async Task<CheckResult> CheckAvailableAsync()
+        {
+            var local = await Task.Run(() => Check(UpdateDirectory, InstallDirectory));
+            if (local.Offer != null || local.Error != null) return local;
+            if (DateTime.UtcNow >= nextGitHubCheck)
+            {
+                nextGitHubCheck = DateTime.UtcNow.AddMinutes(10);
+                try
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{Repository}/releases/latest");
+                    request.Headers.UserAgent.ParseAdd("GameHelper-Personal/1.0");
+                    request.Headers.Accept.ParseAdd("application/vnd.github+json");
+                    using var response = await GitHubClient.SendAsync(request);
+                    if (response.StatusCode == System.Net.HttpStatusCode.NotFound) githubResult = new(null, null);
+                    else
+                    {
+                        response.EnsureSuccessStatusCode();
+                        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                        githubResult = new(ParseGitHubRelease(json.RootElement, CurrentReleaseTag), null);
+                    }
+                }
+                catch (Exception ex) { githubResult = new(null, ex.Message); }
+            }
+            return githubResult;
+        }
+
+        private static async Task<string> PreparePackageAsync(Package package, string installRoot, string updateRoot, int processId)
+        {
+            if (package.DownloadUrl == null) return await Task.Run(() => Prepare(package, installRoot, updateRoot, processId));
+            var downloadRoot = Path.Combine(Path.GetTempPath(), "GameHelper-Download-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(downloadRoot);
+            try
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+                using (var response = await GitHubClient.GetAsync(package.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, timeout.Token))
+                {
+                    response.EnsureSuccessStatusCode();
+                    if (response.Content.Headers.ContentLength is long length && length != package.DownloadSize)
+                        throw new InvalidDataException("GitHub package size changed.");
+                    using var input = await response.Content.ReadAsStreamAsync(timeout.Token);
+                    using var output = new FileStream(Path.Combine(downloadRoot, package.PackageFile), FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                    var buffer = new byte[81920];
+                    long total = 0;
+                    int read;
+                    while ((read = await input.ReadAsync(buffer, timeout.Token)) != 0)
+                    {
+                        if ((total += read) > package.DownloadSize) throw new InvalidDataException("GitHub package too large.");
+                        await output.WriteAsync(buffer.AsMemory(0, read), timeout.Token);
+                    }
+                    if (total != package.DownloadSize) throw new InvalidDataException("Incomplete GitHub download.");
+                }
+                return await Task.Run(() => Prepare(package, installRoot, downloadRoot, processId));
+            }
+            finally { Directory.Delete(downloadRoot, true); }
+        }
+
         private static CheckResult Check(string updateRoot, string installRoot)
         {
             try
@@ -129,7 +233,7 @@ namespace GameHelper
                 var manifestPath = Path.Combine(updateRoot, "GameHelper-Maj.json");
                 if (!File.Exists(manifestPath)) return new(null, installationError);
                 var candidate = JsonSerializer.Deserialize<Package>(File.ReadAllText(manifestPath));
-                if (candidate == null || string.IsNullOrWhiteSpace(candidate.Id) || string.IsNullOrWhiteSpace(candidate.Label) ||
+                if (candidate == null || candidate.DownloadUrl != null || string.IsNullOrWhiteSpace(candidate.Id) || string.IsNullOrWhiteSpace(candidate.Label) ||
                     candidate.Sha256 == null || candidate.Sha256.Length != 64 || !candidate.Sha256.All(Uri.IsHexDigit) ||
                     string.IsNullOrWhiteSpace(candidate.PackageFile) || candidate.PackageFile != Path.GetFileName(candidate.PackageFile) ||
                     !candidate.PackageFile.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
@@ -179,7 +283,7 @@ namespace GameHelper
             if (prepareTask == null && checkTask == null && DateTime.UtcNow >= nextCheck)
             {
                 nextCheck = DateTime.UtcNow.AddSeconds(5);
-                checkTask = Task.Run(() => Check(UpdateDirectory, InstallDirectory));
+                checkTask = CheckAvailableAsync();
             }
             if (offer == null || DateTime.UtcNow >= toastUntil) return;
             var viewport = ImGui.GetMainViewport();
@@ -196,11 +300,12 @@ namespace GameHelper
 
         internal static void DrawSettings()
         {
-            Ui.ImGuiTheme.SectionHeader(L.T("updates.title", "Local updates"), L.T("updates.description", "Updates from your folder. Your settings are preserved."));
-            ImGui.TextWrapped(UpdateDirectory);
-            ImGui.TextDisabled(L.T("updates.poll", "Checked at startup and every 5 seconds."));
+            Ui.ImGuiTheme.SectionHeader(L.T("updates.title", "Updates"), L.T("updates.description", "Updates from GitHub or your local folder. Your settings are preserved."));
+            ImGui.TextWrapped("https://github.com/" + Repository + "/releases");
+            if (Directory.Exists(UpdateDirectory)) ImGui.TextWrapped(UpdateDirectory);
+            ImGui.TextDisabled(L.T("updates.poll", "Checked at startup; GitHub every 10 minutes, local updates every 5 seconds."));
             ImGui.Separator();
-            if (prepareTask != null) ImGui.TextWrapped(L.T("updates.preparing", "Checking and preparing the update…"));
+            if (prepareTask != null) ImGui.TextWrapped(L.T("updates.preparing", "Downloading, checking and preparing the update…"));
             else if (offer != null)
             {
                 ImGui.TextColored(Ui.ImGuiTheme.Accent, L.T("updates.available", "Local update available"));
@@ -209,12 +314,12 @@ namespace GameHelper
                 {
                     error = null;
                     var selected = offer;
-                    prepareTask = Task.Run(() => Prepare(selected, InstallDirectory, UpdateDirectory, Environment.ProcessId));
+                    prepareTask = PreparePackageAsync(selected, InstallDirectory, UpdateDirectory, Environment.ProcessId);
                 }
             }
-            else ImGui.TextWrapped(L.T("updates.none", "No local update available."));
+            else ImGui.TextWrapped(L.T("updates.none", "No update available."));
             ImGui.BeginDisabled(prepareTask != null);
-            if (ImGui.Button(L.T("updates.check", "Check now"))) nextCheck = DateTime.MinValue;
+            if (ImGui.Button(L.T("updates.check", "Check now"))) { nextCheck = DateTime.MinValue; nextGitHubCheck = DateTime.MinValue; }
             ImGui.SameLine();
             if (ImGui.Button(L.T("updates.folder", "Open update folder")))
             {
@@ -239,7 +344,7 @@ namespace GameHelper
                 Path.GetFileName(relative).Equals("settings.json", StringComparison.OrdinalIgnoreCase)) return false;
             if (segments.Length == 1)
                 return relative.Equals("GameHelper.exe", StringComparison.OrdinalIgnoreCase) || relative.Equals("GameHelper.App.exe", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
-                    relative is "GameHelper.deps.json" or "GameHelper.runtimeconfig.json";
+                    relative is "GameHelper.deps.json" or "GameHelper.runtimeconfig.json" or "LICENSE" or "CREDITS.md" or "README.md";
             return segments[0] is "Plugins" or "Localization" or "fonts" && !relative.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -276,6 +381,14 @@ namespace GameHelper
                     if (!IsPackageFile(relative) || !names.Add(relative) || names.Count > 10000 || (totalSize += entry.Length) > 512L * 1024 * 1024)
                         throw new InvalidDataException("Invalid package file: " + relative);
                     var target = SafeTarget(installRoot, relative);
+                    if (relative.Equals("GameOffsets.dll", StringComparison.OrdinalIgnoreCase))
+                    {
+                        using var incoming = entry.Open();
+                        using var installed = File.OpenRead(target);
+                        if (!SHA256.HashData(incoming).SequenceEqual(SHA256.HashData(installed)))
+                            throw new InvalidDataException("GameOffsets.dll must remain unchanged.");
+                        continue;
+                    }
                     var staged = SafeTarget(payload, relative);
                     Directory.CreateDirectory(Path.GetDirectoryName(staged)!);
                     entry.ExtractToFile(staged);

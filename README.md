@@ -179,8 +179,17 @@ Les compilations locales habituelles ne sont pas modifiées.
 Le ZIP contient les exécutables, plugins, dépendances, ressources, licence et
 crédits ; il exclut les réglages personnels et diagnostics. Extraire dans un
 dossier et lancer `GameHelper.exe` avec le runtime **.NET 10 Desktop x64** installé.
-Les deux exécutables démarrent directement la version personnalisée. Ce workflow
-n'active pas de mise à jour automatique depuis GitHub dans l'application.
+Les deux exécutables démarrent directement la version personnalisée. Au démarrage,
+l'application propose les mises à jour avec le choix Oui/Non. Pendant son utilisation,
+elle vérifie les Releases publiques toutes les 10 minutes et affiche une notification.
+Le bouton « Mettre à jour et redémarrer » télécharge le ZIP depuis ce dépôt,
+vérifie son SHA256 et conserve les réglages. Le dossier de mises à jour locales
+reste prioritaire. Une connexion indisponible n'empêche pas de démarrer GameHelper.
+GameOffsets.dll est vérifiée et ne fait jamais partie des fichiers remplacés.
+La version installée est enregistrée dans les métadonnées de compilation à partir
+du tag, pour éviter les réinstallations et les retours à une ancienne Release.
+Les utilisateurs des anciens ZIP doivent installer une première fois la version
+qui ajoute cette fonction ; les mises à jour suivantes sont proposées dans l'application.
 Téléchargements : <https://github.com/TahiKari/Gamehelper2/releases>.
 
 ## Links
