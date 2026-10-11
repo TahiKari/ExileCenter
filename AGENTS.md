@@ -17,6 +17,7 @@ L'utilisateur autorise la publication locale et sur GitHub après chaque mise à
 3. Vérifier le résultat de la CI, le ZIP et son SHA256, puis publier la nouvelle Release publique avec les changements expliqués. Un simple push ou une Release laissée en brouillon ne suffit pas.
 4. Préparer et publier aussi la mise à jour locale dans `C:\Users\tahka\Desktop\Gamehelpers\Maj GameHelper`, sans modifier l'installation en cours ni ses réglages.
 5. Faire évoluer la version dans le nom affiché à chaque Release : **GameHelper P-V1.0**, **GameHelper P-V1.1**, etc. Augmenter le dernier numéro pour une correction et choisir la progression adaptée aux changements. Conserver les liens de téléchargement visibles et les identifiants techniques compatibles avec les versions déjà installées. La version intégrée au binaire doit correspondre au tag publié.
+6. Renseigner le numéro et le détail des changements dans chaque mise à jour locale (`scripts/publish.ps1 -Version <tag> -Changelog <changements>`) et dans les notes de Release GitHub, pour les afficher dans la fenêtre de mise à jour.
 
 Pour une modification limitée à la documentation ou aux libellés GitHub, ne pas reconstruire l'application ni créer une nouvelle Release binaire inutile.
 

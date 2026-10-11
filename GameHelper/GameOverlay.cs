@@ -183,7 +183,7 @@ namespace GameHelper
         private readonly Action<Rectangle>? savePlacement;
         private readonly Size minimumSize;
         private readonly Size initialSize;
-        private string WindowTitle => this.title?.Invoke() ?? L.T("settings.window.compact_title", "GameHelper · Settings");
+        private string WindowTitle => this.title?.Invoke() ?? L.T("settings.window.compact_title", "GameHelper · Settings") + " · " + LocalUpdates.InstalledVersion;
         private Func<bool>? updateInput;
         private Func<WindowMessage, UIntPtr, IntPtr, bool>? processInput;
         private IDXGISwapChain? swapChain;

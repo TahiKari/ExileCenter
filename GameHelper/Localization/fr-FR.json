@@ -194,6 +194,7 @@
   "updates.none": "Aucune mise à jour disponible.",
   "updates.startup_question": "{0}\n\nVoulez-vous installer cette mise à jour avant d’ouvrir GameHelper ?\nLa mise à jour sera téléchargée si nécessaire, puis installée avant le démarrage.\nVous pouvez aussi continuer avec la version actuelle. Vos réglages sont conservés.",
   "updates.startup_install": "Installer la mise à jour",
+  "updates.changes": "Ce que contient cette mise à jour",
   "updates.startup_continue": "Continuer sans mise à jour",
   "updates.check": "Vérifier maintenant",
   "updates.folder": "Ouvrir le dossier des mises à jour",

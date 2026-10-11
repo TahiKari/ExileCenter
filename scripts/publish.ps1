@@ -79,7 +79,10 @@ if ($LocalUpdate) {
     [IO.File]::Move($temporaryPackage,$packagePath)
     $packageHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash
     if ([string]::IsNullOrWhiteSpace($LocalLabel)) { $LocalLabel = 'GameHelper - ' + (Get-Date -Format 'dd/MM/yyyy HH:mm') }
-    $manifest = @{ Id=$packageHash; PackageFile=$packageName; Sha256=$packageHash; Label=$LocalLabel } | ConvertTo-Json
+    $manifest = @{ Id=$packageHash; PackageFile=$packageName; Sha256=$packageHash; Label=$LocalLabel }
+    if ($Version) { $manifest.ReleaseTag = $Version }
+    if ($Changelog) { $manifest.Changes = $Changelog -join "`n" }
+    $manifest = $manifest | ConvertTo-Json
     $manifestPath = Join-Path $destination 'GameHelper-Maj.json'
     $temporaryManifest = $manifestPath + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
     [IO.File]::WriteAllText($temporaryManifest,$manifest,[Text.UTF8Encoding]::new($false))

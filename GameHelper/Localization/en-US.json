@@ -195,6 +195,7 @@
   "updates.none": "No update available.",
   "updates.startup_question": "{0}\n\nInstall this update before opening GameHelper?\nThe update will be downloaded if needed and installed before startup.\nYou can also continue with the current version. Your settings are preserved.",
   "updates.startup_install": "Install update",
+  "updates.changes": "What changes in this update",
   "updates.startup_continue": "Continue without updating",
   "updates.check": "Check now",
   "updates.folder": "Open update folder",

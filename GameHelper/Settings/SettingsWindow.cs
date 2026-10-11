@@ -75,7 +75,7 @@ namespace GameHelper.Settings
             }
 
             ImGui.PushStyleColor(ImGuiCol.Text, ImGuiTheme.TextMuted);
-            ImGui.Text($"GameHelper {Core.GetVersion()}");
+            ImGui.Text($"GameHelper {LocalUpdates.InstalledVersion}");
             ImGui.PopStyleColor();
             ImGui.SameLine();
             ImGui.TextDisabled("|");
@@ -1193,7 +1193,7 @@ namespace GameHelper.Settings
                     ImGui.SetNextWindowSize(new Vector2(Math.Min(1100f, ImGui.GetIO().DisplaySize.X - 40f), Math.Min(760f, ImGui.GetIO().DisplaySize.Y - 60f)), ImGuiCond.FirstUseEver);
                     ImGui.SetNextWindowSizeConstraints(new Vector2(800, 600), Vector2.One * float.MaxValue);
                 }
-                var expanded = ImGui.Begin($"{L.T("settings.window.compact_title", "GameHelper · Settings")}###GameOverlaySettings",
+                var expanded = ImGui.Begin($"{L.T("settings.window.compact_title", "GameHelper · Settings")} · {LocalUpdates.InstalledVersion}###GameOverlaySettings",
                     ref isOverlayRunningLocal, flags);
                 try
                 {

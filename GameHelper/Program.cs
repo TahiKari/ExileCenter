@@ -94,6 +94,8 @@ namespace GameHelper
             .FirstOrDefault(attribute => attribute.Key == "GameHelperReleaseTag")?.Value;
         private sealed record Package(string Id, string PackageFile, string Sha256, string Label)
         {
+            public string? ReleaseTag { get; init; }
+            public string? Changes { get; init; }
             public string? DownloadUrl { get; init; }
             public long DownloadSize { get; init; }
         }
@@ -110,6 +112,7 @@ namespace GameHelper
         private static bool installerStarted;
         internal static bool IsLocalInstallation => Directory.Exists(UpdateDirectory) || File.Exists(Path.Combine(InstallDirectory, StateName));
         internal static bool IsAvailable => offer != null;
+        internal static string InstalledVersion => DisplayVersion(CurrentReleaseTag) ?? Core.GetVersion();
 
         internal static async Task<bool> InstallBeforeStartupAsync(Func<string, bool>? confirm = null)
         {
@@ -119,7 +122,10 @@ namespace GameHelper
             // A failed installer restarts the old version. Leave retries to the update page.
             if (offer == null || error != null) return false;
             lastNotified = offer.Id;
-            var question = L.F("updates.startup_question", "{0}\n\nInstall this update before starting GameHelper?\nYou can also continue with the current version. Your settings are preserved.", offer.Label);
+            var summary = offer.Label;
+            if (!string.IsNullOrWhiteSpace(offer.Changes))
+                summary += "\n\n" + L.T("updates.changes", "What changes in this update") + "\n" + offer.Changes;
+            var question = L.F("updates.startup_question", "{0}\n\nInstall this update before starting GameHelper?\nYou can also continue with the current version. Your settings are preserved.", summary);
             try
             {
                 if (confirm != null)
@@ -128,7 +134,7 @@ namespace GameHelper
                 }
                 else
                 {
-                    using var prompt = new StartupUpdateWindow(question);
+                    using var prompt = new StartupUpdateWindow(question, UpdateTitle(offer));
                     await prompt.Run();
                     if (!prompt.InstallRequested) return false;
                 }
@@ -148,13 +154,15 @@ namespace GameHelper
         private sealed class StartupUpdateWindow : ClickableTransparentOverlay.Overlay
         {
             private readonly string question;
+            private readonly string title;
             private SettingsDisplay? display;
             private volatile bool closeRequested;
             internal bool InstallRequested { get; private set; }
 
-            internal StartupUpdateWindow(string question) : base("GameHelper update", true, 1, 1)
+            internal StartupUpdateWindow(string question, string title) : base("GameHelper update", true, 1, 1)
             {
                 this.question = question;
+                this.title = title;
                 this.VSync = true;
             }
 
@@ -169,7 +177,7 @@ namespace GameHelper
                 else
                     this.ReplaceFont(settings.FontPathName, settings.FontSize, settings.FontLanguage);
                 this.display = new SettingsDisplay(this, this.Draw, this.Close, new Settings.State(),
-                    () => "GameHelper · " + L.T("updates.title", "Updates"), _ => { },
+                    () => this.title, _ => { },
                     new System.Drawing.Size(620, 360), new System.Drawing.Size(760, 480));
                 return Task.CompletedTask;
             }
@@ -200,7 +208,7 @@ namespace GameHelper
                         ImGuiWindowFlags.NoSavedSettings);
                     try
                     {
-                        Ui.ImGuiTheme.SectionHeader(L.T("updates.available", "Update available"));
+                        Ui.ImGuiTheme.SectionHeader(this.title ?? L.T("updates.available", "Update available"));
                         if (ImGui.BeginChild("##UpdateDetails", new Vector2(0, -62), ImGuiChildFlags.Borders))
                             ImGui.TextWrapped(this.question);
                         ImGui.EndChild();
@@ -232,6 +240,27 @@ namespace GameHelper
                 (match.Groups[2].Success ? match.Groups[2].Value : "0"), out var version) ? version : null;
         }
 
+        private static string? DisplayVersion(string? tag)
+        {
+            var version = ReleaseVersion(tag);
+            if (version == null) return null;
+            return tag!.Contains("-personnalise.", StringComparison.Ordinal)
+                ? "P-V1." + Math.Max(0, version.Revision - 5)
+                : "v" + version.ToString(3);
+        }
+
+        private static string UpdateTitle(Package package)
+        {
+            var version = DisplayVersion(package.ReleaseTag);
+            if (version == null)
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(package.Label, @"\bP-V\d+(?:\.\d+)*[a-z]?\b");
+                if (match.Success) version = match.Value;
+            }
+            return version == null ? L.T("updates.available", "Update available")
+                : "GameHelper " + version + " · " + L.T("updates.title", "Updates");
+        }
+
         private static Package? ParseGitHubRelease(JsonElement release, string? installedTag)
         {
             if (release.GetProperty("draft").GetBoolean() || release.GetProperty("prerelease").GetBoolean()) return null;
@@ -250,7 +279,12 @@ namespace GameHelper
                 digest == null || !digest.StartsWith("sha256:", StringComparison.Ordinal) || digest.Length != 71 || !digest[7..].All(Uri.IsHexDigit))
                 throw new InvalidDataException("Invalid GitHub release package.");
             return new("github:" + tag, GitHubPackageName, digest[7..], release.GetProperty("name").GetString() ?? tag!)
-                { DownloadUrl = url, DownloadSize = size };
+            {
+                ReleaseTag = tag,
+                Changes = release.TryGetProperty("body", out var body) ? body.GetString() : null,
+                DownloadUrl = url,
+                DownloadSize = size
+            };
         }
 
         private static async Task<CheckResult> CheckAvailableAsync()
@@ -377,7 +411,7 @@ namespace GameHelper
             if (ImGui.Begin("##LocalUpdateNotification", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.AlwaysAutoResize |
                 ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoNav))
             {
-                ImGui.TextColored(Ui.ImGuiTheme.Accent, L.T("updates.available", "Local update available"));
+                ImGui.TextColored(Ui.ImGuiTheme.Accent, UpdateTitle(offer));
                 ImGui.Text(L.F("updates.toast", "Open GameHelper with {0} to install it.", Core.GHSettings.MainMenuHotKey));
             }
             ImGui.End();
@@ -393,8 +427,13 @@ namespace GameHelper
             if (prepareTask != null) ImGui.TextWrapped(L.T("updates.preparing", "Downloading, checking and preparing the update…"));
             else if (offer != null)
             {
-                ImGui.TextColored(Ui.ImGuiTheme.Accent, L.T("updates.available", "Local update available"));
+                ImGui.TextColored(Ui.ImGuiTheme.Accent, UpdateTitle(offer));
                 ImGui.TextWrapped(offer.Label);
+                if (!string.IsNullOrWhiteSpace(offer.Changes))
+                {
+                    ImGui.TextColored(Ui.ImGuiTheme.Accent, L.T("updates.changes", "What changes in this update"));
+                    ImGui.TextWrapped(offer.Changes);
+                }
                 if (ImGui.Button(L.T("updates.apply", "Update and restart")))
                 {
                     error = null;
