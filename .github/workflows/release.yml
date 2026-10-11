@@ -136,6 +136,6 @@ jobs:
           $output = $env:RELEASE_OUTPUT
           $options = @('--repo', $env:GITHUB_REPOSITORY, '--verify-tag', '--title', 'GameHelper P-V1', '--notes-file', "$output/notes.txt")
           if ($env:RELEASE_DRAFT -eq 'true') { $options += '--draft' }
-          & gh release create $env:RELEASE_TAG "$output/GameHelper-Personnalise-win-x64.zip" "$output/GameHelper-Personnalise-win-x64.zip.sha256" @options
+          & gh release create $env:RELEASE_TAG "$output/GameHelper-Personnalise-win-x64.zip#Télécharger GameHelper P-V1 — Windows x64 (ZIP)" "$output/GameHelper-Personnalise-win-x64.zip.sha256" @options
           if ($LASTEXITCODE -ne 0) { throw 'Échec de publication de la Release.' }
           "Release : https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$env:RELEASE_TAG" >> $env:GITHUB_STEP_SUMMARY
