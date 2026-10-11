@@ -6006,7 +6006,7 @@ namespace StashUtility
             if (fontSize < 8f) return;
             var textSize = measured * (fontSize / ImGui.GetFontSize());
             var badgeSize = textSize + new Vector2(padding * 2, padding);
-            var p0 = pos + new Vector2(inset, size.Y - badgeSize.Y - inset);
+            var p0 = pos + new Vector2(inset, inset);
             var p1 = p0 + badgeSize;
             var color = TabletItemRankColor(rank);
             dl.AddRectFilled(p0, p1, ImGuiHelper.Color(new Vector4(.04f, .05f, .07f, .94f)), 3f);
