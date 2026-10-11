@@ -616,7 +616,9 @@ namespace LootTracker
 
             // Detect blocking panels explicitly. A missing XP anchor must still allow the bars'
             // viewport fallback, particularly after switching back from the independent window.
-            if (!Core.IsSettingsMenuOpen && !IsLargePanelOpen() && !this.IsTrackerPriorityOverlayOpen() &&
+            // PoE Overlay/Overwolf can keep a transparent top-level window visible permanently.
+            // Its title and bounds do not prove a panel is open, so do not use it to hide this HUD.
+            if (!Core.IsSettingsMenuOpen && !IsLargePanelOpen() &&
                 this.ShouldDrawGameTracker(Core.Process.Foreground))
             {
                 if (this.onMapArea)

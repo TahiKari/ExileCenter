@@ -18,8 +18,6 @@ namespace LootTracker
         private bool trackerPositionDirty;
         private bool trackerInteractionActive;
         private System.Numerics.Vector2 trackerModeButtonMin, trackerModeButtonMax;
-        private bool trackerPriorityOverlayVisible;
-        private DateTime trackerPriorityCheck;
         private System.Numerics.Vector2 trackerSize = new(200f, 80f);
 
         private void DrawDisplaySettings()
@@ -115,60 +113,6 @@ namespace LootTracker
             return gameForeground || IsTrackerAppForeground() ||
                 (this.Settings.FreePosition && !this.Settings.LockPosition && held &&
                     (this.trackerInteractionActive || ImGui.GetIO().WantCaptureMouse));
-        }
-
-        private delegate bool TrackerWindowCallback(IntPtr window, IntPtr parameter);
-        [DllImport("user32.dll", EntryPoint = "EnumWindows")]
-        private static extern bool TrackerEnumWindows(TrackerWindowCallback callback, IntPtr parameter);
-        [DllImport("user32.dll", EntryPoint = "IsWindowVisible")]
-        private static extern bool TrackerWindowVisible(IntPtr window);
-        [DllImport("user32.dll", EntryPoint = "IsIconic")]
-        private static extern bool TrackerWindowMinimized(IntPtr window);
-        [DllImport("user32.dll", EntryPoint = "GetWindowTextW", CharSet = CharSet.Unicode)]
-        private static extern int TrackerWindowTitle(IntPtr window, StringBuilder title, int capacity);
-        [DllImport("user32.dll", EntryPoint = "GetWindowRect")]
-        private static extern bool TrackerWindowBounds(IntPtr window, out TrackerRect bounds);
-        [StructLayout(LayoutKind.Sequential)]
-        private struct TrackerRect { public int Left, Top, Right, Bottom; }
-
-        private static bool IsTrackerPriorityWindow(IntPtr window, System.Drawing.Rectangle gameBounds)
-        {
-            if (!TrackerWindowVisible(window) || TrackerWindowMinimized(window)) return false;
-            var title = new StringBuilder(80);
-            if (TrackerWindowTitle(window, title, title.Capacity) == 0 ||
-                !title.ToString().StartsWith("PoE Overlay", StringComparison.OrdinalIgnoreCase)) return false;
-            if (!TrackerWindowBounds(window, out var bounds)) return false;
-            var rectangle = System.Drawing.Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
-            // Ignore the small tray/launcher window and windows on another monitor.
-            return rectangle.Width >= 160 && rectangle.Height >= 80 && rectangle.IntersectsWith(gameBounds);
-        }
-
-        private static bool FindTrackerPriorityOverlay(System.Drawing.Rectangle gameBounds, uint gamePid)
-        {
-            if (gamePid == 0) return false;
-            bool found = false;
-            TrackerWindowCallback callback = (window, _) =>
-            {
-                // EnumWindows follows Z order: a window behind the game cannot cover the tracker.
-                TrackerWindowProcess(window, out var windowPid);
-                if (windowPid == gamePid) return false;
-                found = IsTrackerPriorityWindow(window, gameBounds);
-                return !found;
-            };
-            TrackerEnumWindows(callback, IntPtr.Zero);
-            return found;
-        }
-
-        private bool IsTrackerPriorityOverlayOpen()
-        {
-            var now = DateTime.UtcNow;
-            if (now >= this.trackerPriorityCheck)
-            {
-                this.trackerPriorityOverlayVisible = FindTrackerPriorityOverlay(Core.Process.WindowArea,
-                    Core.Process.Pid);
-                this.trackerPriorityCheck = now.AddMilliseconds(100);
-            }
-            return this.trackerPriorityOverlayVisible;
         }
 
         private ImGuiWindowFlags TrackerWindowFlags(ImGuiWindowFlags flags)
