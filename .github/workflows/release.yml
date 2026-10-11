@@ -69,6 +69,14 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Échec de compilation : $project" }
           }
           $runtime = Join-Path $PWD 'GameHelper/bin/Release/net10.0-windows/win-x64'
+          # Some older plugin projects do not deploy their localization files.
+          $localizations = @(git ls-files -- 'Plugins/*/Localization/*.json')
+          if ($LASTEXITCODE -ne 0 -or !$localizations) { throw 'Liste des traductions indisponible.' }
+          foreach ($path in $localizations) {
+            $destination = Join-Path $runtime $path
+            [void][IO.Directory]::CreateDirectory((Split-Path $destination -Parent))
+            Copy-Item -LiteralPath $path -Destination $destination
+          }
           $native = Join-Path $runtime 'runtimes/win-x64/native'
           if (Test-Path $native) {
             Get-ChildItem $native -Filter '*.dll' -File | Copy-Item -Destination $runtime
@@ -100,6 +108,9 @@ jobs:
           try {
             foreach ($name in @('GameHelper.exe', 'GameHelper.App.exe', 'GameHelper.dll', 'GameHelper.deps.json', 'GameHelper.runtimeconfig.json', 'GameOffsets.dll', 'cimgui.dll', 'LICENSE')) {
               if (!$zip.GetEntry($name)) { throw "Fichier indispensable absent : $name" }
+            }
+            foreach ($path in @(git ls-files -- 'Plugins/*/Localization/*.json')) {
+              if (!$zip.GetEntry($path)) { throw "Traduction absente du ZIP : $path" }
             }
             if ($zip.Entries.FullName -match '(?i)(^|/)(configs?|settings\.json)(/|$)|(?i)(dump|\.pdb$|\.log$)') { throw 'Données locales ou de diagnostic présentes dans le ZIP.' }
           } finally { $zip.Dispose() }
