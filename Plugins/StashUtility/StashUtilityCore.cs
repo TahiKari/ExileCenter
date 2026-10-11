@@ -2783,7 +2783,7 @@ namespace StashUtility
                     }
                     if (affinityTabletUsesSpecializedPage && affinityTabletCategory is ("Boss" or "Map"))
                     {
-                        BeginTabletPlacement();
+                        BeginTabletPlacement(presentItems);
                         return;
                     }
                     if (!affinityCtrlHeld)
@@ -3370,7 +3370,7 @@ namespace StashUtility
             actual != null && expected != null && actual.Count == expected.Count && expected.All(item =>
                 actual.Any(other => other.X == item.X && other.Y == item.Y && other.Identity == item.Identity && other.Tier == item.Tier));
 
-        private void BeginTabletPlacement()
+        private void BeginTabletPlacement(HashSet<IntPtr> presentItems)
         {
             var now = DateTime.UtcNow;
             if (affinityTabletReadDeadline == default) affinityTabletReadDeadline = now.AddMilliseconds(1500);
@@ -3416,9 +3416,10 @@ namespace StashUtility
                 affinityNextAction = DateTime.UtcNow;
                 return;
             }
+            // Stash scans can change the cached slot offset; exclude retained, non-inventory pointers here too.
             var checkedSource = ReadTabletPlacementItem(ReadFreshItem(affinityItem));
             if (checkedSource == null || checkedSource.Identity != source.Identity || checkedSource.Tier != source.Tier ||
-                GetItemAddressFromElement(affinitySlot, true) != affinityItem ||
+                GetItemAddressFromElement(affinitySlot, true, presentItems) != affinityItem ||
                 !PluginUiElementReflection.TryGetAbsoluteRect(affinitySlot, out var position, out var size) ||
                 !AffinityGetCursorPos(out var cursor) || Math.Abs(cursor.X - affinityCursor.X) > 2 || Math.Abs(cursor.Y - affinityCursor.Y) > 2 ||
                 Math.Abs(position.X + size.X / 2 + affinityWindow.X - affinityCursor.X) > 2 ||
