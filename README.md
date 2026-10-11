@@ -1,16 +1,27 @@
-# GameHelper
+# GameHelper P-V1
 
-**Version personnalisée TahiKari :** [téléchargements](https://github.com/TahiKari/Gamehelper2/releases).
-Choisir `GameHelper-Personnalise-win-x64.zip`, extraire dans un dossier et lancer
-`GameHelper.exe` (runtime .NET 10 Desktop x64 requis).
-La procédure de publication est décrite dans la section « Releases de la version
-personnalisée » ci-dessous. Les informations historiques de l'amont sont conservées.
+La version de **TahiKari** pour Path of Exile 2 : **P** pour « personnalisé », **V1** pour « version 1 ».
+
+## ⬇️ [Télécharger GameHelper P-V1 pour Windows x64](https://github.com/TahiKari/Gamehelper2/releases/latest/download/GameHelper-Personnalise-win-x64.zip)
+
+**[Voir la dernière version et ses nouveautés](https://github.com/TahiKari/Gamehelper2/releases/latest)** · [Toutes les versions](https://github.com/TahiKari/Gamehelper2/releases)
+
+1. Télécharger le ZIP avec le lien ci-dessus.
+2. Extraire son contenu dans un dossier.
+3. Lancer `GameHelper.exe` (runtime **.NET 10 Desktop x64** requis).
+
+Après cette première installation, les nouvelles mises à jour sont proposées au démarrage avec le choix **Oui/Non**, ou signalées dans l'application déjà ouverte.
+
+Le ZIP garde le nom `GameHelper-Personnalise-win-x64.zip` pour que les versions déjà installées puissent continuer à recevoir les mises à jour.
+La procédure de publication est décrite dans la section « Releases de GameHelper P-V1 » ci-dessous. Les informations historiques de l'amont sont conservées.
 
 GameHelper is a Windows x64 .NET overlay for **Path of Exile 2** with a plugin architecture. The launcher (`GameHelper.exe`) checks for updates, starts the overlay (`GameHelper.App.exe`), reads data from the running game process, and loads plugins from the `Plugins` folder.
 
 **Open-source fork maintained by** [MordWraith](https://github.com/MordWraith) — basis **Lafko / Gordin** ([GameHelper2](https://github.com/MordWraith/Gamehelper)).
 
-## Source + binaries (same project)
+## Source + binaries (original upstream project)
+
+Pour **GameHelper P-V1**, utiliser le bouton de téléchargement en haut de cette page. Les liens ci-dessous concernent le projet d'origine.
 
 | Channel | For whom | Link |
 |---------|----------|------|
@@ -23,7 +34,7 @@ GameHelper is a Windows x64 .NET overlay for **Path of Exile 2** with a plugin a
 - **Windows Defender blocked GameHelper?** See [SECURITY.md → false positives](SECURITY.md#windows-defender-and-antivirus-false-positives) — common with auto-update and unsigned DLLs; usually not a real trojan.
 - **Attribution:** [CREDITS.md](CREDITS.md) and in-app **Plugins → Author** column.
 
-## Download (players)
+## Download (original upstream project)
 
 | What | Link |
 |------|------|
@@ -152,7 +163,7 @@ atomically published. Updating never overwrites inventory protections, stash
 destinations or other saved settings. The first installation of this updater is
 manual; subsequent packages use the in-app button.
 
-## Releases de la version personnalisée (GitHub Actions)
+## Releases de GameHelper P-V1 (GitHub Actions)
 
 Le workflow `.github/workflows/release.yml` compile le cœur et les plugins sur
 une machine Windows standard gratuite. Il fonctionne uniquement dans le dépôt
@@ -179,7 +190,7 @@ Les compilations locales habituelles ne sont pas modifiées.
 Le ZIP contient les exécutables, plugins, dépendances, ressources, licence et
 crédits ; il exclut les réglages personnels et diagnostics. Extraire dans un
 dossier et lancer `GameHelper.exe` avec le runtime **.NET 10 Desktop x64** installé.
-Les deux exécutables démarrent directement la version personnalisée. Au démarrage,
+Les deux exécutables démarrent directement GameHelper P-V1. Au démarrage,
 l'application propose les mises à jour avec le choix Oui/Non. Pendant son utilisation,
 elle vérifie les Releases publiques toutes les 10 minutes et affiche une notification.
 Le bouton « Mettre à jour et redémarrer » télécharge le ZIP depuis ce dépôt,

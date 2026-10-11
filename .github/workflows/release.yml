@@ -94,7 +94,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $runtime = Join-Path $PWD 'GameHelper/bin/Release/net10.0-windows/win-x64'
           $output = Join-Path $env:RUNNER_TEMP 'gamehelper-release'
-          & ./scripts/publish.ps1 -LocalUpdate -SkipBuild -LocalSource $runtime -LocalDestination $output -LocalLabel "GameHelper personnalisé $env:RELEASE_TAG"
+          & ./scripts/publish.ps1 -LocalUpdate -SkipBuild -LocalSource $runtime -LocalDestination $output -LocalLabel 'GameHelper P-V1'
           $manifest = Get-Content "$output/GameHelper-Maj.json" -Raw | ConvertFrom-Json
           $archive = Join-Path $output $manifest.PackageFile
           Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -120,7 +120,9 @@ jobs:
           $hash = (Get-FileHash $download -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  GameHelper-Personnalise-win-x64.zip" | Set-Content "$download.sha256" -Encoding utf8NoBOM
           @"
-          GameHelper personnalisé pour Windows x64. Extraire le ZIP dans un dossier puis lancer GameHelper.exe.
+          GameHelper P-V1 — la version de TahiKari pour Windows x64 (P : personnalisé, V1 : version 1).
+          Télécharger : https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/GameHelper-Personnalise-win-x64.zip
+          Installation : extraire le ZIP dans un dossier puis lancer GameHelper.exe.
           Nécessite le runtime .NET 10 Desktop x64. GameOffsets.dll est conservée sans recompilation.
           Les paramètres personnels ne sont pas inclus. Le code correspondant est disponible au tag $env:RELEASE_TAG.
           Après cette première installation, les nouvelles Releases sont proposées au démarrage (Oui/Non) ou signalées dans l'application.
@@ -132,7 +134,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $output = $env:RELEASE_OUTPUT
-          $options = @('--repo', $env:GITHUB_REPOSITORY, '--verify-tag', '--title', "GameHelper personnalisé $env:RELEASE_TAG", '--notes-file', "$output/notes.txt")
+          $options = @('--repo', $env:GITHUB_REPOSITORY, '--verify-tag', '--title', 'GameHelper P-V1', '--notes-file', "$output/notes.txt")
           if ($env:RELEASE_DRAFT -eq 'true') { $options += '--draft' }
           & gh release create $env:RELEASE_TAG "$output/GameHelper-Personnalise-win-x64.zip" "$output/GameHelper-Personnalise-win-x64.zip.sha256" @options
           if ($LASTEXITCODE -ne 0) { throw 'Échec de publication de la Release.' }
