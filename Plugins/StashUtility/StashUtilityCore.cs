@@ -4063,7 +4063,7 @@ namespace StashUtility
                 if (!TryReadStashEntries(header, out var entries, out var failure))
                     throw new InvalidOperationException(PluginText.F("stashutility.transfer.scan_folder_error", "Folder: {0}. {1}",
                         folders.Count == 0 ? PluginText.T("stashutility.transfer.root", "Stash Root") : string.Join(" / ", folders), failure));
-                foreach (var entry in entries)
+                foreach (var entry in GetStashEntriesInDisplayOrder(header, entries))
                 {
                     var nestedHeader = ResolvePath(entry.page, new int[] { 0, 1 });
                     var nestedButtons = ResolvePath(nestedHeader, new int[] { 0 });
@@ -4368,6 +4368,37 @@ namespace StashUtility
 
         private bool TryReadStashEntries(IntPtr header, out List<(string name, IntPtr page)> entries)
             => TryReadStashEntries(header, out entries, out _);
+
+        private List<(string name, IntPtr page)> GetStashEntriesInDisplayOrder(IntPtr header,
+            List<(string name, IntPtr page)> entries)
+        {
+            // Keep canonical name/page pairs intact; only the scan/browser display order changes.
+            var container = ResolvePath(header, new[] { 0 });
+            if (container == IntPtr.Zero || !TryReadMemory<UiElementBaseOffset>(container, out var offset) ||
+                offset.Self != container) return entries;
+            long count = offset.ChildrensPtr.TotalElements(IntPtr.Size);
+            if (count < 0 || count > 257) return entries;
+            var buttons = new List<(string name, Vector2 position)>();
+            bool positionsReadable = true;
+            foreach (var button in ReadStdVector<IntPtr>(offset.ChildrensPtr))
+            {
+                var label = ResolvePath(button, new[] { 0, 1 });
+                if (!TryReadUiString(label, 0x98, out var id) || id != "label" ||
+                    !TryReadUiString(label, 0x360, out var name) || !entries.Any(entry => entry.name == name)) continue;
+                // Sibling buttons share a container, so their local positions give the visible order.
+                bool readable = TryReadMemory<UiElementBaseOffset>(button, out var buttonOffset) && buttonOffset.Self == button;
+                var position = new Vector2(buttonOffset.RelativePosition.X, buttonOffset.RelativePosition.Y);
+                readable &= float.IsFinite(position.X) && float.IsFinite(position.Y);
+                positionsReadable &= readable;
+                buttons.Add((name, position));
+            }
+            // Unloaded or ambiguous button lists must not invent a destination or an order.
+            if (buttons.Count != entries.Count || buttons.Select(button => button.name).Distinct().Count() != entries.Count)
+                return entries;
+            var ordered = positionsReadable ? buttons.OrderBy(button => button.position.Y).ThenBy(button => button.position.X).ToList() : buttons;
+            var ranks = ordered.Select((button, index) => (button.name, index)).ToDictionary(button => button.name, button => button.index);
+            return entries.OrderBy(entry => ranks[entry.name]).ToList();
+        }
 
         private bool TryReadStashEntries(IntPtr header, out List<(string name, IntPtr page)> entries, out string failure)
             => TryReadStashEntries(header, out entries, out failure, out _);
