@@ -585,7 +585,8 @@ namespace LootTracker
             // Session-history windows are independent of game state (they read from disk).
             if (!this.Settings.SeparateWindow)
             {
-                this.CloseTrackerDisplay();
+                // Keep the native window on its monitor when switching display modes.
+                this.trackerDisplay?.Render(false);
                 this.DrawSessionHistoryWindow();
                 this.DrawSessionDetailWindow();
                 this.DrawMapLootWindow();
@@ -634,15 +635,15 @@ namespace LootTracker
             }
         }
 
-        // Aggregate the completed runs (the live run is excluded so the rate stays stable).
+        // Include the current leg in the same live totals shown on the map strip.
         private void SessionTotals(out TimeSpan totalActive, out double totalEx)
         {
             totalActive = TimeSpan.Zero;
             totalEx = 0;
             foreach (var r in this.completed)
             {
-                totalActive += r.ActiveTime;
-                totalEx += this.ValueOf(r.Gained, out _, out _);
+                totalActive += this.RunDisplayTime(r);
+                totalEx += this.ValueOf(ReferenceEquals(r, this.current) ? this.CurrentGainedLive() : r.Gained, out _, out _);
             }
         }
 

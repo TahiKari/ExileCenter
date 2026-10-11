@@ -29,7 +29,7 @@
   "settings.highlight_font_size": "Highlight font size",
   "settings.highlight_from": "Highlight from (ex)",
   "settings.hide_when_game_unfocused": "Hide values when game is not focused",
-  "settings.hide_slot_prices_on_hover": "Hide item-panel values while hovering an item",
+  "settings.hide_slot_prices_on_hover": "Hide prices while the mouse is in an item panel (keeps descriptions and Ritual tribute readable)",
   "settings.jitter_filter": "Jitter filter (lower=stronger, no lag)",
   "settings.league": "League",
   "settings.min_value_to_show": "Min value to show (ex)",

@@ -17,6 +17,7 @@ namespace LootTracker
         private float detachedUiScale = 1f;
         private bool trackerPositionDirty;
         private bool trackerInteractionActive;
+        private System.Numerics.Vector2 trackerModeButtonMin, trackerModeButtonMax;
         private bool trackerPriorityOverlayVisible;
         private DateTime trackerPriorityCheck;
         private System.Numerics.Vector2 trackerSize = new(200f, 80f);
@@ -168,7 +169,33 @@ namespace LootTracker
         {
             if (this.Settings.FreePosition && !this.Settings.LockPosition)
                 return flags & ~(ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoInputs);
+            // Only the mode button captures input on an otherwise locked game overlay.
+            if (this.trackerModeButtonMax.X > this.trackerModeButtonMin.X &&
+                this.trackerModeButtonMax.Y > this.trackerModeButtonMin.Y &&
+                ImGui.GetCurrentContext() != IntPtr.Zero &&
+                ImGui.IsMouseHoveringRect(this.trackerModeButtonMin, this.trackerModeButtonMax, false))
+                return flags & ~ImGuiWindowFlags.NoInputs;
             return flags;
+        }
+
+        private void DrawTrackerModeButton()
+        {
+            bool detached = this.Settings.SeparateWindow;
+            string label = this.L(detached ? "lt.game_mode" : "lt.desktop_mode", detached ? "Game screen" : "Another screen");
+            ContinueTrackerRow(ImGui.CalcTextSize(label).X + ImGui.GetStyle().FramePadding.X * 2);
+            if (ImGui.SmallButton(label + "##TrackerDisplayMode"))
+            {
+                this.Settings.SeparateWindow = !detached;
+                this.Settings.SeparateWindowVisible = true;
+                this.applyTrackerPosition = true;
+                this.trackerDisplayError = string.Empty;
+                this.SaveSettings();
+            }
+            if (!detached)
+            {
+                this.trackerModeButtonMin = ImGui.GetItemRectMin();
+                this.trackerModeButtonMax = ImGui.GetItemRectMax();
+            }
         }
 
         private void RecordTrackerPosition()
@@ -315,6 +342,7 @@ namespace LootTracker
             // [map] name
             if (this.DrawInlineIcon("Map")) ImGui.SameLine(0f, pad);
             ImGui.TextWrapped(name);
+            this.DrawTrackerModeButton();
 
             // [time] mm:ss
             ContinueTrackerRow(90f);
@@ -532,14 +560,21 @@ namespace LootTracker
             }
         }
 
-        private void DrawTrackerMetric(string label, string value, double? profit = null)
+        private void DrawTrackerMetric(string label, string value = "", double? profit = null)
         {
             ImGui.PushTextWrapPos(0);
             ImGui.TextDisabled(label);
             if (profit.HasValue)
             {
-                ImGui.TextColored(profit.Value >= 0 ? GreenCol : RedCol, value);
-                this.ProfitTooltip(profit.Value);
+                for (int unit = 0; unit < ProfitUnits.Length; unit++)
+                {
+                    if ((this.SelectedProfitUnits & (1 << unit)) == 0) continue;
+                    string converted = this.FormatProfitCurrency(profit.Value, unit);
+                    ImGui.TextColored(converted.StartsWith("—", StringComparison.Ordinal)
+                        ? new System.Numerics.Vector4(0.65f, 0.68f, 0.74f, 1f)
+                        : profit.Value >= 0 ? GreenCol : RedCol, converted);
+                    this.ProfitTooltip(profit.Value);
+                }
             }
             else ImGui.TextWrapped(value);
             ImGui.PopTextWrapPos();
@@ -606,8 +641,6 @@ namespace LootTracker
             double perHour = totalActive.TotalHours > 0 ? totalEx / totalActive.TotalHours : 0;
             TimeSpan avgTime = maps > 0 ? totalActive / maps : TimeSpan.Zero;
             double avgProfit = maps > 0 ? totalEx / maps : 0;
-            int primaryUnit = 0;
-            while ((this.SelectedProfitUnits & (1 << primaryUnit)) == 0) primaryUnit++;
 
             // Bound the header independently so the history always retains most of the panel.
             float headerLimit = Math.Max(1f, ImGui.GetContentRegionAvail().Y * 0.45f);
@@ -623,8 +656,9 @@ namespace LootTracker
                 {
                     width = ImGui.GetContentRegionAvail().X;
                     ImGui.TextColored(new System.Numerics.Vector4(0.48f, 0.69f, 1f, 1f), this.L("lt.dashboard", "LOOT TRACKER"));
+                    this.DrawTrackerModeButton();
                     string timer = this.LF("lt.session_timer", "Session: {0}", FormatDuration(DateTime.UtcNow - this.sessionStartUtc));
-                    if (ImGui.GetItemRectSize().X + ImGui.CalcTextSize(timer).X + 20 * s < width)
+                    if (ImGui.GetItemRectMax().X + ImGui.CalcTextSize(timer).X + 20 * s < ImGui.GetCursorScreenPos().X + width)
                     {
                         ImGui.SameLine(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize(timer).X);
                         ImGui.TextDisabled(timer);
@@ -646,11 +680,11 @@ namespace LootTracker
                         if (ImGui.BeginTable("profit_summary", columns, ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.NoSavedSettings))
                         {
                             ImGui.TableNextColumn();
-                            this.DrawTrackerMetric(this.L("lt.total", "Total"), this.FormatProfitCurrency(totalEx, primaryUnit), totalEx);
+                            this.DrawTrackerMetric(this.L("lt.total", "Total"), profit: totalEx);
                             ImGui.TableNextColumn();
-                            this.DrawTrackerMetric(this.L("lt.hourly_profit", "Profit / hour"), this.FormatProfitCurrency(perHour, primaryUnit), perHour);
+                            this.DrawTrackerMetric(this.L("lt.hourly_profit", "Profit / hour"), profit: perHour);
                             ImGui.TableNextColumn();
-                            this.DrawTrackerMetric(this.L("lt.average_profit", "Average profit"), this.FormatProfitCurrency(avgProfit, primaryUnit), avgProfit);
+                            this.DrawTrackerMetric(this.L("lt.average_profit", "Average profit"), profit: avgProfit);
                             ImGui.TableNextColumn();
                             this.DrawTrackerMetric(this.LF("lt.maps", "Maps: {0}", maps), this.LF("lt.avg_time", "AVG Time: {0}", FormatDuration(avgTime)));
                             ImGui.EndTable();
@@ -710,7 +744,7 @@ namespace LootTracker
                     ImGui.TextWrapped(r.Name);
                     ImGui.TableNextColumn();
                     ImGui.TextUnformatted(FormatDuration(this.RunDisplayTime(r)));
-                    double ex = this.ValueOf(r.Gained, out _, out _);
+                    double ex = this.ValueOf(ReferenceEquals(r, this.current) ? this.CurrentGainedLive() : r.Gained, out _, out _);
                     for (int unit = 0, value = 0; unit < ProfitUnits.Length; unit++)
                     {
                         if ((this.SelectedProfitUnits & (1 << unit)) == 0) continue;

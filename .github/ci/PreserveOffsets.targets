@@ -1,0 +1,14 @@
+<Project>
+  <!-- CI only: reference the validated binary; never compile GameOffsets. -->
+  <ItemGroup>
+    <ProjectReference Remove="@(ProjectReference->WithMetadataValue('Filename', 'GameOffsets'))" />
+    <Reference Include="GameOffsets">
+      <HintPath>$(PinnedGameOffsetsPath)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="PreventOffsetsBuild" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(MSBuildProjectName)' == 'GameOffsets'" Text="GameOffsets must not be built in this workflow." />
+    <Error Condition="!Exists('$(PinnedGameOffsetsPath)')" Text="Missing pinned GameOffsets.dll." />
+  </Target>
+</Project>

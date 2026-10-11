@@ -42,6 +42,9 @@ internal sealed class DpsTracker
         CurrentMap = null;
         mapTime = null;
         MapDirty = false;
+        // Only the newest report can remain paused between map visits.
+        foreach (var map in maps.Take(Math.Max(0, maps.Count - 1)))
+            if (!map.Finished) { map.Finished = true; MapDirty = true; }
         mapEnemyIndices.Clear();
     }
 
@@ -63,6 +66,7 @@ internal sealed class DpsTracker
                 CurrentMap.ReadingInterrupted = true;
             if (CurrentMap == null)
             {
+                foreach (var map in maps) map.Finished = true;
                 CurrentMap = new AuraTrackerSettings.DamageMeterMap
                     { Hash = hash, Name = name, AreaLevel = level, ProcessId = processId, Label = label, EnemySampleVersion = 1 };
                 maps.Add(CurrentMap);

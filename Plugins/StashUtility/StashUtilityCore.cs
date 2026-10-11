@@ -123,8 +123,10 @@ namespace StashUtility
         private int affinityInventoryReadRetries;
         private int affinityUnrouted;
         private string affinityTabletCategory;
+        private bool affinityTabletUsesSpecializedPage;
         private TabletPlacement affinityTabletPlacement;
         private DateTime affinityTabletReadDeadline;
+        private DateTime affinityTabletNavigationReadDeadline;
         private sealed class TabletPlacement
         {
             public IntPtr Page, Grid, Inventory;
@@ -1247,7 +1249,7 @@ namespace StashUtility
                 {
                 ImGui.TextWrapped(PluginText.T("stashutility.transfer.equipment_hint", "Equipment uses the destinations below. The correct folder and tab are opened before Ctrl+Click. Numbered tabs in the same folder are tried in order when an item cannot be deposited."));
                 ImGui.TextWrapped(PluginText.T("stashutility.transfer.affinity_hint", "Specialized items use the game's stash affinities, including newly looted items. No stash scan is needed. Configure the affinities in the game first."));
-                ImGui.TextWrapped(PluginText.T("stashutility.transfer.unique_hint", "Unique equipment uses its own numbered tabs, then the overflow tab if deposits fail. Items are kept in that stash tab. Tablets use the game's specialized stash affinity to reach their category (Unique, Delirium, Breach, etc.)."));
+                ImGui.TextWrapped(PluginText.T("stashutility.transfer.unique_hint", "Unique equipment uses its own numbered tabs, then the overflow tab. Each unique tablet type can use its own selected stash tab. Unset types use the default unique-tablet destination. Fragment destinations also select the matching category and preserve the existing Boss/Map model blocks."));
                 ImGui.TextWrapped(PluginText.T("stashutility.transfer.timelost_hint", "Time-Lost jewels require their own destination. Without one, they stay in the inventory."));
                 ImGui.TextWrapped(PluginText.T("stashutility.transfer.gem_hint", "Gems use three separate destinations at every level. A scan recognizes uniquely named Skills, Supports and Kalguuran tabs. You can change these destinations or select None to keep these items in your inventory."));
                 }
@@ -1296,10 +1298,13 @@ namespace StashUtility
                     DrawDestinationRow("Gem/Skills", PluginText.T("stashutility.transfer.gem_skills", "Skill and Spirit Gems (cut and uncut)"), false);
                     DrawDestinationRow("Gem/Supports", PluginText.T("stashutility.transfer.gem_supports", "Support Gems (cut and uncut)"), false);
                     DrawDestinationRow("Gem/Kalguuran", PluginText.T("stashutility.transfer.gem_kalguuran", "Kalguuran Gems and Alloys"), false);
-                    DrawDestinationRow("UniqueTablets", PluginText.T("stashutility.transfer.unique_tablets", "Unique Tablets (Fragment tab)"), false);
+                    DrawDestinationRow("UniqueTablets", PluginText.T("stashutility.transfer.unique_tablets", "Unique Tablets (default destination)"), false);
+                    foreach (var category in UniqueTabletCategories)
+                        DrawDestinationRow("UniqueTablets/" + category,
+                            PluginText.T("stashutility.transfer.unique_tablets." + category, "Unique Tablets: " + category), false);
                     var itemGroups = Settings.TransferDestinations.Where(pair =>
                         !UsesGameAffinity(pair.Key) && pair.Key != "UniqueEquipment" && pair.Key != "UniqueEquipmentOverflow" &&
-                        !equipmentGroups.ContainsKey(pair.Key) && !IsRoutedGemKind(pair.Key) && pair.Key != "UniqueTablets" && !string.IsNullOrEmpty(pair.Value?.ExampleItemName)).ToList();
+                        !equipmentGroups.ContainsKey(pair.Key) && !IsRoutedGemKind(pair.Key) && pair.Key != "UniqueTablets" && !IsUniqueTabletDestinationKey(pair.Key) && !string.IsNullOrEmpty(pair.Value?.ExampleItemName)).ToList();
                     foreach (var group in itemGroups)
                     {
                         DrawDestinationRow(group.Key, PluginText.F("stashutility.transfer.items_like", "Items like {0}", group.Value.ExampleItemName));
@@ -1341,10 +1346,10 @@ namespace StashUtility
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(-1f);
                 if (ImGui.BeginCombo("##tabName", destination.Disabled ? PluginText.T("stashutility.transfer.none", "None") : string.IsNullOrEmpty(destination.TabName)
-                    ? (group.StartsWith("Weapons/", StringComparison.Ordinal) ? PluginText.T("stashutility.transfer.inherit", "Use default destination") : PluginText.T("stashutility.transfer.choose_tab", "Choose a detected tab")) :
+                    ? (group.StartsWith("Weapons/", StringComparison.Ordinal) || IsUniqueTabletDestinationKey(group) ? PluginText.T("stashutility.transfer.inherit", "Use default destination") : PluginText.T("stashutility.transfer.choose_tab", "Choose a detected tab")) :
                     (string.IsNullOrEmpty(destination.FolderName) ? destination.TabName : $"{destination.FolderName} / {destination.TabName}")))
                 {
-                    if (group == "Weapons" || group.StartsWith("Weapons/", StringComparison.Ordinal))
+                    if (group == "Weapons" || group.StartsWith("Weapons/", StringComparison.Ordinal) || IsUniqueTabletDestinationKey(group))
                     {
                         if (ImGui.Selectable(PluginText.T("stashutility.transfer.inherit", "Use default destination"), !destination.Disabled && string.IsNullOrWhiteSpace(destination.TabName)))
                         {
@@ -2343,6 +2348,20 @@ namespace StashUtility
             return destination?.Disabled == true || string.IsNullOrWhiteSpace(destination?.TabName) ? null : destination;
         }
 
+        private static readonly string[] UniqueTabletCategories = { "Map", "Boss", "Abyss", "Breach", "Ritual", "Delirium" };
+
+        private static bool IsUniqueTabletDestinationKey(string key) =>
+            key?.StartsWith("UniqueTablets/", StringComparison.Ordinal) == true;
+
+        private StashDestination GetUniqueTabletDestination(string category)
+        {
+            if (category == null || Settings.TransferDestinations == null) return null;
+            var destination = Settings.TransferDestinations.GetValueOrDefault("UniqueTablets/" + category);
+            if (destination == null || !destination.Disabled && string.IsNullOrWhiteSpace(destination.TabName))
+                destination = Settings.TransferDestinations.GetValueOrDefault("UniqueTablets");
+            return destination?.Disabled == true || string.IsNullOrWhiteSpace(destination?.TabName) ? null : destination;
+        }
+
         private static string GetUniqueTabletCategory(string path)
         {
             if (string.IsNullOrEmpty(path) || !path.StartsWith("Metadata/Items/TowerAugment/", StringComparison.Ordinal)) return null;
@@ -2520,6 +2539,7 @@ namespace StashUtility
                 affinityTransferred = affinityFailed = affinityProtectedSkipped = 0;
                 affinityUnrouted = 0;
                 affinityTabletCategory = null;
+                affinityTabletUsesSpecializedPage = false;
                 affinityTabletPlacement = null;
                 affinityOpenedPage = IntPtr.Zero;
                 affinityRouteIssue = string.Empty;
@@ -2681,7 +2701,7 @@ namespace StashUtility
                     // Confirm completed transfers from the server inventory, since
                     // UI slots can retain a transferred item's pointer for a while.
                     bool stillPresent = presentItems.Contains(affinityItem) && (affinityClicked ||
-                        (slots.Contains(affinitySlot) && GetItemAddressFromElement(affinitySlot, true) == affinityItem));
+                        (slots.Contains(affinitySlot) && GetItemAddressFromElement(affinitySlot, true, presentItems) == affinityItem));
                     if (affinityClicked)
                     {
                         ReleaseAffinityControl();
@@ -2761,7 +2781,7 @@ namespace StashUtility
                         StopAffinityTransfer(PluginText.T("stashutility.transfer.affinity_focus_lost", "The game lost focus."));
                         return;
                     }
-                    if (affinityTabletCategory is "Boss" or "Map")
+                    if (affinityTabletUsesSpecializedPage && affinityTabletCategory is ("Boss" or "Map"))
                     {
                         BeginTabletPlacement();
                         return;
@@ -2806,7 +2826,7 @@ namespace StashUtility
                 foreach (var slot in slots)
                 {
                     if (slot == IntPtr.Zero || !IsElementVisible(slot)) continue;
-                    var itemAddress = GetItemAddressFromElement(slot, true);
+                    var itemAddress = GetItemAddressFromElement(slot, true, presentItems);
                     if (itemAddress == IntPtr.Zero || affinityProcessed.Contains(itemAddress) ||
                         !PluginUiElementReflection.TryValidateItemAddress(itemAddress, out var path, out _) ||
                         !(UsesGameAffinity(GetItemKind(path)) || IsEquipmentKind(GetItemKind(path)))) continue;
@@ -2829,7 +2849,9 @@ namespace StashUtility
                     affinityEquipmentDestination = null;
                     affinityUniqueFallbackDestination = null;
                     affinityTabletCategory = null;
+                    affinityTabletUsesSpecializedPage = false;
                     affinityTabletReadDeadline = default;
+                    affinityTabletNavigationReadDeadline = default;
                     string itemKind = GetItemKind(path);
                     affinityFinishingGemSort = false;
                     affinityPendingKind = itemKind;
@@ -2857,12 +2879,12 @@ namespace StashUtility
                         if (mods.Rarity == Rarity.Unique)
                         {
                             affinityTabletCategory = GetUniqueTabletCategory(path);
-                            var destination = Settings.TransferDestinations?.GetValueOrDefault("UniqueTablets");
+                            var destination = GetUniqueTabletDestination(affinityTabletCategory);
                             if (affinityTabletCategory == null || destination?.Disabled == true || string.IsNullOrWhiteSpace(destination?.TabName))
                             {
                                 affinityProcessed.Add(itemAddress);
                                 affinityUnrouted++;
-                                affinityRouteIssue = PluginText.T("stashutility.transfer.tablet_route_missing", "Unique tablets stayed in your inventory. Scan the stash and choose their Fragment destination.");
+                                affinityRouteIssue = PluginText.T("stashutility.transfer.tablet_route_missing", "Unique tablets stayed in your inventory. Choose a destination for their type, or a default unique-tablet destination.");
                                 affinityTabletCategory = null;
                                 continue;
                             }
@@ -2938,6 +2960,15 @@ namespace StashUtility
             {
                 StopAffinityTransfer(PluginText.F("stashutility.transfer.affinity_read_failed", "Could not read the inventory: {0}", ex.InnerException?.Message ?? ex.Message));
                 Console.WriteLine($"[StashUtility] Affinity transfer interrupted: {ex.Message}");
+                if (affinityTabletCategory != null)
+                    try
+                    {
+                        if (DumpUiTreeToFile(affinityOpenedPage != IntPtr.Zero ? affinityOpenedPage : affinityStashRoot, true))
+                            File.AppendAllText(Path.Combine(DllDirectory, "config", "ui_tree_dump.txt"), "\nTablet transfer: " +
+                                JsonConvert.SerializeObject(new { Category = affinityTabletCategory, Reason = ex.InnerException?.Message ?? ex.Message,
+                                    Page = affinityOpenedPage.ToInt64(), Destination = affinityEquipmentDestination }) + "\n");
+                    }
+                    catch (Exception diagnosticError) { Console.WriteLine($"[StashUtility] Tablet transfer diagnostic failed: {diagnosticError.Message}"); }
             }
         }
 
@@ -2954,7 +2985,16 @@ namespace StashUtility
             for (int depth = 0; depth <= folders.Count; depth++)
             {
                 if (!TryReadStashEntries(header, out var entries, out _, out var list))
+                {
+                    // Folder contents can lag behind selection. Keep the pending tablet
+                    // without sending input; the existing navigation deadline bounds retries.
+                    if (affinityTabletCategory != null)
+                    {
+                        affinityNextAction = DateTime.UtcNow.AddMilliseconds(100);
+                        return false;
+                    }
                     throw new InvalidOperationException(PluginText.T("stashutility.transfer.layout_unavailable", "Stash tab names are unavailable. Open the stash and try again."));
+                }
                 if (depth == folders.Count && !affinityEquipmentRouteResolved)
                 {
                     if (folders.Count > 0 && GetTabPriority(destination.TabName) != null &&
@@ -2973,10 +3013,21 @@ namespace StashUtility
                 string name = depth < folders.Count ? folders[depth] :
                     (affinityEquipmentTab == 0 ? destination.TabName : destination.OverflowTabNames[affinityEquipmentTab - 1]);
                 var matches = entries.Where(entry => string.Equals(entry.name, name, StringComparison.Ordinal)).ToList();
+                if (affinityTabletCategory != null && !string.IsNullOrWhiteSpace(name) && matches.Count == 0)
+                {
+                    affinityNextAction = DateTime.UtcNow.AddMilliseconds(100);
+                    return false;
+                }
                 if (string.IsNullOrWhiteSpace(name) || matches.Count != 1)
                     throw new InvalidOperationException(PluginText.F("stashutility.transfer.destination_not_found", "Destination name not found or ambiguous: {0}", name));
                 var page = matches[0].page;
-                bool selected = IsElementVisible(page) && entries.Count(entry => IsTabVisible(entry.page)) == 1;
+                int visiblePages = entries.Count(entry => IsTabVisible(entry.page));
+                if (affinityTabletCategory != null && visiblePages != 1)
+                {
+                    affinityNextAction = DateTime.UtcNow.AddMilliseconds(100);
+                    return false;
+                }
+                bool selected = IsElementVisible(page) && visiblePages == 1;
                 var dropdown = ResolvePath(header, new int[] { 4 });
                 bool dropdownOpen = IsElementVisible(dropdown);
                 if (!selected || dropdownOpen)
@@ -2986,6 +3037,17 @@ namespace StashUtility
                     if (!dropdownOpen || selected)
                     {
                         var toggle = ResolvePath(header, new int[] { 2 });
+                        if (affinityTabletCategory != null && !selected && !dropdownOpen && !IsElementVisible(toggle))
+                        {
+                            // Small folders hide the dropdown toggle when their tabs fit
+                            // on screen. Their visible buttons can be reordered: match names.
+                            var button = FindVisibleStashTabButton(header, name);
+                            if (button != IntPtr.Zero)
+                            {
+                                NavigateStashControl(button);
+                                return false;
+                            }
+                        }
                         if (!TryReadUiString(toggle, 0x98, out var id) || id != "tab_list_button")
                             throw new InvalidOperationException(PluginText.T("stashutility.transfer.equipment_control_unavailable", "The stash navigation control could not be identified."));
                         NavigateStashControl(toggle);
@@ -3012,6 +3074,24 @@ namespace StashUtility
                 if (depth == folders.Count) affinityOpenedPage = page;
             }
             return true;
+        }
+
+        private IntPtr FindVisibleStashTabButton(IntPtr header, string name)
+        {
+            var buttons = ResolvePath(header, new int[] { 0 });
+            if (buttons == IntPtr.Zero || string.IsNullOrWhiteSpace(name) ||
+                !TryReadUiString(buttons, 0x98, out var id) || id != "buttons_container") return IntPtr.Zero;
+            var vector = ReadMemory<UiElementBaseOffset>(buttons).ChildrensPtr;
+            long count = vector.TotalElements(IntPtr.Size);
+            if (count < 0 || count > 257) return IntPtr.Zero;
+            var matches = ReadStdVector<IntPtr>(vector).Where(button =>
+            {
+                if (!IsElementVisible(button)) return false;
+                var label = ResolvePath(button, new int[] { 0, 1 });
+                return TryReadUiString(label, 0x98, out var labelId) && labelId == "label" &&
+                    TryReadUiString(label, 0x360, out var text) && string.Equals(text, name, StringComparison.Ordinal);
+            }).ToList();
+            return matches.Count == 1 ? matches[0] : IntPtr.Zero;
         }
 
         private sealed class StashUiNode
@@ -3053,14 +3133,16 @@ namespace StashUtility
                 foreach (var node in StashUiNodes(child)) yield return node;
         }
 
-        private static string TabletCategoryLabel(string text) => NormalizeModSearch(text) switch
+        private static string TabletCategoryLabel(string text) => NormalizeModSearch(text).Trim() switch
         {
             "delirium" or "delire" => "Delirium",
             "ritual" or "rituel" => "Ritual",
             "breach" or "breche" => "Breach",
             "abyss" or "abysse" or "abime" => "Abyss",
-            "boss" or "bosses" => "Boss",
-            "map" or "maps" or "carte" or "cartes" => "Map",
+            "boss" or "bosses" or "overseer" or "superviseur" or "superviseurs" or
+                "overseer tablet" or "overseer tablets" or "tablette de superviseur" or "tablettes de superviseur" => "Boss",
+            "map" or "maps" or "carte" or "cartes" or "irradiated" or "irradie" or "irradiee" or "irradiees" or
+                "irradiated tablet" or "irradiated tablets" or "tablette irradiee" or "tablettes irradiees" => "Map",
             _ => null
         };
 
@@ -3107,12 +3189,36 @@ namespace StashUtility
         private bool EnsureUniqueTabletCategory()
         {
             var plan = UniqueTabletNavigation(ReadStashUiBranch(affinityOpenedPage), affinityTabletCategory);
+            bool expectsFragment = plan == null && (affinityTabletUsesSpecializedPage ||
+                IsGemDestinationName("UniqueTablets", affinityEquipmentDestination?.TabName ?? string.Empty) ||
+                (IsActiveTab(affinityOpenedPage, out var tabType) && tabType == "Fragment"));
+            affinityTabletUsesSpecializedPage = plan != null || expectsFragment;
+            // Ctrl+Shift+Click deposits into the selected ordinary tab, including an empty
+            // tab. Fragment tabs additionally require their matching category page.
+            if (plan == null && !expectsFragment) return true;
             if (plan == null)
             {
+                // A newly selected tab can still expose the previous tab's controls.
+                // Retry discovery before abandoning any of the six tablet categories.
+                var now = DateTime.UtcNow;
+                if (affinityTabletNavigationReadDeadline == default)
+                    affinityTabletNavigationReadDeadline = now.AddSeconds(3);
+                if (now < affinityTabletNavigationReadDeadline)
+                {
+                    affinityNextAction = now.AddMilliseconds(100);
+                    return false;
+                }
                 ReleaseAffinityControl();
                 if (affinityCtrlHeld || affinityShiftHeld)
                     throw new InvalidOperationException(PluginText.T("stashutility.transfer.affinity_release_failed", "Release Ctrl and Shift before trying again."));
                 affinityRouteIssue = PluginText.T("stashutility.transfer.tablet_view_missing", "Unique tablets stayed in the inventory: their controls could not be identified. Open Fragment > Tablets > Unique Tablets and try again.");
+                try
+                {
+                    if (DumpUiTreeToFile(affinityOpenedPage, true))
+                        File.AppendAllText(Path.Combine(DllDirectory, "config", "ui_tree_dump.txt"), "\nTablet navigation: " +
+                            JsonConvert.SerializeObject(new { Category = affinityTabletCategory, Page = affinityOpenedPage.ToInt64() }) + "\n");
+                }
+                catch (Exception ex) { Console.WriteLine($"[StashUtility] Tablet navigation diagnostic failed: {ex.Message}"); }
                 affinityUnrouted++;
                 affinitySlot = affinityItem = IntPtr.Zero;
                 affinityEquipmentDestination = null;
@@ -3139,9 +3245,14 @@ namespace StashUtility
             item.TryGetComponent<Stack>(out var stack);
             item.TryGetComponent<Base>(out var itemBase);
             if (stack != null && stack.Count < 1) return null;
+            // Mastered Domain's biome changes its mod IDs, but not its unique model.
+            bool masteredDomain = GetUniqueTabletCategory(item.Path) == "Map" &&
+                item.TryGetComponent<RenderItem>(out var renderItem) &&
+                Path.GetFileNameWithoutExtension(renderItem.ResourcePath.Replace('\\', '/')) == "PrecursorTabletMasteredDomain";
             return new SortItem { Address = item.Address, Width = 1, Height = 1, Path = item.Path, Tier = stack?.Count ?? 1,
                 // Rolls and remaining uses can vary within one unique model. Only merge identical rolls.
-                Kind = JsonConvert.SerializeObject(new { item.Path,
+                Kind = masteredDomain ? JsonConvert.SerializeObject(new { item.Path, Model = "MasteredDomain" }) :
+                    JsonConvert.SerializeObject(new { item.Path,
                     Explicit = mods.ExplicitMods.Select(mod => mod.name).OrderBy(name => name, StringComparer.Ordinal),
                     Implicit = mods.ImplicitMods.Select(mod => mod.name).OrderBy(name => name, StringComparer.Ordinal) }),
                 Identity = JsonConvert.SerializeObject(new { item.Path, Base = itemBase?.InternalName, mods.Rarity,
@@ -3149,20 +3260,24 @@ namespace StashUtility
         }
 
         private List<SortItem> ReadTabletPlacementGrid(IntPtr page, IntPtr inventory, out IntPtr matchedInventory,
-            out IntPtr grid, out Vector2 origin, out Vector2 cell)
+            out IntPtr grid, out Vector2 origin, out Vector2 cell, out string failure)
         {
             matchedInventory = inventory;
             grid = ResolvePath(page, new[] { 0, 0 });
             origin = cell = Vector2.Zero;
+            failure = "Page/grid hidden";
             if (!IsElementVisible(page) || !IsElementVisible(grid)) return null;
             var children = ReadMemory<UiElementBaseOffset>(grid).ChildrensPtr;
+            failure = "UI child count: " + children.TotalElements(IntPtr.Size);
             if (children.TotalElements(IntPtr.Size) < 1 || children.TotalElements(IntPtr.Size) > 96) return null;
             var visibleItems = new HashSet<IntPtr>();
             foreach (var slot in ReadStdVector<IntPtr>(children))
             {
-                if (!IsElementVisible(slot)) return null;
+                if (!IsElementVisible(slot)) continue;
                 var address = GetItemAddressFromElement(slot, true);
-                if (address == IntPtr.Zero || !visibleItems.Add(address)) return null;
+                // Empty cells and duplicate UI copies are not inventory items. The complete
+                // server inventory must still match below before any placement is allowed.
+                if (address != IntPtr.Zero) visibleItems.Add(address);
             }
             if (inventory == IntPtr.Zero)
             {
@@ -3176,38 +3291,38 @@ namespace StashUtility
                     if (address == IntPtr.Zero || ReadMemory<int>(address + 0x150) != 12 || ReadMemory<int>(address + 0x154) != 8) continue;
                     if (visibleItems.SetEquals(ReadSortItems(address, 12, 8).Select(item => item.Address))) matches.Add(address);
                 }
+                failure = "Matching inventories: " + matches.Count + "; UI items: " + visibleItems.Count;
                 if (matches.Count != 1) return null;
                 inventory = matchedInventory = matches.Single();
             }
             var actual = ReadSortItems(inventory, 12, 8);
+            failure = "Inventory/UI mismatch or geometry unavailable; UI items: " + visibleItems.Count + "; inventory items: " + actual.Count;
             if (!visibleItems.SetEquals(actual.Select(item => item.Address)) || actual.Any(item => item.Width != 1 || item.Height != 1) ||
                 !TrySortGeometry(page, actual, true, 12, 8, out grid, out origin, out cell)) return null;
             var result = new List<SortItem>();
             foreach (var position in actual)
             {
                 var item = ReadTabletPlacementItem(ReadFreshItem(position.Address));
+                failure = "Unrecognized destination item: " + position.Address.ToInt64().ToString("X");
                 if (item == null) return null;
                 item.X = position.X; item.Y = position.Y;
                 result.Add(item);
             }
+            failure = string.Empty;
             return result;
         }
 
-        private static SortItem TabletBlockTarget(List<SortItem> items, SortItem source, string category, int stackLimit)
+        private static SortItem TabletBlockTarget(List<SortItem> items, SortItem source, string category, int stackLimit, out bool blockFull)
         {
+            blockFull = false;
             if (items == null || source == null || string.IsNullOrEmpty(source.Kind) || source.Tier < 1 ||
                 items.Any(item => item.X < 0 || item.X >= 12 || item.Y < 0 || item.Y >= 8 || string.IsNullOrEmpty(item.Kind)) ||
                 items.Select(item => (item.X, item.Y)).Distinct().Count() != items.Count) return null;
-            var regions = category == "Boss" ? new[] { (0, 5), (6, 11) } :
-                category == "Map" ? new[] { (0, 3), (4, 7), (8, 11) } : Array.Empty<(int, int)>();
+            int modelCount = category == "Boss" ? 2 : category == "Map" ? 3 : 0;
+            if (modelCount == 0) return null;
             var blocks = new List<(string model, int left, int right)>();
-            foreach (var region in regions)
+            foreach (var model in items.GroupBy(item => item.Kind))
             {
-                var models = items.Where(item => item.X >= region.Item1 && item.X <= region.Item2)
-                    .GroupBy(item => item.Kind).OrderByDescending(group => group.Count()).ToList();
-                if (models.Count == 0) continue;
-                if (models.Count > 1 && models[0].Count() == models[1].Count()) return null;
-                var model = models[0];
                 var clusters = new List<List<int>>();
                 foreach (int column in model.Select(item => item.X).Distinct().Order())
                 {
@@ -3218,8 +3333,8 @@ namespace StashUtility
                 if (ranked.Count > 1 && model.Count(item => ranked[0].Contains(item.X)) == model.Count(item => ranked[1].Contains(item.X))) return null;
                 blocks.Add((model.Key, ranked[0].First(), ranked[0].Last()));
             }
-            // Never infer a new model from its artwork, nor expand into the separator columns.
-            if (blocks.Select(block => block.model).Distinct().Count() != blocks.Count) return null;
+            blocks = blocks.OrderBy(block => block.left).ToList();
+            if (blocks.Count > modelCount || blocks.Zip(blocks.Skip(1), (left, right) => left.right >= right.left).Any(overlap => overlap)) return null;
             var matching = blocks.Where(block => block.model == source.Kind).ToList();
             if (matching.Count != 1) return null;
             var block = matching[0];
@@ -3232,6 +3347,22 @@ namespace StashUtility
                 for (int x = block.left; x <= block.right; x++)
                     if (!occupied.Contains(y * 12 + x))
                         return new SortItem { X = x, Y = y, Width = 1, Height = 1, Kind = source.Kind, Identity = source.Identity };
+            // A native tablet page has one shared grid, not three equal-width regions.
+            // When all models are present, extend into adjacent free columns while
+            // keeping at least one separator column before the neighbouring model.
+            if (blocks.Count == modelCount)
+            {
+                int index = blocks.IndexOf(block);
+                int leftLimit = index == 0 ? 0 : blocks[index - 1].right + 2;
+                int rightLimit = index == blocks.Count - 1 ? 11 : blocks[index + 1].left - 2;
+                for (int distance = 1; distance < 12; distance++)
+                    foreach (int x in new[] { block.left - distance, block.right + distance })
+                        if (x >= leftLimit && x <= rightLimit && !items.Any(item => item.X == x))
+                            for (int y = 0; y < 8; y++)
+                                if (!occupied.Contains(y * 12 + x))
+                                    return new SortItem { X = x, Y = y, Width = 1, Height = 1, Kind = source.Kind, Identity = source.Identity };
+            }
+            blockFull = true;
             return null;
         }
 
@@ -3248,7 +3379,7 @@ namespace StashUtility
             var plan = UniqueTabletNavigation(ReadStashUiBranch(affinityOpenedPage), affinityTabletCategory);
             var source = ReadTabletPlacementItem(ReadFreshItem(affinityItem));
             var page = plan?.Last().page.Address ?? IntPtr.Zero;
-            var items = ReadTabletPlacementGrid(page, IntPtr.Zero, out var inventory, out var grid, out var origin, out var cell);
+            var items = ReadTabletPlacementGrid(page, IntPtr.Zero, out var inventory, out var grid, out var origin, out var cell, out var gridFailure);
             if ((items == null || source == null) && now < affinityTabletReadDeadline)
             {
                 affinityNextAction = now.AddMilliseconds(100);
@@ -3256,10 +3387,28 @@ namespace StashUtility
             }
             var fresh = ReadFreshItem(affinityItem);
             int limit = fresh != null && fresh.TryGetComponent<Stack>(out var stack) ? stack.MaxStack : 1;
-            var target = TabletBlockTarget(items, source, affinityTabletCategory, limit);
+            var target = TabletBlockTarget(items, source, affinityTabletCategory, limit, out var blockFull);
             if (target == null)
             {
-                affinityRouteIssue = PluginText.T("stashutility.transfer.tablet_block_unavailable", "A Boss/Map tablet stayed in the inventory: its existing block is full or could not be identified safely. Keep one model in each left/centre/right block.");
+                affinityRouteIssue = source == null
+                    ? PluginText.T("stashutility.transfer.tablet_source_unavailable", "The unique tablet could not be read. It stayed in the inventory.")
+                    : items == null
+                        ? PluginText.T("stashutility.transfer.tablet_grid_unavailable", "The unique-tablet grid could not be read or matched to its inventory. The tablet stayed in the inventory.")
+                        : blockFull
+                            ? PluginText.T("stashutility.transfer.tablet_block_full", "The block reserved for this unique-tablet model is full. Free a space or choose another destination for this tablet type.")
+                            : PluginText.T("stashutility.transfer.tablet_block_unavailable", "A Boss/Map tablet stayed in the inventory: its existing block is full or could not be identified safely. Keep one model in each left/centre/right block.");
+                try
+                {
+                    var sourceMods = fresh != null && fresh.TryGetComponent<Mods>(out var diagnosticMods) ? diagnosticMods : null;
+                    var sourceArt = fresh != null && fresh.TryGetComponent<RenderItem>(out var diagnosticArt) ? diagnosticArt.ResourcePath : null;
+                    if (DumpUiTreeToFile(page, true))
+                        File.AppendAllText(Path.Combine(DllDirectory, "config", "ui_tree_dump.txt"), "\nTablet placement: " +
+                            JsonConvert.SerializeObject(new { Category = affinityTabletCategory, Source = source, Items = items,
+                                SourcePath = fresh?.Path, SourceArt = sourceArt, Rarity = sourceMods?.Rarity,
+                                Explicit = sourceMods?.ExplicitMods, Implicit = sourceMods?.ImplicitMods,
+                                Failure = gridFailure, Inventory = inventory.ToInt64(), Grid = grid.ToInt64(), Origin = origin, Cell = cell }) + "\n");
+                }
+                catch (Exception ex) { Console.WriteLine($"[StashUtility] Tablet placement diagnostic failed: {ex.Message}"); }
                 affinityUnrouted++;
                 affinitySlot = affinityItem = IntPtr.Zero;
                 affinityEquipmentDestination = null;
@@ -3301,7 +3450,7 @@ namespace StashUtility
             if (plan == null || plan.Last().page.Address != placement.Page ||
                 plan.Last().pages.Children.Count(page => IsElementVisible(page.Address)) != 1)
                 throw new InvalidOperationException(PluginText.T("stashutility.sort.grid_changed", "The grid changed. Sorting stopped."));
-            var items = ReadTabletPlacementGrid(placement.Page, placement.Inventory, out _, out var grid, out var origin, out var cell);
+            var items = ReadTabletPlacementGrid(placement.Page, placement.Inventory, out _, out var grid, out var origin, out var cell, out _);
             if (items == null)
             {
                 if (now >= affinityDeadline)
@@ -3495,7 +3644,7 @@ namespace StashUtility
             }
 
             var viewport = ImGui.GetMainViewport();
-            int actions = (Settings.ShowInventoryTransferButton ? 1 : 0) + (Settings.ShowInventorySortButton ? 1 : 0) + (Settings.EnableTabletManager ? 1 : 0) + (Settings.InventoryTransferButtonLocked ? 0 : 2);
+            int actions = (Settings.ShowInventoryTransferButton ? 1 : 0) + (Settings.ShowInventorySortButton ? 1 : 0) + (Settings.EnableTabletManager ? 1 : 0) + (Settings.InventoryTransferButtonLocked ? 1 : 2);
             var windowSize = new Vector2(4 + actions * 32, 36);
             if (inventoryToolbarPanel != panel || inventoryToolbarWindow != Core.Process.WindowArea)
             {
@@ -3509,52 +3658,44 @@ namespace StashUtility
             var offset = Settings.InventoryTransferButtonOffset;
             if (!float.IsFinite(offset.X) || !float.IsFinite(offset.Y)) offset = Vector2.Zero;
             var location = Vector2.Clamp(anchor + offset, viewport.Pos,
-                viewport.Pos + Vector2.Max(Vector2.Zero, viewport.Size - windowSize));
+                viewport.Pos + Vector2.Max(Vector2.Zero, viewport.Size - windowSize -
+                    new Vector2(Settings.InventoryTransferButtonLocked ? 32 : 0, 0)));
             ImGui.SetNextWindowPos(location, ImGuiCond.Always);
             ImGui.SetNextWindowSize(windowSize, ImGuiCond.Always);
             ImGui.SetNextWindowBgAlpha(0.9f);
             var flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove |
                 ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing;
+            if (Settings.InventoryTransferButtonLocked) flags |= ImGuiWindowFlags.NoBackground;
             if (affinityTransferRunning || sortRunning) flags |= ImGuiWindowFlags.NoInputs;
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4));
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(4));
             if (ImGui.Begin("##stashInventoryTransfer", flags))
             {
-                if (Settings.ShowInventoryTransferButton)
+                DrawToolbarPositionControls(anchor, location, windowSize, ref Settings.InventoryTransferButtonOffset,
+                    ref Settings.InventoryTransferButtonLocked, lockFirst: true);
+                if (Settings.EnableTabletManager)
                 {
-                    ImGui.BeginDisabled(!canTransfer);
-                    if (ImGui.Button("##transfer", new Vector2(28))) BeginAffinityTransfer();
-                    DrawActionIcon(0);
-                    ImGui.EndDisabled();
-                    if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                        ImGui.SetTooltip(PluginText.T("stashutility.transfer.button_tooltip", "Open your stash to transfer specialized items and equipment with a configured destination. Protected cells stay untouched. Leave the mouse still after clicking; Escape stops the transfer."));
+                    ImGui.SameLine();
+                    DrawTabletVisibilityButton(true);
                 }
                 if (Settings.ShowInventorySortButton)
                 {
-                    if (Settings.ShowInventoryTransferButton) ImGui.SameLine();
+                    ImGui.SameLine();
                     ImGui.BeginDisabled(affinityTransferRunning || sortRunning || stashScanQueue.Count > 0);
                     if (ImGui.Button("##sortInventory", new Vector2(28))) BeginGridSort(false);
                     DrawActionIcon(3);
                     ImGui.EndDisabled();
                     if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(PluginText.T("stashutility.sort.inventory_tooltip", "Sort this inventory. Protected cells stay untouched."));
                 }
-                if (!Settings.InventoryTransferButtonLocked)
+                if (Settings.ShowInventoryTransferButton)
                 {
                     ImGui.SameLine();
-                    DrawToolbarMoveButton(anchor, location, windowSize, ref Settings.InventoryTransferButtonOffset);
-                    ImGui.SameLine();
-                    if (ImGui.Button("##lock", new Vector2(28)))
-                    {
-                        Settings.InventoryTransferButtonLocked = true;
-                        SaveSettings();
-                    }
-                    DrawActionIcon(2);
-                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(PluginText.T("stashutility.transfer.button_lock", "Lock Position"));
-                }
-                if (Settings.EnableTabletManager)
-                {
-                    if (Settings.ShowInventoryTransferButton || Settings.ShowInventorySortButton || !Settings.InventoryTransferButtonLocked) ImGui.SameLine();
-                    DrawTabletVisibilityButton(true);
+                    ImGui.BeginDisabled(!canTransfer);
+                    if (ImGui.Button("##transfer", new Vector2(28))) BeginAffinityTransfer();
+                    DrawActionIcon(0);
+                    ImGui.EndDisabled();
+                    if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                        ImGui.SetTooltip(PluginText.T("stashutility.transfer.button_tooltip", "Open your stash to transfer specialized items and equipment with a configured destination. Protected cells stay untouched. Leave the mouse still after clicking; Escape stops the transfer."));
                 }
             }
             ImGui.End();
@@ -3585,9 +3726,9 @@ namespace StashUtility
                 draw.AddTriangleFilled(center + new Vector2(0, -9), center + new Vector2(3, -5), center + new Vector2(-3, -5), color);
                 draw.AddTriangleFilled(center + new Vector2(0, 9), center + new Vector2(-3, 5), center + new Vector2(3, 5), color);
             }
-            else if (icon == 2)
+            else if (icon == 2 || icon == 4)
             {
-                draw.AddRect(center + new Vector2(-4, -8), center + new Vector2(4, 2), color, 4, ImDrawFlags.None, 2);
+                draw.AddRect(center + new Vector2(icon == 4 ? 1 : -4, -8), center + new Vector2(icon == 4 ? 9 : 4, 2), color, 4, ImDrawFlags.None, 2);
                 draw.AddRectFilled(center + new Vector2(-7, -1), center + new Vector2(7, 9), color, 2);
                 draw.AddCircleFilled(center + new Vector2(0, 3), 1.5f, ImGui.GetColorU32(ImGuiCol.Button));
             }
@@ -3615,12 +3756,11 @@ namespace StashUtility
                 var draw = ImGui.GetWindowDrawList();
                 var center = (ImGui.GetItemRectMin() + ImGui.GetItemRectMax()) / 2;
                 uint color = ImGui.GetColorU32(ImGuiCol.Text);
-                draw.AddLine(center + new Vector2(-9, 0), center + new Vector2(0, -5), color, 1.5f);
-                draw.AddLine(center + new Vector2(0, -5), center + new Vector2(9, 0), color, 1.5f);
-                draw.AddLine(center + new Vector2(9, 0), center + new Vector2(0, 5), color, 1.5f);
-                draw.AddLine(center + new Vector2(0, 5), center + new Vector2(-9, 0), color, 1.5f);
-                draw.AddCircleFilled(center, 2.5f, color);
-                if (tabletHighlightsHiddenManually) draw.AddLine(center + new Vector2(-8, -8), center + new Vector2(8, 8), color, 2);
+                if (tabletIconHandles.TryGetValue("TabletIrradiated", out var icon))
+                    draw.AddImage(icon, center - new Vector2(12), center + new Vector2(12), Vector2.Zero, Vector2.One,
+                        ImGuiHelper.Color(new Vector4(1, 1, 1, tabletHighlightsHiddenManually ? .45f : 1f)));
+                else draw.AddRect(center + new Vector2(-7, -10), center + new Vector2(7, 10), color, 2, ImDrawFlags.None, 2);
+                if (tabletHighlightsHiddenManually) draw.AddLine(center + new Vector2(-10, -10), center + new Vector2(10, 10), color, 2);
             }
             ImGuiHelper.ToolTip(label + "\n" +
                 PluginText.T("stashutility.tablet.manual_hide_help", "Manual hiding takes priority. Tablet colors and ranks stay hidden until you click Show or restart GameHelper, even after moving the mouse."), 28f);
@@ -3651,12 +3791,36 @@ namespace StashUtility
             ImGuiHelper.ToolTip(PluginText.T("stashutility.transfer.button_drag", "Drag to move"));
         }
 
+        private void DrawToolbarPositionControls(Vector2 anchor, Vector2 location, Vector2 windowSize, ref Vector2 offset, ref bool locked, bool lockFirst = false)
+        {
+            if (!locked && !lockFirst)
+            {
+                DrawToolbarMoveButton(anchor, location, windowSize, ref offset);
+                ImGui.SameLine();
+            }
+            if (ImGui.Button("##lock", new Vector2(28)))
+            {
+                locked = !locked;
+                SaveSettings();
+            }
+            DrawActionIcon(locked ? 2 : 4);
+            ImGuiHelper.ToolTip(locked
+                ? PluginText.T("stashutility.transfer.button_unlock", "Unlock position")
+                : PluginText.T("stashutility.transfer.button_lock", "Lock Position"));
+            if (!locked && lockFirst)
+            {
+                ImGui.SameLine();
+                DrawToolbarMoveButton(anchor, location, windowSize, ref offset);
+            }
+        }
+
         private void DrawStashSortButton()
         {
             if ((!Settings.ShowStashSortButton && !Settings.EnableTabletManager) || (!Core.IsSettingsMenuOpen && !InventoryToolbarHasFocus()) ||
                 Core.States.GameCurrentState != GameStateTypes.InGameState || Core.GHSettings.EnableControllerMode ||
                 (handleObj == null && !InitReflection())) return;
             bool canSort = false;
+            bool merchant = false;
             Vector2 position = Vector2.Zero, size = Vector2.Zero;
             try
             {
@@ -3664,11 +3828,16 @@ namespace StashUtility
                 if (ui == null || !IsElementVisible(ui.LeftPanel.Address)) return;
                 var header = ResolvePath(ui.LeftPanel.Address, new int[] { 2, 0, 0, 0, 1 });
                 if (!IsElementVisible(header) || !TryReadUiString(header, 0x98, out var id) || id != "top_level_tabs") return;
+                // Ange reuses the stash control; the exported panel title identifies her shop.
+                var title = ResolvePath(ui.LeftPanel.Address, new int[] { 1 });
+                merchant = TryReadUiString(title, 0x98, out var titleId) && titleId == "label_title" &&
+                    TryReadUiString(title, 0x360, out var titleText) &&
+                    (titleText == "Marchand" || titleText == "Merchant");
                 var inventory = FindPlayerInventoryAddress(InventoryName.StashInventoryId);
                 var dimensions = inventory == IntPtr.Zero ? (0, 0) : (ReadMemory<int>(inventory + 0x150), ReadMemory<int>(inventory + 0x154));
-                canSort = !sortRunning && !affinityTransferRunning && stashScanQueue.Count == 0 &&
-                    (dimensions == (12, 12) || dimensions == (24, 24)) && FindSortSurface(true) != IntPtr.Zero;
                 var surface = FindSortSurface(true);
+                canSort = !sortRunning && !affinityTransferRunning && stashScanQueue.Count == 0 &&
+                    (dimensions == (12, 12) || dimensions == (24, 24)) && surface != IntPtr.Zero;
                 canSort = canSort && IsActiveTab(surface, out var tabType) && tabType.StartsWith("Normal/Quad", StringComparison.Ordinal);
                 if (surface != IntPtr.Zero)
                     foreach (var candidate in new[] { ResolvePath(surface, new int[] { 0, 0 }), ResolvePath(surface, new int[] { 0 }), surface })
@@ -3676,19 +3845,23 @@ namespace StashUtility
                             PluginUiElementReflection.TryGetAbsoluteRect(candidate, out position, out size) && size.X > 100 && size.Y > 100) break;
             }
             catch (Exception) { return; }
+            ref var toolbarOffset = ref (merchant ? ref Settings.MerchantToolbarOffset : ref Settings.StashToolbarOffset);
+            ref var toolbarLocked = ref (merchant ? ref Settings.MerchantToolbarLocked : ref Settings.StashToolbarLocked);
             var viewport = ImGui.GetMainViewport();
-            var windowSize = new Vector2(4 + ((Settings.ShowStashSortButton ? 1 : 0) + (Settings.EnableTabletManager ? 1 : 0) + 1) * 32, 36);
-            var anchor = viewport.Pos + (size.X > 100 && size.Y > 100 ? position + new Vector2(size.X - windowSize.X, size.Y + 4) : new Vector2(16, viewport.Size.Y * 0.83f));
-            var offset = Settings.StashToolbarOffset;
+            var windowSize = new Vector2(4 + ((Settings.ShowStashSortButton ? 1 : 0) + (Settings.EnableTabletManager ? 1 : 0) + (toolbarLocked ? 1 : 2)) * 32, 36);
+            bool hasGridBounds = size.X > 100 && size.Y > 100;
+            var anchor = viewport.Pos + (hasGridBounds ? position + new Vector2(size.X - windowSize.X, size.Y + 4) : new Vector2(16, viewport.Size.Y * 0.83f));
+            var offset = toolbarOffset;
             if (!float.IsFinite(offset.X) || !float.IsFinite(offset.Y)) offset = Vector2.Zero;
             var location = Vector2.Clamp(anchor + offset, viewport.Pos, viewport.Pos + Vector2.Max(Vector2.Zero, viewport.Size - windowSize));
             ImGui.SetNextWindowPos(location, ImGuiCond.Always);
             ImGui.SetNextWindowSize(windowSize, ImGuiCond.Always);
             var flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing;
+            if (toolbarLocked) flags |= ImGuiWindowFlags.NoBackground;
             if (sortRunning || affinityTransferRunning) flags |= ImGuiWindowFlags.NoInputs;
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4));
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(4));
-            if (ImGui.Begin("##sortCurrentStash", flags))
+            if (ImGui.Begin(merchant ? "##sortMerchantStash" : "##sortCurrentStash", flags))
             {
                 if (Settings.ShowStashSortButton)
                 {
@@ -3710,7 +3883,16 @@ namespace StashUtility
                     DrawTabletVisibilityButton(true);
                 }
                 ImGui.SameLine();
-                DrawToolbarMoveButton(anchor, location, windowSize, ref Settings.StashToolbarOffset);
+                bool wasLocked = toolbarLocked;
+                DrawToolbarPositionControls(anchor, location, windowSize, ref toolbarOffset, ref toolbarLocked);
+                if (!hasGridBounds && wasLocked != toolbarLocked)
+                {
+                    // Specialized tabs use a fixed left anchor. Keep the right edge in place
+                    // when the 32-pixel move button is hidden or shown, just like normal tabs.
+                    toolbarOffset.X = location.X - anchor.X + (toolbarLocked ? 32 : -32);
+                    toolbarOffset.Y = location.Y - anchor.Y;
+                    SaveSettings();
+                }
             }
             ImGui.End(); ImGui.PopStyleVar(2);
         }
@@ -3719,7 +3901,8 @@ namespace StashUtility
         {
             if (Core.IsSettingsMenuOpen || (!affinityTransferRunning && !sortRunning && DateTime.UtcNow > affinityFeedbackUntil) ||
                 !Core.Process.Foreground || string.IsNullOrEmpty(affinityTransferStatus)) return;
-            bool compact = !affinityTransferRunning && !sortRunning && !string.IsNullOrEmpty(affinityCompletionSummary);
+            bool compact = !affinityTransferRunning && !sortRunning && !string.IsNullOrEmpty(affinityCompletionSummary) &&
+                affinityFailed == 0 && affinityUnrouted == 0 && string.IsNullOrEmpty(affinityRouteIssue);
             var viewport = ImGui.GetMainViewport();
             ImGui.SetNextWindowPos(viewport.Pos + new Vector2(viewport.Size.X / 2f, 25), ImGuiCond.Always, new Vector2(0.5f, 0));
             ImGui.SetNextWindowSize(new Vector2(Math.Min(compact ? 360f : 650f, Math.Max(250f, viewport.Size.X - 40f)), 0), ImGuiCond.Always);
@@ -3908,6 +4091,8 @@ namespace StashUtility
                                 {
                                     var rarity = item.TryGetComponent<Mods>(out var mods) ? mods.Rarity : Rarity.Normal;
                                     if (rarity == Rarity.Unique && IsEquipmentKind(kind)) kind = "UniqueEquipment";
+                                    else if (rarity == Rarity.Unique && GetUniqueTabletCategory(item.Path) is string tabletCategory)
+                                        kind = "UniqueTablets/" + tabletCategory;
                                     node.tab.ItemAddresses.Add(itemAddress);
                                     var itemName = string.IsNullOrEmpty(itemBase.BaseItemName) ? itemBase.InternalName : itemBase.BaseItemName;
                                     node.tab.ItemKinds.TryAdd(kind, itemName);
@@ -3949,7 +4134,7 @@ namespace StashUtility
                     var matches = detectedStashTabs.Where(tab => tab.Name == destination.TabName &&
                         tab.Folders.SequenceEqual(folders)).ToList();
                     if (matches.Count == 1) SetDetectedDestination(destination, matches[0],
-                        pair.Key != "UniqueEquipmentOverflow" && pair.Key != "UniqueTablets" && !IsRoutedGemKind(pair.Key));
+                        pair.Key != "UniqueEquipmentOverflow" && pair.Key != "UniqueTablets" && !IsUniqueTabletDestinationKey(pair.Key) && !IsRoutedGemKind(pair.Key));
                     else destination.OverflowTabNames?.Clear();
                     // Copied settings may refer to another player's stash. Rebuild missing destinations only after a successful scan.
                     if (matches.Count != 0 || detectedStashTabs.Count == 0) continue;
@@ -3973,7 +4158,7 @@ namespace StashUtility
                 if (destination.Disabled) continue;
                 if (singleDestination && string.IsNullOrEmpty(destination.TabName))
                 {
-                    SetDetectedDestination(destination, candidates[0]);
+                    SetDetectedDestination(destination, candidates[0], !IsUniqueTabletDestinationKey(kind));
                     destination.IsAutomatic = true;
                 }
                 if (!singleDestination && string.IsNullOrEmpty(destination.TabName)) ambiguousKinds.Add(kind);
@@ -4394,6 +4579,9 @@ namespace StashUtility
             DrawStashSortButton();
             DrawAffinityTransferFeedback();
             UpdateStashScan();
+            // Transfers validate live item positions directly; decorative scans need not
+            // compete with those checks. Resume highlighting as soon as the transfer ends.
+            if (affinityTransferRunning) return;
             if (!Settings.EnableWaystoneManager && !Settings.EnableTabletManager && !Settings.EnableJewelManager && !Settings.EnableDebugProbe && !Settings.EnableMerchantPurchasePanel) return;
 
             if (!Settings.ShowOverlayInBackground && !Core.Process.Foreground)
@@ -4691,7 +4879,7 @@ namespace StashUtility
                         if (size.X <= 0f || pos == Vector2.Zero) continue;
 
                         // Scan slot for item entity
-                        var itemAddr = GetItemAddressFromElement(slot);
+                        var itemAddr = GetHighlightItemAddress(slot);
                         if (itemAddr != IntPtr.Zero)
                         {
                             var item = ReadFreshItem(itemAddr);
@@ -4737,7 +4925,7 @@ namespace StashUtility
                     if (size.X <= 0f || pos == Vector2.Zero) continue;
 
                     // Scan slot for item entity
-                    var itemAddr = GetItemAddressFromElement(slot);
+                    var itemAddr = GetHighlightItemAddress(slot);
                     if (itemAddr != IntPtr.Zero)
                     {
                         var item = ReadFreshItem(itemAddr);
@@ -4771,7 +4959,7 @@ namespace StashUtility
                 if (size.X <= 0f || pos == Vector2.Zero) continue;
 
                 // Scan slot for item entity
-                var itemAddr = GetItemAddressFromElement(slot);
+                var itemAddr = GetHighlightItemAddress(slot);
                 if (itemAddr != IntPtr.Zero)
                 {
                     var item = ReadFreshItem(itemAddr);
@@ -4795,7 +4983,7 @@ namespace StashUtility
                 if (address == IntPtr.Zero || depth > 18 || visited.Count >= 4096 || !visited.Add(address) ||
                     !TryReadMemory<UiElementBaseOffset>(address, out var data) ||
                     (data.Self != IntPtr.Zero && data.Self != address) || !UiElementBaseFuncs.IsVisibleChecker(data.Flags)) return;
-                var itemAddress = GetItemAddressFromElement(address, true);
+                var itemAddress = GetHighlightItemAddress(address);
                 if (itemAddress != IntPtr.Zero)
                 {
                     var element = PluginUiElementReflection.CreateUiElement(address, this.currentUiParentsObj);
@@ -5966,7 +6154,15 @@ namespace StashUtility
             return 0;
         }
 
-        private IntPtr GetItemAddressFromElement(IntPtr elementAddr, bool transfer = false)
+        private IntPtr GetHighlightItemAddress(IntPtr elementAddr)
+        {
+            // Use the displayed-item field, as LootValue does. Scanning the entire UI
+            // object can pick a retained tablet reference on a currency slot or container.
+            return elementAddr != IntPtr.Zero && TryReadMemory<IntPtr>(elementAddr + 0x4E0, out var item) &&
+                IsValidItemEntity(item) ? item : IntPtr.Zero;
+        }
+
+        private IntPtr GetItemAddressFromElement(IntPtr elementAddr, bool transfer = false, HashSet<IntPtr> presentItems = null)
         {
             if (elementAddr == IntPtr.Zero) return IntPtr.Zero;
 
@@ -5976,14 +6172,17 @@ namespace StashUtility
             if (transfer && TryReadMemory<IntPtr>(elementAddr, out layout) && layout != IntPtr.Zero &&
                 affinityItemOffsets.TryGetValue(layout, out var cachedOffset) &&
                 cachedOffset >= Settings.ScanStartOffset && cachedOffset + 8 <= Settings.ScanEndOffset &&
-                TryReadMemory<IntPtr>(elementAddr + cachedOffset, out var cachedItem) && IsValidItemEntity(cachedItem))
+                TryReadMemory<IntPtr>(elementAddr + cachedOffset, out var cachedItem) &&
+                (presentItems == null || presentItems.Contains(cachedItem)) && IsValidItemEntity(cachedItem))
                 return cachedItem;
 
             for (int offset = Settings.ScanStartOffset; offset + 8 <= Settings.ScanEndOffset; offset += 8)
             {
                 if (TryReadMemory<IntPtr>(elementAddr + offset, out var cand))
                 {
-                    if (IsValidItemEntity(cand))
+                    // The live inventory already identifies its entities. Do not probe
+                    // unrelated pointers (or transferred items still retained by the UI).
+                    if ((presentItems == null || presentItems.Contains(cand)) && IsValidItemEntity(cand))
                     {
                         if (transfer && layout != IntPtr.Zero) affinityItemOffsets[layout] = offset;
                         return cand;

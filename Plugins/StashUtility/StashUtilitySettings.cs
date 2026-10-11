@@ -21,6 +21,9 @@ namespace StashUtility
         public bool ShowInventorySortButton = true;
         public bool ShowStashSortButton = true;
         public Vector2 StashToolbarOffset = Vector2.Zero;
+        public bool StashToolbarLocked = false;
+        public Vector2 MerchantToolbarOffset = Vector2.Zero;
+        public bool MerchantToolbarLocked = false;
         public bool SortByType = true;
         public bool SortGemsByLevel = true;
 

@@ -1,5 +1,11 @@
 # GameHelper
 
+**Version personnalisée TahiKari :** [téléchargements](https://github.com/TahiKari/Gamehelper2/releases).
+Choisir `GameHelper-Personnalise-win-x64.zip`, extraire dans un dossier et lancer
+`GameHelper.exe` (runtime .NET 10 Desktop x64 requis).
+La procédure de publication est décrite dans la section « Releases de la version
+personnalisée » ci-dessous. Les informations historiques de l'amont sont conservées.
+
 GameHelper is a Windows x64 .NET overlay for **Path of Exile 2** with a plugin architecture. The launcher (`GameHelper.exe`) checks for updates, starts the overlay (`GameHelper.App.exe`), reads data from the running game process, and loads plugins from the `Plugins` folder.
 
 **Open-source fork maintained by** [MordWraith](https://github.com/MordWraith) — basis **Lafko / Gordin** ([GameHelper2](https://github.com/MordWraith/Gamehelper)).
@@ -145,6 +151,37 @@ for checking publication. The ZIP is copied and verified before its manifest is
 atomically published. Updating never overwrites inventory protections, stash
 destinations or other saved settings. The first installation of this updater is
 manual; subsequent packages use the in-app button.
+
+## Releases de la version personnalisée (GitHub Actions)
+
+Le workflow `.github/workflows/release.yml` compile le cœur et les plugins sur
+une machine Windows standard gratuite. Il fonctionne uniquement dans le dépôt
+**public** `TahiKari/Gamehelper2` ; il ne démarre pas si le dépôt devient privé.
+Il n'utilise ni machine payante, ni cache Actions, ni stockage d'artefacts Actions.
+Le ZIP et son SHA256 sont joints directement à une GitHub Release.
+
+Pour l'activer, envoyer les sources personnalisées et les fichiers `.github`
+dans ce dépôt, puis créer un tag tel que `v1.5.11-personnalise.1` sur le commit
+contenant ces sources. L'envoi du tag déclenche compilation puis préparation d'une
+Release en brouillon, à publier après vérification.
+Pour une préparation manuelle, utiliser **Actions → GameHelper - compilation et
+Release gratuite → Run workflow**, avec un tag existant : l'option brouillon est
+activée par défaut. Une Release existante n'est pas remplacée : utiliser un nouveau
+tag. Une compilation échouée ne publie rien. Le premier passage sur GitHub doit
+être vérifié avant de diffuser le lien aux joueurs.
+
+La copie `.github/ci/GameOffsets.dll` est le binaire validé, conservé à l'identique
+(SHA256 `EF67411C6456DE8E92179ED8DB55ADC043D086B072ED37AE52E1109F966F9B93`).
+`PreserveOffsets.targets`, importé uniquement par le workflow, remplace les
+références au projet GameOffsets par ce binaire et interdit sa compilation.
+Les compilations locales habituelles ne sont pas modifiées.
+
+Le ZIP contient les exécutables, plugins, dépendances, ressources, licence et
+crédits ; il exclut les réglages personnels et diagnostics. Extraire dans un
+dossier et lancer `GameHelper.exe` avec le runtime **.NET 10 Desktop x64** installé.
+Les deux exécutables démarrent directement la version personnalisée. Ce workflow
+n'active pas de mise à jour automatique depuis GitHub dans l'application.
+Téléchargements : <https://github.com/TahiKari/Gamehelper2/releases>.
 
 ## Links
 

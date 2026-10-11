@@ -79,6 +79,7 @@ namespace LootValue
         private DateTime nextSlotScanUtc = DateTime.MinValue;
         private readonly List<ExchangePriceLabel> cachedExchangeLabels = new();
         private DateTime nextExchangeScanUtc = DateTime.MinValue;
+        private bool hidePricesWhileInspecting;
 
         private string SettingPathname => Path.Join(this.DllDirectory, "config", "settings.txt");
 
@@ -216,7 +217,7 @@ namespace LootValue
                     ImGui.Checkbox(this.PluginText.Label("settings.show_ritual_overlay", "Show value over Ritual rewards", "LootValueShowRitualOverlay"), ref this.Settings.ShowRitualOverlay);
                     ImGui.Checkbox(this.PluginText.Label("settings.show_currency_exchange_overlay", "Show owned-stack values in Currency Exchange", "LootValueShowCurrencyExchangeOverlay"), ref this.Settings.ShowCurrencyExchangeOverlay);
                     ImGui.Checkbox(this.PluginText.Label("settings.hide_when_game_unfocused", "Hide values when game is not focused", "LootValueHideWhenGameUnfocused"), ref this.Settings.HideWhenGameInBackground);
-                    ImGui.Checkbox(this.PluginText.Label("settings.hide_slot_prices_on_hover", "Hide item-panel values while hovering an item", "LootValueHideSlotPricesOnHover"), ref this.Settings.HideSlotPricesOnHover);
+                    ImGui.Checkbox(this.PluginText.Label("settings.hide_slot_prices_on_hover", "Hide prices while the mouse is in an item panel (keeps descriptions and Ritual tribute readable)", "LootValueHideSlotPricesOnHover"), ref this.Settings.HideSlotPricesOnHover);
                     ImGui.Checkbox(this.PluginText.Label("settings.reveal_unidentified_uniques", "Reveal unidentified uniques (by art)", "LootValueRevealUnidentifiedUniques"), ref this.Settings.RevealUnidentifiedUniques);
                     
                     ImGui.SliderFloat(this.PluginText.Label("settings.min_value_to_show", "Min value to show (ex)", "LootValueMinValueToShow"), ref this.Settings.MinValueEx, 0f, 50f, "%.2f");
@@ -325,8 +326,13 @@ namespace LootValue
                 return;
             }
 
+            var itemPanelHovered = this.IsItemPanelHovered(out var itemPanelOpen);
+            this.hidePricesWhileInspecting = this.Settings.HideSlotPricesOnHover && itemPanelHovered;
             var now = DateTime.UtcNow;
-            if (this.Settings.ShowOverlay && this.Settings.AnchorToLootTags)
+            // Panel text and item descriptions are not ground loot labels.
+            var drawGroundPrices = this.Settings.ShowOverlay && !this.hidePricesWhileInspecting &&
+                                   !itemPanelOpen;
+            if (drawGroundPrices && this.Settings.AnchorToLootTags)
             {
                 if (this.EnsureReflection())
                 {
@@ -339,7 +345,7 @@ namespace LootValue
                     this.DrawTagChips();
                 }
             }
-            else if (this.Settings.ShowOverlay)
+            else if (drawGroundPrices)
             {
                 if (now >= this.nextRecomputeUtc)
                 {
@@ -648,6 +654,7 @@ namespace LootValue
         /// <summary>Draws cached owned-stack values in the Currency Exchange item browser.</summary>
         private void DrawCurrencyExchangeValues()
         {
+            if (this.hidePricesWhileInspecting) return;
             if (!this.EnsureReflection()) return;
 
             var now = DateTime.UtcNow;
@@ -858,7 +865,7 @@ namespace LootValue
             var leftScroll = GetScrollFrameState(this.cachedLeftSlots);
             var rightScroll = GetScrollFrameState(this.cachedRightSlots);
             var ritualScroll = GetScrollFrameState(this.cachedRitualSlots);
-            var hidePrices = this.Settings.HideSlotPricesOnHover &&
+            var hidePrices = this.hidePricesWhileInspecting || this.Settings.HideSlotPricesOnHover &&
                              (IsAnySlotHovered(this.cachedLeftSlots, leftScroll) ||
                               IsAnySlotHovered(this.cachedRightSlots, rightScroll) ||
                               IsAnySlotHovered(this.cachedRitualSlots, ritualScroll));
@@ -1080,6 +1087,31 @@ namespace LootValue
             return true;
         }
 
+        private bool IsItemPanelHovered(out bool panelOpen)
+        {
+            var gameUi = Core.States.InGameStateObject.GameUi;
+            panelOpen = gameUi.IsAnyLargePanelOpen;
+            var mouse = ImGui.GetIO().MousePos;
+            // Include unpriced items, empty cells and newly changed rewards without waiting for a scan.
+            if (gameUi.LeftPanel.IsVisible && ContainsMouse(gameUi.LeftPanel.Position, gameUi.LeftPanel.Size, mouse) ||
+                gameUi.RightPanel.IsVisible && ContainsMouse(gameUi.RightPanel.Position, gameUi.RightPanel.Size, mouse) ||
+                gameUi.CurrencyExchangePanel.IsVisible && ContainsMouse(gameUi.CurrencyExchangePanel.Position, gameUi.CurrencyExchangePanel.Size, mouse)) return true;
+            if (!this.EnsureReflection()) return false;
+            var panel = this.ResolveUiPath(gameUi.Address, RitualRewardGridPath);
+            if (this.TryGetVisibleChildren(panel, out _) &&
+                PluginUiElementReflection.TryGetAbsoluteRect(panel, out var position, out var size))
+            {
+                panelOpen = true;
+                return ContainsMouse(position, size, mouse);
+            }
+
+            return false;
+        }
+
+        private static bool ContainsMouse(Vector2 position, Vector2 size, Vector2 mouse) =>
+            size.X > 0f && size.Y > 0f && mouse.X >= position.X && mouse.Y >= position.Y &&
+            mouse.X < position.X + size.X && mouse.Y < position.Y + size.Y;
+
         private static bool IsAnySlotHovered(IReadOnlyList<SlotInfo> slots, ScrollFrameState scroll)
         {
             var mousePosition = ImGui.GetIO().MousePos;
@@ -1203,16 +1235,24 @@ namespace LootValue
 
                 if (!drawPrices || hidePrices) continue;
                 var textWidth = ImGui.CalcTextSize(slot.ValueText).X * this.Settings.SlotFontScale;
-                var drawPosition = new Vector2(
+                if (textWidth <= 0f || slot.Size.X <= 8f || slot.Size.Y <= 6f) continue;
+                var fittedFontSize = fontSize * Math.Min(1f, Math.Min((slot.Size.X - 8f) / textWidth, (slot.Size.Y - 6f) / fontSize));
+                textWidth *= fittedFontSize / fontSize;
+                var drawPosition = Vector2.Clamp(new Vector2(
                     position.X + this.Settings.SlotOffsetX,
-                    position.Y + slot.Size.Y - fontSize + this.Settings.SlotOffsetY);
+                    position.Y + slot.Size.Y - fittedFontSize + this.Settings.SlotOffsetY),
+                    position + new Vector2(4f, 3f),
+                    position + slot.Size - new Vector2(textWidth + 4f, fittedFontSize + 3f));
+                foreground.PushClipRect(new Vector2(position.X, Math.Max(position.Y, scroll.ClipTop)),
+                    new Vector2(position.X + slot.Size.X, Math.Min(position.Y + slot.Size.Y, scroll.ClipBottom)), true);
                 foreground.AddRectFilled(
                     drawPosition - new Vector2(3f, 1f),
-                    drawPosition + new Vector2(textWidth + 3f, fontSize + 1f),
+                    drawPosition + new Vector2(textWidth + 3f, fittedFontSize + 1f),
                     0xB0000000u,
                     3f);
-                foreground.AddText(font, fontSize, drawPosition + new Vector2(1f, 1f), 0xCC000000u, slot.ValueText);
-                foreground.AddText(font, fontSize, drawPosition, color, slot.ValueText);
+                foreground.AddText(font, fittedFontSize, drawPosition + new Vector2(1f, 1f), 0xCC000000u, slot.ValueText);
+                foreground.AddText(font, fittedFontSize, drawPosition, color, slot.ValueText);
+                foreground.PopClipRect();
             }
         }
 

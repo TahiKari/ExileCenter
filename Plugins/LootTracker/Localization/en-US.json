@@ -117,5 +117,7 @@
     "lt.currency.greater_chaos":  "Greater Chaos",
     "lt.currency.perfect_chaos":  "Perfect Chaos",
     "lt.currency_short.greater_exalted":  "Ex G",
-    "lt.currency_short.greater_chaos":  "Ch G"
+    "lt.currency_short.greater_chaos":  "Ch G",
+    "lt.game_mode":  "Game screen",
+    "lt.desktop_mode":  "Another screen"
 }

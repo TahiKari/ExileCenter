@@ -156,7 +156,8 @@ namespace AuraTracker
 
         public override void DrawUI()
         {
-            if (!this.Settings.ShowDamageMeter || !this.Settings.DamageMeterSeparateWindow) this.CloseDamageMeterDisplay();
+            if (!this.Settings.ShowDamageMeter) this.CloseDamageMeterDisplay();
+            else if (!this.Settings.DamageMeterSeparateWindow) this.damageMeterDisplay?.Render(false);
             if (Core.States.GameCurrentState != GameStateTypes.InGameState && Core.States.GameCurrentState != GameStateTypes.EscapeState)
             {
                 this.damageMeter.EndArea();
