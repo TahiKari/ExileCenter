@@ -606,11 +606,7 @@ namespace LootTracker
             this.UpdateMapCompletion();
             this.MaybeAutoSaveSession();
 
-            // HUD bars hide when the game window isn't focused (alt-tabbed), and whenever the experience
-            // bar can't be resolved. The game hides the experience bar whenever a large panel covers the
-            // screen (Atlas / world-travel map, inventory, passive tree), so a failed FP resolve is
-            // itself a reliable, fork-independent "panel is open" signal — both bars hide in that case
-            // instead of falling back to a viewport position that would overlap the open panel.
+            // The independent window keeps its own visibility and placement rules.
             if (this.Settings.SeparateWindow)
             {
                 this.RenderTrackerDisplay();
@@ -618,9 +614,10 @@ namespace LootTracker
                 return;
             }
 
+            // Detect blocking panels explicitly. A missing XP anchor must still allow the bars'
+            // viewport fallback, particularly after switching back from the independent window.
             if (!Core.IsSettingsMenuOpen && !IsLargePanelOpen() && !this.IsTrackerPriorityOverlayOpen() &&
-                this.ShouldDrawGameTracker(Core.Process.Foreground) &&
-                (this.Settings.FreePosition || this.TryGetExperienceBarRect(out _, out _)))
+                this.ShouldDrawGameTracker(Core.Process.Foreground))
             {
                 if (this.onMapArea)
                 {

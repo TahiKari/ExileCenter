@@ -28,6 +28,7 @@ namespace LootTracker
             if (ImGui.Checkbox(this.L("lt.separate_window", "Independent window (another screen)"), ref this.Settings.SeparateWindow))
             {
                 this.Settings.SeparateWindowVisible = true;
+                this.applyTrackerPosition = true;
                 this.trackerDisplayError = string.Empty;
                 this.SaveSettings();
             }
@@ -142,11 +143,15 @@ namespace LootTracker
             return rectangle.Width >= 160 && rectangle.Height >= 80 && rectangle.IntersectsWith(gameBounds);
         }
 
-        private static bool FindTrackerPriorityOverlay(System.Drawing.Rectangle gameBounds)
+        private static bool FindTrackerPriorityOverlay(System.Drawing.Rectangle gameBounds, uint gamePid)
         {
+            if (gamePid == 0) return false;
             bool found = false;
             TrackerWindowCallback callback = (window, _) =>
             {
+                // EnumWindows follows Z order: a window behind the game cannot cover the tracker.
+                TrackerWindowProcess(window, out var windowPid);
+                if (windowPid == gamePid) return false;
                 found = IsTrackerPriorityWindow(window, gameBounds);
                 return !found;
             };
@@ -159,7 +164,8 @@ namespace LootTracker
             var now = DateTime.UtcNow;
             if (now >= this.trackerPriorityCheck)
             {
-                this.trackerPriorityOverlayVisible = FindTrackerPriorityOverlay(Core.Process.WindowArea);
+                this.trackerPriorityOverlayVisible = FindTrackerPriorityOverlay(Core.Process.WindowArea,
+                    Core.Process.Pid);
                 this.trackerPriorityCheck = now.AddMilliseconds(100);
             }
             return this.trackerPriorityOverlayVisible;
