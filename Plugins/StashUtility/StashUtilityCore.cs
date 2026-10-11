@@ -5959,7 +5959,7 @@ namespace StashUtility
             if (!isBad && !passesNumericalFilters) return;
 
             float scale = size.X / 52.0f;
-            float margin = Settings.BorderMargin * scale; // Adaptive margin for 4K scaling where bounding boxes overlap
+            float margin = isTablet ? scale : Settings.BorderMargin * scale;
             float activeBorderThickness = 0f;
 
             bool showModBorder = (isWaystone && Settings.ShowModBorder) || (isTablet && Settings.ShowTabletModBorder) || (isJewel && Settings.EnableJewelManager);
@@ -5977,6 +5977,7 @@ namespace StashUtility
                         ? (isBad ? Settings.TabletBadColor : Settings.TabletGoodColor)
                         : (isBad ? Settings.BadColor : Settings.GoodColor));
                 float thickness = isBad ? Settings.BorderThickness : Math.Max(1.5f, Settings.BorderThickness - 0.5f);
+                if (isTablet) thickness = Math.Clamp(Settings.BorderThickness * .5f, 1f, 2f) * scale;
                 int style = isBad ? Settings.FrameStyleBad : Settings.FrameStyleGood;
 
                 if (isTablet && tabletMatchCount > 0)
@@ -5984,7 +5985,6 @@ namespace StashUtility
                     int strength = Math.Clamp(tabletMatchCount, 1, 4);
                     borderCol = tabletClassification.RankColor;
                     borderCol.W = Math.Min(1f, .7f + .1f * strength);
-                    thickness = (thickness + .85f * (strength - 1)) * scale;
                     var fill = borderCol;
                     fill.W = .07f + .05f * (strength - 1);
                     ImGui.GetBackgroundDrawList().AddRectFilled(pos + new Vector2(margin), pos + size - new Vector2(margin), ImGuiHelper.Color(fill), 3f);
