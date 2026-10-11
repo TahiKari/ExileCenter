@@ -125,7 +125,7 @@ namespace GameHelper
             var summary = offer.Label;
             if (!string.IsNullOrWhiteSpace(offer.Changes))
                 summary += "\n\n" + L.T("updates.changes", "What changes in this update") + "\n" + offer.Changes;
-            var question = L.F("updates.startup_question", "{0}\n\nInstall this update before starting GameHelper?\nYou can also continue with the current version. Your settings are preserved.", summary);
+            var question = L.F("updates.startup_question", "{0}\n\nInstall this update before starting GameHelper?\nYou can also continue with the current version. Your settings are preserved.", L.NormalizeDisplayText(summary, false));
             try
             {
                 if (confirm != null)
@@ -428,11 +428,11 @@ namespace GameHelper
             else if (offer != null)
             {
                 ImGui.TextColored(Ui.ImGuiTheme.Accent, UpdateTitle(offer));
-                ImGui.TextWrapped(offer.Label);
+                ImGui.TextWrapped(L.NormalizeDisplayText(offer.Label, false));
                 if (!string.IsNullOrWhiteSpace(offer.Changes))
                 {
                     ImGui.TextColored(Ui.ImGuiTheme.Accent, L.T("updates.changes", "What changes in this update"));
-                    ImGui.TextWrapped(offer.Changes);
+                    ImGui.TextWrapped(L.NormalizeDisplayText(offer.Changes, false));
                 }
                 if (ImGui.Button(L.T("updates.apply", "Update and restart")))
                 {

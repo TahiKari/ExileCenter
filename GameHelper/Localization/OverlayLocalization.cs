@@ -110,28 +110,40 @@ namespace GameHelper.Localization
         {
             if (string.IsNullOrWhiteSpace(key))
             {
-                return fallback;
+                return NormalizeDisplayText(fallback);
             }
 
             if (TryGet(CurrentLanguage, key, out var value))
             {
-                return value;
+                return NormalizeDisplayText(value);
             }
 
             if (CurrentLanguage != OverlayLanguage.English &&
                 TryGet(OverlayLanguage.English, key, out value))
             {
-                return value;
+                return NormalizeDisplayText(value);
             }
 
-            return fallback;
+            return NormalizeDisplayText(fallback);
         }
 
         /// <summary>
         ///     Resolves and formats a localized string using the current culture.
         /// </summary>
         public static string F(string key, string fallback, params object[] args) =>
-            string.Format(CultureInfo.CurrentCulture, T(key, fallback), args);
+            NormalizeDisplayText(string.Format(CultureInfo.CurrentCulture, T(key, fallback), args));
+
+        // Some CJK fonts give typographic apostrophes a full-width advance. Keep French
+        // elisions compact at display time while preserving resources and hidden ImGui IDs.
+        internal static string NormalizeDisplayText(string text, bool preserveImGuiId = true)
+        {
+            if (CurrentLanguage != OverlayLanguage.French ||
+                (!text.Contains('\u2019') && !text.Contains('\u2018'))) return text;
+            var id = preserveImGuiId ? text.IndexOf("##", StringComparison.Ordinal) : -1;
+            var visible = id < 0 ? text : text[..id];
+            visible = visible.Replace('\u2019', '\'').Replace('\u2018', '\'');
+            return id < 0 ? visible : visible + text[id..];
+        }
 
         /// <summary>
         ///     Resolves a localized label and appends a stable ImGui hidden ID.

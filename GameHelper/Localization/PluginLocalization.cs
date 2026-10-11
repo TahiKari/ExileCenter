@@ -36,29 +36,29 @@ namespace GameHelper.Localization
         {
             if (string.IsNullOrWhiteSpace(key))
             {
-                return fallback;
+                return OverlayLocalization.NormalizeDisplayText(fallback);
             }
 
             var currentLanguage = OverlayLocalization.CurrentLanguage;
             if (this.TryGet(currentLanguage, key, out var value))
             {
-                return value;
+                return OverlayLocalization.NormalizeDisplayText(value);
             }
 
             if (currentLanguage != OverlayLanguage.English &&
                 this.TryGet(OverlayLanguage.English, key, out value))
             {
-                return value;
+                return OverlayLocalization.NormalizeDisplayText(value);
             }
 
-            return fallback;
+            return OverlayLocalization.NormalizeDisplayText(fallback);
         }
 
         /// <summary>
         ///     Resolves and formats a localized string using the current culture.
         /// </summary>
         public string F(string key, string fallback, params object[] args) =>
-            string.Format(CultureInfo.CurrentCulture, this.T(key, fallback), args);
+            OverlayLocalization.NormalizeDisplayText(string.Format(CultureInfo.CurrentCulture, this.T(key, fallback), args));
 
         /// <summary>
         ///     Resolves a localized label and appends a stable ImGui hidden ID.
