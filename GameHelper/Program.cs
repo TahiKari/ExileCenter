@@ -119,10 +119,19 @@ namespace GameHelper
             // A failed installer restarts the old version. Leave retries to the update page.
             if (offer == null || error != null) return false;
             lastNotified = offer.Id;
-            var question = L.F("updates.startup_question", "{0}\n\nInstall this update before starting GameHelper?\nChoose No to continue with the current version. Your settings are preserved.", offer.Label);
-            if (!(confirm?.Invoke(question) ?? (StartupMessageBox(IntPtr.Zero, question, "GameHelper", 0x124) == 6))) return false;
+            var question = L.F("updates.startup_question", "{0}\n\nInstall this update before starting GameHelper?\nYou can also continue with the current version. Your settings are preserved.", offer.Label);
             try
             {
+                if (confirm != null)
+                {
+                    if (!confirm(question)) return false;
+                }
+                else
+                {
+                    using var prompt = new StartupUpdateWindow(question);
+                    await prompt.Run();
+                    if (!prompt.InstallRequested) return false;
+                }
                 var stage = await PreparePackageAsync(offer, InstallDirectory, UpdateDirectory, Environment.ProcessId);
                 StartInstaller(stage);
                 installerStarted = true;
@@ -136,8 +145,84 @@ namespace GameHelper
             }
         }
 
-        [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "MessageBoxW", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
-        private static extern int StartupMessageBox(IntPtr owner, string text, string caption, uint flags);
+        private sealed class StartupUpdateWindow : ClickableTransparentOverlay.Overlay
+        {
+            private readonly string question;
+            private SettingsDisplay? display;
+            private volatile bool closeRequested;
+            internal bool InstallRequested { get; private set; }
+
+            internal StartupUpdateWindow(string question) : base("GameHelper update", true, 1, 1)
+            {
+                this.question = question;
+                this.VSync = true;
+            }
+
+            public override void Close() => this.closeRequested = true;
+
+            protected override Task PostInitialized()
+            {
+                Ui.ImGuiTheme.Apply();
+                var settings = Core.GHSettings;
+                if (MiscHelper.TryConvertStringToImGuiGlyphRanges(settings.FontCustomGlyphRange, out var ranges))
+                    this.ReplaceFont(settings.FontPathName, settings.FontSize, ranges);
+                else
+                    this.ReplaceFont(settings.FontPathName, settings.FontSize, settings.FontLanguage);
+                this.display = new SettingsDisplay(this, this.Draw, this.Close, new Settings.State(),
+                    () => "GameHelper · " + L.T("updates.title", "Updates"), _ => { },
+                    new System.Drawing.Size(620, 360), new System.Drawing.Size(760, 480));
+                return Task.CompletedTask;
+            }
+
+            protected override void Render()
+            {
+                if (!this.closeRequested) this.display?.Render(true);
+                if (!this.closeRequested) return;
+                this.display?.Dispose();
+                this.display = null;
+                base.Close();
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing) { this.display?.Dispose(); this.display = null; }
+                base.Dispose(disposing);
+            }
+
+            private void Draw()
+            {
+                Ui.ImGuiTheme.PushSettingsStyle();
+                try
+                {
+                    ImGui.SetNextWindowPos(Vector2.Zero);
+                    ImGui.SetNextWindowSize(ImGui.GetIO().DisplaySize);
+                    ImGui.Begin("##StartupUpdate", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove |
+                        ImGuiWindowFlags.NoSavedSettings);
+                    try
+                    {
+                        Ui.ImGuiTheme.SectionHeader(L.T("updates.available", "Update available"));
+                        if (ImGui.BeginChild("##UpdateDetails", new Vector2(0, -62), ImGuiChildFlags.Borders))
+                            ImGui.TextWrapped(this.question);
+                        ImGui.EndChild();
+                        ImGui.Spacing();
+                        var width = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X) / 2f;
+                        ImGui.PushStyleColor(ImGuiCol.Button, Ui.ImGuiTheme.AccentMuted);
+                        if (ImGui.Button(L.T("updates.startup_install", "Install update"), new Vector2(width, 38)))
+                        {
+                            this.InstallRequested = true;
+                            this.Close();
+                        }
+                        ImGui.PopStyleColor();
+                        ImGui.SameLine();
+                        if (ImGui.Button(L.T("updates.startup_continue", "Continue without updating"), new Vector2(width, 38))) this.Close();
+                        ImGui.SetItemDefaultFocus();
+                        if (ImGui.IsKeyPressed(ImGuiKey.Escape)) this.Close();
+                    }
+                    finally { ImGui.End(); }
+                }
+                finally { Ui.ImGuiTheme.PopSettingsStyle(); }
+            }
+        }
 
         private static Version? ReleaseVersion(string? tag)
         {
