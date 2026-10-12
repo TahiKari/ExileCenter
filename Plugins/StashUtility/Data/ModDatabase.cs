@@ -83,6 +83,7 @@ namespace StashUtility.Data
         // Catalogs verified on 2026-10-07 against RePoE's PoE2 mods/mods_by_base exports.
         // Keep configuration IDs stable; match jewels using the actual exported GameModId.
         public static readonly List<TabletMod> AllTabletMods = LoadCatalog<TabletMod>("tablet_mod_ranges.json", "mods");
+        public static readonly TabletMetaCatalog TabletMeta = LoadTabletMeta();
         public static readonly List<JewelMod> AllJewelMods = LoadCatalog<JewelMod>("jewel_mod_ranges.json");
 
         public const int TabletFarmPresetVersion = 1;
@@ -244,6 +245,16 @@ namespace StashUtility.Data
             var token = Newtonsoft.Json.Linq.JToken.Parse(json);
             if (property != null) token = token[property];
             return token?.ToObject<List<T>>() ?? new List<T>();
+        }
+
+        private static TabletMetaCatalog LoadTabletMeta()
+        {
+            using var stream = typeof(ModDatabase).Assembly.GetManifestResourceStream("StashUtility.Data.tablet_meta_rankings.json");
+            if (stream == null) throw new System.IO.InvalidDataException("Missing reference tablet catalogue.");
+            using var reader = new System.IO.StreamReader(stream);
+            var catalog = Newtonsoft.Json.JsonConvert.DeserializeObject<TabletMetaCatalog>(reader.ReadToEnd());
+            if (catalog == null || catalog.Validate().Count > 0) throw new System.IO.InvalidDataException("Invalid reference tablet catalogue.");
+            return catalog;
         }
 
     }

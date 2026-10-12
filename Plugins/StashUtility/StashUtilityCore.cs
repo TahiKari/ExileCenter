@@ -19,7 +19,7 @@ namespace StashUtility
     using System.Reflection;
     using System.Runtime.InteropServices;
 
-    public sealed class StashUtilityCore : PCore<StashUtilitySettings>
+    public sealed partial class StashUtilityCore : PCore<StashUtilitySettings>
     {
         private readonly Dictionary<string, IntPtr> tabletIconHandles = new();
         private readonly List<(Item Item, Vector2 Position, Vector2 Size)> pendingItemHighlights = new();
@@ -225,7 +225,8 @@ namespace StashUtility
                 try
                 {
                     var content = File.ReadAllText(SettingPathname);
-                    Settings = JsonConvert.DeserializeObject<StashUtilitySettings>(content) ?? new StashUtilitySettings();
+                    Settings = JsonConvert.DeserializeObject<StashUtilitySettings>(content,
+                        new JsonSerializerSettings { MaxDepth = Models.TabletFilterEngine.MaximumDepth * 3 + 32 }) ?? new StashUtilitySettings();
                 }
                 catch
                 {
@@ -868,6 +869,9 @@ namespace StashUtility
             string type = StashUtilitySettings.TabletTypes[tabletFilterType];
             if (!Settings.TabletProfiles.TryGetValue(type, out var profile) || profile == null)
                 Settings.TabletProfiles[type] = profile = new TabletProfile();
+
+            DrawTabletMetaFilters(type, profile);
+            if (profile.UseMetaFilters) return;
             if (ImGui.CollapsingHeader(PluginText.T("stashutility.filters.farm_preset", "Farming ranks - PoE 2 0.5.5")))
             {
                 ImGui.TextWrapped(PluginText.T("stashutility.filters.farm_preset_help", "Loot/currency farming synthesis, editable: S = priority, A = excellent, B = useful, C = secondary, D = low priority. All modifiers are selected, including D. Your minimum rolls are retained. Less documented grades are estimates; the best choice depends on your Atlas and farming strategy."));
@@ -5685,6 +5689,16 @@ namespace StashUtility
                     lastHoveredWaystone = item;
                 }
             }
+            if (isTablet)
+            {
+                string metaType = GetTabletProfileType(name, path);
+                if (metaType != null && Settings.TabletProfiles?.TryGetValue(metaType, out var metaSettings) == true && metaSettings?.UseMetaFilters == true)
+                {
+                    item.TryGetComponent<Mods>(out var metaMods);
+                    DrawMetaTabletHighlight(name, metaType, pos, size, metaMods);
+                    return;
+                }
+            }
             if (isTablet && (TabletHighlightsSuppressed() || IsTabletOccluded(pos, size))) return;
             // Only hide the hovered tablet's overlay so its remaining uses stay readable.
             if (isTablet && Settings.HideTabletHighlightsOnItemHover)
@@ -6030,21 +6044,7 @@ namespace StashUtility
 
             if ((isWaystone || isTablet || isJewel) && Settings.ShowRarityBorder)
             {
-                Vector4 rarityCol = rarity switch
-                {
-                    GameHelper.RemoteEnums.Rarity.Normal => Settings.NormalRarityColor,
-                    GameHelper.RemoteEnums.Rarity.Magic => Settings.MagicRarityColor,
-                    GameHelper.RemoteEnums.Rarity.Rare => Settings.RareRarityColor,
-                    GameHelper.RemoteEnums.Rarity.Unique => new Vector4(1f, 0.5f, 0f, 1f),
-                    _ => Settings.NormalRarityColor
-                };
-
-                float offset = margin + activeBorderThickness;
-                float sizeVal = Settings.RarityIndicatorSize;
-                var p0 = pos + new Vector2(size.X - offset - sizeVal, offset);
-                var p1 = pos + new Vector2(size.X - offset, offset);
-                var p2 = pos + new Vector2(size.X - offset, offset + sizeVal);
-                ImGui.GetBackgroundDrawList().AddTriangleFilled(p0, p1, p2, ImGuiHelper.Color(rarityCol));
+                DrawItemRarityMarker(pos, size, margin, activeBorderThickness, rarity);
             }
 
             if (isGreat)
@@ -6959,6 +6959,9 @@ namespace StashUtility
 
         private static Vector4 TabletItemRankColor(string label)
         {
+            if (label == "OK") return new Vector4(.4f, .86f, .57f, 1);
+            if (label == "NON") return new Vector4(.95f, .4f, .35f, 1);
+            if (label is "?" or "!") return new Vector4(1, .73f, .3f, 1);
             int index = label?.Length > 0 ? Array.IndexOf(TabletModRanks, label.Substring(0, 1)) : -1;
             return index >= 0 ? TabletModRankColors[index] : UnclassifiedTablet.RankColor;
         }

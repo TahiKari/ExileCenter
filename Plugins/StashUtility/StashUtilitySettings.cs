@@ -194,6 +194,13 @@ namespace StashUtility
     public class TabletProfile
     {        public Dictionary<string, string> ModRanks = new();
 
+        public bool UseMetaFilters;
+        public string ActiveMetaProfileId = "";
+        public List<Models.TabletFilterProfile> MetaProfiles = new();
+        public bool ShowMetaEnglish = true;
+        public string MetaSearch = "";
+        public List<string> ManualMetaModifiers = new();
+
         public List<string> GoodModPatterns = new();
         public List<string> BadModPatterns = new();
         public List<string> GodModPatterns = new();

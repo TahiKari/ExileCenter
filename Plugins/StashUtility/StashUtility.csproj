@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Data\jewel_mod_ranges.json;Data\tablet_mod_ranges.json" />
+    <EmbeddedResource Include="Data\tablet_meta_rankings.json" />
     <None Update="Data\jewel_mod_ranges.json;Data\tablet_mod_ranges.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
