@@ -1105,7 +1105,9 @@ namespace StashUtility
             float height = Math.Clamp(ImGui.GetContentRegionAvail().Y - 8, 160, 460);
             bool rankGrid = ranks != null && ImGui.GetContentRegionAvail().X >= 620;
             int columns = rankGrid ? TabletModRanks.Length + 2 : 3;
-            if (ImGui.BeginTable("mods_" + rankGrid, columns, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp, new Vector2(0, height)))
+            bool scrollInPanel = scope == "tablet";
+            if (ImGui.BeginTable("mods_" + rankGrid, columns, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.SizingStretchProp |
+                (scrollInPanel ? ImGuiTableFlags.None : ImGuiTableFlags.ScrollY), scrollInPanel ? Vector2.Zero : new Vector2(0, height)))
             {
                 ImGui.TableSetupColumn(PluginText.T("stashutility.filters.modifier", "Modifier"), ImGuiTableColumnFlags.WidthStretch);
                 float ruleWidth = Math.Max(120, new[] { "ignore", "wanted", "avoid", "priority" }

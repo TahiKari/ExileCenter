@@ -214,8 +214,7 @@ namespace StashUtility
             var modifiers = MetaCatalog.ForType(type).Where(m => string.IsNullOrWhiteSpace(settings.MetaSearch) ||
                 m.FrenchText.Contains(settings.MetaSearch, StringComparison.OrdinalIgnoreCase) || m.EnglishText.Contains(settings.MetaSearch, StringComparison.OrdinalIgnoreCase) ||
                 m.Code.Contains(settings.MetaSearch, StringComparison.OrdinalIgnoreCase) || m.RankLabel.Equals(settings.MetaSearch, StringComparison.OrdinalIgnoreCase));
-            if (ImGui.BeginTable("MetaCatalogue" + manual, manual ? 4 : 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY,
-                new Vector2(0, Math.Clamp(ImGui.GetContentRegionAvail().Y - (manual ? 180 : 16), 160, 390))))
+            if (ImGui.BeginTable("MetaCatalogue" + manual, manual ? 4 : 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
             {
                 if (manual) ImGui.TableSetupColumn(MT("present", "Present"), ImGuiTableColumnFlags.WidthFixed, 65);
                 ImGui.TableSetupColumn(MT("rank", "Rank"), ImGuiTableColumnFlags.WidthFixed, 55);
