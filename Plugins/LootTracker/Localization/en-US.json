@@ -78,7 +78,7 @@
     "lt.col_item":  "Item",
     "lt.col_count":  "Count",
     "lt.col_value":  "Value",
-    "lt.no_maps":  "No maps completed yet this session.",
+    "lt.no_maps":  "No maps tracked yet this session.",
     "lt.maps":  "Maps: {0}",
     "lt.avg_time":  "AVG Time: {0}",
     "lt.total":  "Total",

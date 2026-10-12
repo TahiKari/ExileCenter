@@ -3,6 +3,7 @@ namespace LootTracker
     using System;
     using System.Collections.Generic;
     using System.IO;
+    using System.Linq;
     using ImGuiNET;
     using Newtonsoft.Json;
 
@@ -20,6 +21,7 @@ namespace LootTracker
     // A completed map within a saved session.
     public sealed class SessionMap
     {
+        public string ParentHash = string.Empty;
         public string Name = string.Empty;
         public double ActiveSeconds;         // wall time spent inside the map
         public double ProfitEx;              // Σ line.Ex
@@ -41,14 +43,14 @@ namespace LootTracker
         public double TotalEx()
         {
             double s = 0;
-            foreach (var m in this.Maps) s += m.ProfitEx;
+            foreach (var m in this.Maps.Where(m => m.ParentHash.Length == 0)) s += m.ProfitEx;
             return s;
         }
 
         public double TotalActiveSeconds()
         {
             double s = 0;
-            foreach (var m in this.Maps) s += m.ActiveSeconds;
+            foreach (var m in this.Maps.Where(m => m.ParentHash.Length == 0)) s += m.ActiveSeconds;
             return s;
         }
 
@@ -98,6 +100,8 @@ namespace LootTracker
                     {
                         Name = r.Name,
                         Hash = r.Hash,
+                        ParentHash = r.ParentHash,
+                        ProcessId = r.ProcessId,
                         AreaLevel = r.AreaLevel,
                         IsFinished = r.IsFinished,
                         ActiveTime = isActive ? this.CurrentLiveTime() : r.ActiveTime,
@@ -209,9 +213,9 @@ namespace LootTracker
         // Shared by session archiving and the live "Active session" loot view in settings.
         private SessionMap BuildSessionMap(MapRun r)
         {
-            var m = new SessionMap { Name = r.Name, ActiveSeconds = r.ActiveTime.TotalSeconds };
+            var m = new SessionMap { Name = r.Name, ParentHash = r.ParentHash, ActiveSeconds = this.RunDisplayTime(r).TotalSeconds };
             double profit = 0;
-            foreach (var kv in r.Gained)
+            foreach (var kv in this.RunGained(r))
             {
                 if (kv.Value == 0) continue;
                 bool priced = this.TryPriceItem(kv.Key, out var unit, out var label);
@@ -364,7 +368,7 @@ namespace LootTracker
                             ImGui.TableNextColumn();
                             ImGui.TextUnformatted(FormatDuration(rec.EndUtc - rec.StartUtc));
                             ImGui.TableNextColumn();
-                            ImGui.TextUnformatted(rec.Maps.Count.ToString());
+                            ImGui.TextUnformatted(rec.Maps.Count(m => m.ParentHash.Length == 0).ToString());
                             ImGui.TableNextColumn();
                             ImGui.TextUnformatted(rec.DivineRate > 0 ? $"{rec.ToDivine(rec.TotalEx()):0.0}" : "—");
                             ImGui.TableNextColumn();
@@ -413,7 +417,7 @@ namespace LootTracker
             bool open = true;
             if (ImGui.Begin($"{this.L("lt.session", "Session")} {rec.StartUtc.ToLocalTime():yyyy-MM-dd HH:mm}###session_detail", ref open))
             {
-                int maps = rec.Maps.Count;
+                int maps = rec.Maps.Count(m => m.ParentHash.Length == 0);
                 double totalEx = rec.TotalEx();
                 double activeS = rec.TotalActiveSeconds();
                 var avgTime = maps > 0 ? TimeSpan.FromSeconds(activeS / maps) : TimeSpan.Zero;
@@ -447,7 +451,7 @@ namespace LootTracker
                         var m = rec.Maps[i];
                         ImGui.TableNextRow();
                         ImGui.TableNextColumn();
-                        ImGui.TextUnformatted(m.Name);
+                        ImGui.TextUnformatted((m.ParentHash.Length == 0 ? "" : "    > ") + m.Name);
                         ImGui.TableNextColumn();
                         ImGui.TextUnformatted(FormatDuration(TimeSpan.FromSeconds(m.ActiveSeconds)));
                         ImGui.TableNextColumn();

@@ -24,6 +24,7 @@ namespace KikiMeter
         private readonly DamageTracker damageMeter = new();
         private double nextDamageSample;
         private double nextMapSave;
+        private long mapPortalGeneration;
         private readonly DamageMeterRenderer panelRenderer = new();
         private ActiveCoroutine? onAreaChange;
         private SettingsDisplay? damageMeterDisplay;
@@ -48,6 +49,7 @@ namespace KikiMeter
             this.damageMeter.BindMaps(this.Settings.DamageMeterMaps);
             this.nextDamageSample = 0;
             this.nextMapSave = 0;
+            this.mapPortalGeneration = Core.States.InGameStateObject.CurrentAreaInstance.MapPortalGeneration;
             if (!File.Exists(SettingsPath)) this.SaveSettings();
         }
 
@@ -156,9 +158,14 @@ namespace KikiMeter
                     var details = inGame.CurrentWorldInstance.AreaDetails;
                     bool wasMapActive = this.damageMeter.MapActive;
                     string previousMap = this.damageMeter.CurrentMap?.Id ?? "";
+                    if (this.mapPortalGeneration != area.MapPortalGeneration)
+                    {
+                        this.damageMeter.FinishMap();
+                        this.mapPortalGeneration = area.MapPortalGeneration;
+                    }
                     if (!details.IsTown && !details.IsHideout && details.Id != "Abyss_Hub")
                         this.damageMeter.VisitMap(area.AreaHash, details.Name, area.CurrentAreaLevel, Core.Process.Pid, now, this.Settings.DamageMeterTestName);
-                    else this.damageMeter.PauseMap();
+                    else this.damageMeter.VisitHub();
                     if (this.Settings.DamageMeterDetectSkillChanges &&
                         inGame.CurrentAreaInstance.Player.TryGetComponent<Actor>(out var actor) &&
                         this.damageMeter.ObserveSkills(actor.ActiveSkills.Keys, now))

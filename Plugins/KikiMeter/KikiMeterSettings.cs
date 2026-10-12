@@ -57,6 +57,7 @@ public sealed class KikiMeterSettings : IPSettings
             public int EnemySampleVersion;
             public bool EnemySamplesPartial;
             public DamageMeterMapStats Overall = new(), Single = new(), Multi = new();
+            public List<DamageMeterMap> SubAreas = new();
         }
 
         public sealed class DamageMeterMapStats
@@ -73,6 +74,7 @@ public sealed class KikiMeterSettings : IPSettings
         public sealed class DamageMeterEnemy
         {
             public uint Id;
+            public string AreaHash = "";
             public long Address, Damage;
         }
 

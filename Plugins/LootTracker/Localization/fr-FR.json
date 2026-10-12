@@ -66,7 +66,7 @@
     "lt.col_item":  "Objet",
     "lt.col_count":  "Nombre",
     "lt.col_value":  "Valeur",
-    "lt.no_maps":  "Aucune carte terminée dans cette session pour l\u0027instant.",
+    "lt.no_maps":  "Aucune carte suivie dans cette session pour l\u0027instant.",
     "lt.maps":  "Cartes : {0}",
     "lt.avg_time":  "Temps moyen : {0}",
     "lt.total":  "Total",

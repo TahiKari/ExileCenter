@@ -365,7 +365,7 @@ internal sealed class DamageMeterRenderer
             ImGui.TextWrapped(text.T("meter.map_autosave_short", "Auto-saved · pauses outside the map"));
             if (ImGui.CollapsingHeader(text.T("meter.map_guide", "Average, single-target and impacts")))
             {
-                ImGui.TextWrapped(text.T("meter.map_help", "Auto-saved every 20 seconds and on area exits. Returning to the same instance resumes it. Finish the report when the map is over; it stays frozen until you choose Resume."));
+                ImGui.TextWrapped(text.T("meter.map_help", "The map includes its subareas. The hideout pauses tracking. Observed portal replacement, or entering another map, finishes the report. Auto-saved every 20 seconds and on area exits."));
                 ImGui.TextWrapped(text.T("meter.map_measure_help", "Whole-map average includes movement and idle time inside the map. Single/multi averages use periods with one/two or more damaged targets in the last second. Samples sum observed damage on the first N distinct enemies, including every later observed loss on those same enemies. Maximum impact is the largest observed loss on one enemy between readings, not a guaranteed single hit; overkill damage is unavailable. All sources are included."));
             }
             if (reference != null && compared != null && ImGui.CollapsingHeader(text.T("meter.map_compare", "Compare saved maps")))
@@ -430,13 +430,14 @@ internal sealed class DamageMeterRenderer
             foreach (int column in columns) ImGui.TableSetupColumn(MapColumnLabel(column, text), ImGuiTableColumnFlags.WidthFixed, 120);
             ImGui.TableSetupScrollFreeze(1, 1);
             ImGui.TableHeadersRow();
-            for (int i = maps.Count - 1; i >= 0; i--)
+            foreach (var row in maps.AsEnumerable().Reverse().SelectMany(parent =>
+                new[] { (Map: parent, Parent: parent) }.Concat(parent.SubAreas.Select(child => (Map: child, Parent: parent)))))
             {
-                var map = maps[i];
+                var map = row.Map;
                 var stats = MapStats(map, mapMode);
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
-                if (ImGui.Selectable(MapCaption(map) + "##SavedMap" + map.Id, compared?.Id == map.Id)) comparedMapId = map.Id;
+                if (ImGui.Selectable((map == row.Parent ? "" : "    > ") + MapCaption(map) + "##SavedMap" + map.Id, compared?.Id == row.Parent.Id)) comparedMapId = row.Parent.Id;
                 if (ImGui.IsItemHovered()) DrawDamageTooltip(MapCaption(map));
                 foreach (int column in columns)
                 {
@@ -449,7 +450,8 @@ internal sealed class DamageMeterRenderer
                         3 => map.EnemySampleVersion > 0 ? NumberFormatter.Format(stats.LargestImpact) : "—",
                         4 => NumberFormatter.Format(stats.Damage),
                         5 => map.EnemySampleVersion > 0 ? (stats.Enemies?.Count ?? 0).ToString() : "—",
-                        6 => text.T(map.Finished ? "meter.map_finished" : meter.MapActive && map == meter.CurrentMap ? "meter.map_running" : "meter.map_paused", map.Finished ? "Finished" : "Paused"),
+                        6 => text.T(row.Parent.Finished ? "meter.map_finished" : meter.MapActive && row.Parent == meter.CurrentMap &&
+                            (map == row.Parent || map.Hash == meter.CurrentAreaHash) ? "meter.map_running" : "meter.map_paused", row.Parent.Finished ? "Finished" : "Paused"),
                         _ => map.EnemySampleVersion == 0 ? "—" : SampleDamage(stats, column) is { } damage
                             ? NumberFormatter.Format(damage) : $"{Math.Min(stats.Enemies?.Count ?? 0, column)} / {column}"
                     };

@@ -87,7 +87,7 @@
   "meter.map_save": "Save now",
   "meter.map_resume": "Resume this map",
   "meter.map_finish": "Finish and save",
-  "meter.map_help": "Auto-saved every 20 seconds and on area exits. Returning to the same instance resumes it. Finish the report when the map is over; it stays frozen until you choose Resume.",
+  "meter.map_help": "The map includes time and damage from its subareas, detailed in indented rows. The hideout pauses tracking. Observed portal replacement finishes the report; otherwise entering another map finishes it. Auto-saved every 20 seconds and on area exits.",
   "meter.map_guide": "Averages and impacts",
   "meter.map_measure_help": "Whole-map average includes movement and idle time inside the map. Single/multi averages use periods with one/two or more damaged targets in the last second. Samples sum observed damage on the first N distinct enemies, including later hits and small damage on those same enemies. Maximum impact is the largest observed loss on one enemy between readings: several hits may be combined and overkill damage is unavailable. All sources are included.",
   "meter.map_none": "Enter a map to start a report.",

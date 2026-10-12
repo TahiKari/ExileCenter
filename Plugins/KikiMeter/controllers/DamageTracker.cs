@@ -28,8 +28,12 @@ internal sealed class DamageTracker
     private List<KikiMeterSettings.DamageMeterMap> maps = new();
     private double? mapTime;
     private double mapFrameSeconds;
-    private readonly Dictionary<KikiMeterSettings.DamageMeterMapStats, Dictionary<(uint Id, long Address), int>> mapEnemyIndices = new();
+    private readonly Dictionary<KikiMeterSettings.DamageMeterMapStats, Dictionary<(string Area, uint Id, long Address), int>> mapEnemyIndices = new();
+    private KikiMeterSettings.DamageMeterMap? currentSubArea;
+    private string currentAreaHash = "";
+    private bool inHub = true;
     public KikiMeterSettings.DamageMeterMap? CurrentMap { get; private set; }
+    public string CurrentAreaHash => currentAreaHash;
     public bool MapActive => mapTime.HasValue && CurrentMap is { Finished: false };
     public bool MapDirty { get; private set; }
 
@@ -37,6 +41,9 @@ internal sealed class DamageTracker
     {
         maps = savedMaps;
         CurrentMap = null;
+        currentSubArea = null;
+        currentAreaHash = "";
+        inHub = true;
         mapTime = null;
         MapDirty = false;
         // Only the newest report can remain paused between map visits.
@@ -52,30 +59,46 @@ internal sealed class DamageTracker
             PauseMap();
             return;
         }
-        if (CurrentMap?.Hash != hash || CurrentMap.ProcessId != processId)
+        if (currentAreaHash != hash || CurrentMap?.ProcessId != processId)
         {
             bool resumedAfterRestart = CurrentMap == null;
             PauseMap();
             EndArea();
             mapEnemyIndices.Clear();
-            CurrentMap = maps.FindLast(m => m.Hash == hash && m.ProcessId == processId);
-            if (resumedAfterRestart && CurrentMap is { Finished: false } && CurrentMap.Overall.Seconds > 0)
-                CurrentMap.ReadingInterrupted = true;
-            if (CurrentMap == null)
+            var existing = maps.FindLast(m => m.ProcessId == processId &&
+                (m.Hash == hash || m.SubAreas.Any(a => a.Hash == hash)));
+            if (existing != null) CurrentMap = existing;
+            else if (inHub || CurrentMap == null || CurrentMap.Finished || CurrentMap.ProcessId != processId)
             {
                 foreach (var map in maps) map.Finished = true;
                 CurrentMap = new KikiMeterSettings.DamageMeterMap
                     { Hash = hash, Name = name, AreaLevel = level, ProcessId = processId, Label = label, EnemySampleVersion = 1 };
                 maps.Add(CurrentMap);
             }
+            currentSubArea = null;
+            if (CurrentMap!.Hash != hash)
+            {
+                currentSubArea = CurrentMap.SubAreas.Find(a => a.Hash == hash);
+                if (currentSubArea == null)
+                {
+                    currentSubArea = new KikiMeterSettings.DamageMeterMap
+                        { Hash = hash, Name = name, AreaLevel = level, ProcessId = processId, Label = CurrentMap.Label, EnemySampleVersion = 1 };
+                    CurrentMap.SubAreas.Add(currentSubArea);
+                }
+            }
+            currentAreaHash = hash;
+            if (resumedAfterRestart && CurrentMap is { Finished: false } && CurrentMap.Overall.Seconds > 0)
+                CurrentMap.ReadingInterrupted = true;
             MapDirty = true;
         }
+        inHub = false;
         mapFrameSeconds = 0;
         if (CurrentMap.Finished) { mapTime = null; return; }
         if (mapTime is { } previous && now >= previous)
         {
             double elapsed = now - previous;
             CurrentMap.Overall.Seconds += elapsed;
+            if (currentSubArea != null) currentSubArea.Overall.Seconds += elapsed;
             if (elapsed <= 0.5) mapFrameSeconds = elapsed;
             else CurrentMap.ReadingInterrupted = true;
             if (elapsed > 0) MapDirty = true;
@@ -89,6 +112,8 @@ internal sealed class DamageTracker
         mapTime = null;
         mapFrameSeconds = 0;
     }
+
+    public void VisitHub() { inHub = true; PauseMap(); }
 
     public void FinishMap()
     {
@@ -117,7 +142,14 @@ internal sealed class DamageTracker
     private void RecordMapFrame()
     {
         if (!MapActive) return;
-        var map = CurrentMap!;
+        RecordMapFrame(CurrentMap!);
+        if (currentSubArea != null) RecordMapFrame(currentSubArea);
+        if (frameDamage > 0) MapDirty = true;
+        mapFrameSeconds = 0;
+    }
+
+    private void RecordMapFrame(KikiMeterSettings.DamageMeterMap map)
+    {
         if (map.EnemySampleVersion == 0)
         {
             // Existing reports keep their totals. Their enemy cohorts start here,
@@ -139,8 +171,6 @@ internal sealed class DamageTracker
             mode.LargestSample = Math.Max(mode.LargestSample, frameDamage);
             RecordEnemySamples(mode);
         }
-        if (frameDamage > 0) MapDirty = true;
-        mapFrameSeconds = 0;
     }
 
     private void RecordEnemySamples(KikiMeterSettings.DamageMeterMapStats stats)
@@ -151,7 +181,10 @@ internal sealed class DamageTracker
         {
             indices = new();
             for (int i = 0; i < stats.Enemies.Count; i++)
-                indices.TryAdd((stats.Enemies[i].Id, stats.Enemies[i].Address), i);
+            {
+                if (stats.Enemies[i].AreaHash.Length == 0) stats.Enemies[i].AreaHash = CurrentMap?.Hash ?? currentAreaHash;
+                indices.TryAdd((stats.Enemies[i].AreaHash, stats.Enemies[i].Id, stats.Enemies[i].Address), i);
+            }
             mapEnemyIndices[stats] = indices;
         }
         if (stats.EnemySampleDamage == null || stats.EnemySampleDamage.Count != KikiMeterSettings.DamageMeterEnemySampleSizes.Length)
@@ -164,12 +197,12 @@ internal sealed class DamageTracker
         }
         foreach (var target in frameTargets)
         {
-            var key = (target.Key.Id, target.Key.Address.ToInt64());
+            var key = (Area: currentAreaHash, target.Key.Id, Address: target.Key.Address.ToInt64());
             if (!indices.TryGetValue(key, out int index))
             {
                 index = stats.Enemies.Count;
                 indices.Add(key, index);
-                stats.Enemies.Add(new KikiMeterSettings.DamageMeterEnemy { Id = key.Id, Address = key.Item2 });
+                stats.Enemies.Add(new KikiMeterSettings.DamageMeterEnemy { AreaHash = key.Area, Id = key.Id, Address = key.Address });
             }
             stats.Enemies[index].Damage += target.Value;
             stats.LargestImpact = Math.Max(stats.LargestImpact, target.Value);

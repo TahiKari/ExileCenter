@@ -2,6 +2,7 @@ namespace LootTracker
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
     using System.Reflection;
     using System.Runtime.InteropServices;
     using System.Text;
@@ -284,7 +285,8 @@ namespace LootTracker
 
             ImGui.SetWindowFontScale(this.UiScaleFactor());
 
-            var gained = this.CurrentGainedLive();
+            var root = this.current == null ? null : this.RootRun(this.current);
+            var gained = root == null ? this.CurrentGainedLive() : this.RunGained(root);
             double ex = this.ValueOf(gained, out _, out _);
             string name = this.current?.Name ?? "—";
             const float pad = 5f;    // space between an icon and its value
@@ -297,7 +299,7 @@ namespace LootTracker
             // [time] mm:ss
             ContinueTrackerRow(90f);
             if (this.DrawInlineIcon("Time")) ImGui.SameLine(0f, pad);
-            ImGui.TextUnformatted(FormatDuration(this.CurrentLiveTime()));
+            ImGui.TextUnformatted(FormatDuration(root == null ? TimeSpan.Zero : this.RunDisplayTime(root)));
 
             this.DrawProfitCurrencyControls();
             for (int unit = 0, value = 0; unit < ProfitUnits.Length; unit++)
@@ -310,7 +312,7 @@ namespace LootTracker
             // <n>[normal] <n>[magic] <n>[rare] <n>[unique]  — monsters slain this run, by rarity.
             if (this.Settings.ShowKills && this.current != null)
             {
-                var k = this.current.Kills;
+                var k = Enumerable.Range(0, 4).Select(i => this.RunFamily(root!).Sum(r => r.Kills[i])).ToArray();
                 ContinueTrackerRow(90f);
                 this.DrawKillStat("NormalMob", k[0]);
                 ContinueTrackerRow(90f);
@@ -587,7 +589,7 @@ namespace LootTracker
             ImGui.SetWindowFontScale(s);
             float width = ImGui.GetContentRegionAvail().X;
             this.SessionTotals(out var totalActive, out var totalEx);
-            int maps = this.completed.Count;
+            int maps = this.completed.Count(r => r.ParentHash.Length == 0);
             double perHour = totalActive.TotalHours > 0 ? totalEx / totalActive.TotalHours : 0;
             TimeSpan avgTime = maps > 0 ? totalActive / maps : TimeSpan.Zero;
             double avgProfit = maps > 0 ? totalEx / maps : 0;
@@ -686,15 +688,14 @@ namespace LootTracker
                     ImGui.TableNextColumn();
                     ImGui.TextWrapped(this.L("lt.no_maps", "No completed maps in this session yet."));
                 }
-                for (int i = this.completed.Count - 1; i >= 0; i--)
+                foreach (var r in this.completed.Where(r => r.ParentHash.Length == 0).Reverse().SelectMany(this.RunFamily))
                 {
-                    var r = this.completed[i];
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
-                    ImGui.TextWrapped(r.Name);
+                    ImGui.TextWrapped((r.ParentHash.Length == 0 ? "" : "    > ") + r.Name);
                     ImGui.TableNextColumn();
                     ImGui.TextUnformatted(FormatDuration(this.RunDisplayTime(r)));
-                    double ex = this.ValueOf(ReferenceEquals(r, this.current) ? this.CurrentGainedLive() : r.Gained, out _, out _);
+                    double ex = this.ValueOf(this.RunGained(r), out _, out _);
                     for (int unit = 0, value = 0; unit < ProfitUnits.Length; unit++)
                     {
                         if ((this.SelectedProfitUnits & (1 << unit)) == 0) continue;
@@ -705,7 +706,7 @@ namespace LootTracker
                     if (showLoot)
                     {
                         ImGui.TableNextColumn();
-                        if (ImGui.SmallButton($"{this.L("lt.loot", "Loot")}##a{i}")) toOpen = r;
+                        if (ImGui.SmallButton($"{this.L("lt.loot", "Loot")}##a{r.ProcessId}_{r.Hash}")) toOpen = r;
                     }
                 }
                 ImGui.EndTable();

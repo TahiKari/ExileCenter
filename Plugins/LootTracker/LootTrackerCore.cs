@@ -3,6 +3,7 @@ namespace LootTracker
     using System;
     using System.Collections.Generic;
     using System.IO;
+    using System.Linq;
     using System.Runtime.InteropServices;
     using System.Text;
     using GameHelper;
@@ -18,7 +19,9 @@ namespace LootTracker
         public string Name = string.Empty;   // localized area name (display only)
         public string Hash = string.Empty;    // AreaHash — the unique instance id (dedup key)
         public int AreaLevel;
-        public bool IsFinished;               // confirmed by the game's map-complete HUD
+        public string ParentHash = string.Empty;
+        public uint ProcessId;
+        public bool IsFinished;               // another map replaced this map's portals/instance
         public TimeSpan ActiveTime;            // wall time spent inside the map (paused in hideout/town)
         // Accumulated net inventory delta for this run: itemPath -> Δcount (across all hideout exits,
         // re-baselined on same-map re-entry). Positive = gained. Priced into ProfitEx in step 4.
@@ -97,6 +100,7 @@ namespace LootTracker
         private bool onMapArea;                  // true while the current area is a map (not hideout/town)
 
         private readonly PriceCache priceCache = new();
+        private long mapPortalGeneration;
         private DateTime nextAutoRefreshCheckUtc = DateTime.MinValue;
 
         // Throttles the league-list staleness check (same one-minute tick as the price check).
@@ -265,6 +269,7 @@ namespace LootTracker
 
             this.sessionStartUtc = DateTime.UtcNow;
             this.LoadMetaArtMap();
+            this.mapPortalGeneration = Core.States.InGameStateObject.CurrentAreaInstance.MapPortalGeneration;
             this.LoadIcons();
             this.LoadActiveState(); // resume an in-progress session that survived a close/crash
 
@@ -600,10 +605,14 @@ namespace LootTracker
             }
 
             this.MaybeAutoRefreshPrices();
+            if (this.mapPortalGeneration != Core.States.InGameStateObject.CurrentAreaInstance.MapPortalGeneration)
+            {
+                this.FinishCurrentMap(DateTime.UtcNow);
+                this.mapPortalGeneration = Core.States.InGameStateObject.CurrentAreaInstance.MapPortalGeneration;
+            }
             this.UpdateAreaState();
             this.ScanKills();
             this.UpdateLiveInventory();
-            this.UpdateMapCompletion();
             this.MaybeAutoSaveSession();
 
             // The independent window keeps its own visibility and placement rules.
@@ -639,10 +648,10 @@ namespace LootTracker
         {
             totalActive = TimeSpan.Zero;
             totalEx = 0;
-            foreach (var r in this.completed)
+            foreach (var r in this.completed.Where(r => r.ParentHash.Length == 0))
             {
                 totalActive += this.RunDisplayTime(r);
-                totalEx += this.ValueOf(ReferenceEquals(r, this.current) ? this.CurrentGainedLive() : r.Gained, out _, out _);
+                totalEx += this.ValueOf(this.RunGained(r), out _, out _);
             }
         }
 
@@ -837,12 +846,13 @@ namespace LootTracker
                 // `current` away; otherwise loot picked up since entry is lost. Skipped when arriving from
                 // hideout/town (wasOnMap == false): that leg was already folded on exit and the baseline is
                 // about to be re-taken, so folding here would double-count it (and absorb stash changes).
-                if (wasOnMap && this.current != null && this.baseline != null && this.TrySnapshotInventory(out var legSnap))
+                if (wasOnMap && this.current != null && this.baseline != null)
                 {
-                    MergeInto(this.current.Gained, Diff(legSnap, this.baseline));
+                    MergeInto(this.current.Gained, this.TrySnapshotInventory(out var legSnap) ? Diff(legSnap, this.baseline) : this.liveLegDelta);
                 }
 
-                if (this.current != null && this.current.Hash == inst)
+                if (this.current != null && this.current.Hash == inst &&
+                    (this.current.ProcessId == 0 || this.current.ProcessId == Core.Process.Pid))
                 {
                     // Straight re-entry of the same instance we were just on — keep it active.
                 }
@@ -856,10 +866,15 @@ namespace LootTracker
                 {
                     // A genuinely new map instance: open a run and add it to history straight away, so
                     // the table (compact bar) shows it even before the run is "finished".
+                    var parent = wasOnMap && this.current is { IsFinished: false } &&
+                        (this.current.ProcessId == 0 || this.current.ProcessId == Core.Process.Pid) ? this.RootRun(this.current) : null;
+                    if (parent == null && this.current != null) this.FinishCurrentMap(now);
                     this.current = new MapRun
                     {
                         Name = details.Name,
                         Hash = inst,
+                        ParentHash = parent?.Hash ?? string.Empty,
+                        ProcessId = parent?.ProcessId ?? Core.Process.Pid,
                         AreaLevel = area.CurrentAreaLevel,
                         ActiveTime = TimeSpan.Zero,
                     };
@@ -885,11 +900,13 @@ namespace LootTracker
                 // leg's inventory delta into the run's running total. The run stays in the table.
                 this.BankActiveTime(now);
 
-                if (this.baseline != null && this.TrySnapshotInventory(out var snap))
+                if (this.baseline != null)
                 {
-                    MergeInto(this.current.Gained, Diff(snap, this.baseline));
+                    MergeInto(this.current.Gained, this.TrySnapshotInventory(out var snap) ? Diff(snap, this.baseline) : this.liveLegDelta);
                 }
 
+                this.baseline = null;
+                this.liveLegDelta.Clear();
                 this.baselinePending = false; // not on a map now
             }
 
@@ -906,14 +923,27 @@ namespace LootTracker
 
         private void FinishCurrentMap(DateTime now)
         {
-            if (!this.onMapArea || this.current == null || this.current.IsFinished) return;
+            if (this.current == null || this.current.IsFinished) return;
             this.BankActiveTime(now);
-            this.current.IsFinished = true;
+            foreach (var run in this.RunFamily(this.RootRun(this.current))) run.IsFinished = true;
             this.SaveActiveState();
         }
 
         private TimeSpan RunDisplayTime(MapRun run)
-            => ReferenceEquals(run, this.current) ? this.CurrentLiveTime() : run.ActiveTime;
+            => TimeSpan.FromTicks(this.RunFamily(run).Sum(r => (ReferenceEquals(r, this.current) ? this.CurrentLiveTime() : r.ActiveTime).Ticks));
+
+        private MapRun RootRun(MapRun run) => run.ParentHash.Length == 0 ? run : this.completed.Find(r => r.Hash == run.ParentHash && r.ProcessId == run.ProcessId) ?? run;
+
+        private IEnumerable<MapRun> RunFamily(MapRun run) => this.completed.Where(r => ReferenceEquals(r, run) ||
+            (run.ParentHash.Length == 0 && r.ParentHash == run.Hash && r.ProcessId == run.ProcessId));
+
+        private Dictionary<string, long> RunGained(MapRun run)
+        {
+            var gained = new Dictionary<string, long>(StringComparer.Ordinal);
+            foreach (var member in this.RunFamily(run))
+                MergeInto(gained, ReferenceEquals(member, this.current) ? this.CurrentGainedLive() : member.Gained);
+            return gained;
+        }
 
         // Bank the active segment once, then pause.
         private void BankActiveTime(DateTime now)
@@ -931,7 +961,7 @@ namespace LootTracker
         {
             for (int i = this.completed.Count - 1; i >= 0; i--)
             {
-                if (this.completed[i].Hash == hash)
+                if (this.completed[i].Hash == hash && (this.completed[i].ProcessId == 0 || this.completed[i].ProcessId == Core.Process.Pid))
                 {
                     return this.completed[i];
                 }
@@ -943,14 +973,15 @@ namespace LootTracker
         // Drop the oldest runs past the history limit, but never the run that's currently active.
         private void TrimCompleted()
         {
-            while (this.completed.Count > this.Settings.HistorySize)
+            while (this.completed.Count(r => r.ParentHash.Length == 0) > this.Settings.HistorySize)
             {
-                if (ReferenceEquals(this.completed[0], this.current))
+                if (this.current != null && ReferenceEquals(this.completed[0], this.RootRun(this.current)))
                 {
                     break;
                 }
 
-                this.completed.RemoveAt(0);
+                var family = this.RunFamily(this.completed[0]).ToList();
+                this.completed.RemoveAll(r => family.Contains(r));
             }
         }
 

@@ -87,7 +87,7 @@
   "meter.map_save": "Enregistrer maintenant",
   "meter.map_resume": "Reprendre cette carte",
   "meter.map_finish": "Terminer et enregistrer",
-  "meter.map_help": "Sauvegarde automatique toutes les 20 secondes et aux changements de zone. Le retour dans la même instance reprend son bilan. Termine le bilan quand la carte est finie : il reste figé jusqu’à « Reprendre cette carte ».",
+  "meter.map_help": "La carte inclut la durée et les dégâts de ses sous-zones, détaillées en lignes indentées. Le refuge met le suivi en pause. Le remplacement observé des portails termine le bilan ; sinon il est terminé à l’entrée dans une nouvelle carte. Sauvegarde toutes les 20 secondes et aux changements de zone.",
   "meter.map_guide": "Comprendre les moyennes et les impacts",
   "meter.map_measure_help": "Le DPS moyen de la map inclut les déplacements et pauses dans la carte. Mono/multi utilise les périodes avec une/deux cibles ou plus touchées sur la dernière seconde. Les échantillons cumulent les pertes observées sur les N premiers ennemis distincts, y compris les coups suivants et les petits dégâts sur ces mêmes ennemis. L’impact maximal est la plus grosse perte sur une cible entre deux lectures : plusieurs coups peuvent être regroupés, et les dégâts dépassant la vie restante ne sont pas visibles. Toutes les sources sont incluses.",
   "meter.map_none": "Entre dans une carte pour démarrer un bilan.",

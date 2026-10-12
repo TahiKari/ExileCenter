@@ -36,6 +36,11 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
         // primary guard against shifted metadata causing multi-gigabyte allocations.
         private const long MaxTerrainGridCells = 100_000_000;
         private const int TerrainTileStructureSize = 0x38;
+        private readonly MapPortalGenerationTracker mapPortals = new();
+        private long nextPortalScan;
+
+        /// <summary>Gets the observed replacement generation of map-device portals.</summary>
+        public long MapPortalGeneration => this.mapPortals.Generation;
 
         private static readonly EntityBackedBuffDefinition[] EntityBackedPlayerBuffs =
         {
@@ -288,6 +293,28 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
             this.Player.Address = data.PlayerInfo.LocalPlayerPtr;
             this.UpdateEntities(data.Entities.AwakeEntities, this.AwakeEntities, true);
             this.AddEntityBackedPlayerBuffs();
+            this.UpdateMapPortals();
+        }
+
+        private void UpdateMapPortals()
+        {
+            var details = Core.States.InGameStateObject.CurrentWorldInstance.AreaDetails;
+            if (!details.IsHideout && !details.IsTown && details.Id != "Abyss_Hub") return;
+            long now = Environment.TickCount64;
+            if (now < this.nextPortalScan || string.IsNullOrEmpty(this.AreaHash)) return;
+            this.nextPortalScan = now + 250;
+            var ids = new List<uint>();
+            foreach (var entity in this.AwakeEntities.Values)
+            {
+                if (!entity.IsValid) continue;
+                bool mapPortal = entity.Path.Equals("Metadata/MiscellaneousObjects/MapPortal", StringComparison.OrdinalIgnoreCase);
+                if (!mapPortal && entity.Path.Equals("Metadata/MiscellaneousObjects/MultiplexPortal", StringComparison.OrdinalIgnoreCase)
+                    && entity.TryGetComponent<GameHelper.RemoteObjects.Components.StateMachine>(out var machine))
+                    mapPortal = machine.States.Any(state => state.Name == "portal" && state.Value == 3);
+                if (mapPortal && entity.TryGetComponent<GameHelper.RemoteObjects.Components.Targetable>(out var target) && target.IsTargetable)
+                    ids.Add(entity.Id);
+            }
+            this.mapPortals.Observe(Core.Process.Pid, this.AreaHash, ids, now);
         }
 
         private void AddEntityBackedPlayerBuffs()
@@ -1187,5 +1214,55 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
             string EntityPathFragment,
             string BuffNameFragment,
             Func<uint, int> StageToStacks);
+    }
+
+    /// <summary>Detects replacement portal sets; consuming a portal never finishes a map.</summary>
+    public sealed class MapPortalGenerationTracker
+    {
+        private readonly Dictionary<string, HashSet<uint>> known = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> firstSeen = new(StringComparer.Ordinal);
+        private uint processId;
+        private string pendingHub = "";
+        private HashSet<uint> pending = new();
+        private long pendingSince;
+
+        /// <summary>Gets the count of confirmed portal set replacements.</summary>
+        public long Generation { get; private set; }
+
+        /// <summary>Observes a readable safe-area snapshot; new sets must remain visible for one second.</summary>
+        public void Observe(uint pid, string hub, IEnumerable<uint> portalIds, long now)
+        {
+            if (pid != this.processId) { this.known.Clear(); this.firstSeen.Clear(); this.pending.Clear(); this.processId = pid; }
+            var ids = portalIds.ToHashSet();
+            if (!this.known.TryGetValue(hub, out var previous))
+            {
+                this.known[hub] = ids;
+                this.firstSeen[hub] = now;
+                this.pending.Clear();
+                return;
+            }
+            // Establish the first set while entities are still loading. An unseen old set
+            // cannot prove replacement: the plugins then close it on entry to a new map.
+            if (now - this.firstSeen[hub] < 2000 || previous.Count == 0)
+            {
+                previous.UnionWith(ids);
+                this.pending.Clear();
+                return;
+            }
+            if (ids.Count < 2 || ids.Overlaps(previous))
+            {
+                this.pending.Clear();
+                return;
+            }
+            if (this.pendingHub != hub || !this.pending.SetEquals(ids))
+            {
+                this.pendingHub = hub; this.pending = ids; this.pendingSince = now;
+                return;
+            }
+            if (now - this.pendingSince < 1000) return;
+            this.known[hub] = ids;
+            this.pending.Clear();
+            this.Generation++;
+        }
     }
 }
