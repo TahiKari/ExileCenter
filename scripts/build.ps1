@@ -254,6 +254,7 @@ function Test-PluginDeploy {
         @{ Plugin = "RunecraftHelper"; Files = @("RunecraftHelper.dll") },
         @{ Plugin = "SekhemaHelper"; Files = @("SekhemaHelper.dll") },
         @{ Plugin = "AuraTracker"; Files = @("AuraTracker.dll") },
+        @{ Plugin = "KikiMeter"; Files = @("KikiMeter.dll") },
         @{ Plugin = "Atlas"; Files = @("Atlas.dll") },
         @{ Plugin = "LootTracker"; Files = @("LootTracker.dll") },
         @{ Plugin = "LootValue"; Files = @("LootValue.dll") },
