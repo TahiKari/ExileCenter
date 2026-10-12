@@ -16,7 +16,7 @@
   "config.show_health_es_text": "Afficher santé+ES (absolu) sous forme de texte",
   "config.text_color": "Couleur du texte",
   "config.visualize_culling_strike": "Visualisez la portée de frappe d’abattage",
-  "popup.delete_poi_config": "Voulez-vous supprimer la configuration de la barre de santé du groupe {0} POI Monster ?",
+  "popup.delete_poi_config": "Veux-tu supprimer les réglages de barres du groupe de monstres {0} ?",
   "section.common_configuration": "Configuration commune",
   "section.monster_configuration": "Configuration du monstre",
   "section.player_configuration": "Configuration du lecteur",

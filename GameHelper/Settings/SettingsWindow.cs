@@ -114,7 +114,7 @@ namespace GameHelper.Settings
             EnsureSelectedSettingsPage(enabledPlugins);
 
             var availableWidth = ImGui.GetContentRegionAvail().X;
-            var sidebarWidth = Math.Clamp(availableWidth * 0.22f, 200f, 246f);
+            var sidebarWidth = Math.Clamp(availableWidth * 0.22f, 170f, 246f);
 
             if (ImGui.BeginChild("SettingsSidebar", new Vector2(sidebarWidth, 0), ImGuiChildFlags.Borders))
             {
@@ -161,13 +161,13 @@ namespace GameHelper.Settings
 
             ImGui.SetNextItemWidth(-1f);
             ImGui.InputTextWithHint("##SettingsPluginFilter", L.T("settings.navigation.filter", "Find a plugin..."), ref settingsPluginFilter, 96);
-            var filteredPlugins = enabledPlugins.Where(plugin => plugin.Name.Contains(settingsPluginFilter.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+            var filteredPlugins = enabledPlugins.Where(MatchesPluginFilter).ToList();
             var listHeight = Math.Max(80f, ImGui.GetContentRegionAvail().Y - ImGui.GetTextLineHeightWithSpacing() * 2f - 16f);
             if (ImGui.BeginChild("SettingsPluginList", new Vector2(0, listHeight)))
             {
                 if (filteredPlugins.Count == 0) ImGui.TextWrapped(L.T("settings.navigation.no_results", "No matching plugin."));
                 foreach (var container in filteredPlugins)
-                    DrawNavigationItem(PluginPageId(container.Name), container.Name);
+                    DrawNavigationItem(PluginPageId(container.Name), PluginDisplayName(container));
             }
             ImGui.EndChild();
             ImGui.Separator();
@@ -187,17 +187,35 @@ namespace GameHelper.Settings
 
             var rowPosition = ImGui.GetCursorScreenPos();
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 8f);
-            if (ImGui.Selectable($"{label}##nav_{pageId}", selected, ImGuiSelectableFlags.None, new Vector2(0, 30f)))
+            var display = label;
+            var width = Math.Max(40, ImGui.GetContentRegionAvail().X - 8);
+            if (ImGui.CalcTextSize(display).X > width)
+            {
+                while (display.Length > 1 && ImGui.CalcTextSize(display + "...").X > width) display = display[..^1];
+                display += "...";
+            }
+            var rowHeight = Math.Max(30, ImGui.GetFrameHeight());
+            if (ImGui.Selectable($"{display}###nav_{pageId}", selected, ImGuiSelectableFlags.None, new Vector2(0, rowHeight)))
             {
                 selectedSettingsPage = pageId;
             }
 
             if (selected)
             {
-                ImGui.GetWindowDrawList().AddRectFilled(rowPosition + new Vector2(0, 3), rowPosition + new Vector2(3, 27), ImGui.GetColorU32(ImGuiTheme.Accent), 2f);
+                ImGui.GetWindowDrawList().AddRectFilled(rowPosition + new Vector2(0, 3), rowPosition + new Vector2(3, rowHeight - 3), ImGui.GetColorU32(ImGuiTheme.Accent), 2f);
                 ImGui.PopStyleColor(2);
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(label);
+        }
+
+        private static string PluginDisplayName(PluginContainer plugin) => L.T("settings.plugin.name." + plugin.Name, plugin.Name);
+
+        private static bool MatchesPluginFilter(PluginContainer plugin)
+        {
+            var query = settingsPluginFilter.Trim();
+            return plugin.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                PluginDisplayName(plugin).Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                (plugin.Plugin.GetDescription() ?? string.Empty).Contains(query, StringComparison.OrdinalIgnoreCase);
         }
 
         private static void DrawSelectedSettingsPage(IReadOnlyCollection<PluginContainer> enabledPlugins)
@@ -225,8 +243,16 @@ namespace GameHelper.Settings
             {
                 var description = selectedPlugin.Plugin.GetDescription();
                 ImGuiTheme.SectionHeader(
-                    selectedPlugin.Name,
+                    PluginDisplayName(selectedPlugin),
                     string.IsNullOrWhiteSpace(description) ? null : description);
+                if (ImGui.CollapsingHeader(L.T("settings.plugin.quickstart", "Getting started") + "###PluginQuickStart"))
+                {
+                    ImGui.PushTextWrapPos(0);
+                    ImGui.TextUnformatted(L.T("settings.plugin.help." + selectedPlugin.Name,
+                        L.T("settings.plugin.help.default", "Use the tabs to choose a section. Scroll with the mouse wheel. Hover controls for details. Settings are saved when you close the menu.")));
+                    ImGui.PopTextWrapPos();
+                    ImGui.TextUnformatted(selectedPlugin.Name);
+                }
                 selectedPlugin.Plugin.DrawSettings();
                 return;
             }
@@ -343,6 +369,9 @@ namespace GameHelper.Settings
 
             ImGui.Spacing();
 
+            ImGui.SetNextItemWidth(-1);
+            ImGui.InputTextWithHint("##PluginManagerFilter", L.T("settings.navigation.filter", "Find a plugin..."), ref settingsPluginFilter, 96);
+
             if (!ImGui.BeginTable(
                 "pluginTable",
                 4,
@@ -355,16 +384,22 @@ namespace GameHelper.Settings
             ImGui.TableSetupScrollFreeze(0, 1);
             ImGui.TableSetupColumn(L.T("settings.plugin.column.plugin", "Plugin"), ImGuiTableColumnFlags.WidthFixed, Math.Clamp(ImGui.GetContentRegionAvail().X * 0.3f, 140f, 190f));
             ImGui.TableSetupColumn(L.T("settings.plugin.column.description", "Description"), ImGuiTableColumnFlags.WidthStretch, 1.0f);
-            ImGui.TableSetupColumn(L.T("settings.plugin.column.status", "Status"), ImGuiTableColumnFlags.WidthFixed, 70f);
-            ImGui.TableSetupColumn(L.T("settings.plugin.column.enable", "Enable"), ImGuiTableColumnFlags.WidthFixed, 60f);
+            ImGui.TableSetupColumn(L.T("settings.plugin.column.status", "Status"), ImGuiTableColumnFlags.WidthFixed,
+                Math.Max(70f, ImGui.CalcTextSize(L.T("settings.plugin.status.active", "Active")).X + 12));
+            ImGui.TableSetupColumn(L.T("settings.plugin.column.enable", "Enable"), ImGuiTableColumnFlags.WidthFixed,
+                Math.Max(60f, ImGui.CalcTextSize(L.T("settings.plugin.column.enable", "Enable")).X + 12));
             ImGui.TableHeadersRow();
 
             foreach (var container in PManager.Plugins)
             {
+                if (!MatchesPluginFilter(container)) continue;
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 ImGui.AlignTextToFramePadding();
-                ImGui.TextWrapped(container.Name);
+                ImGui.PushTextWrapPos(0);
+                ImGui.TextUnformatted(PluginDisplayName(container));
+                ImGui.PopTextWrapPos();
+                ImGuiHelper.ToolTip(container.Name);
 
                 ImGui.TableNextColumn();
                 ImGui.AlignTextToFramePadding();

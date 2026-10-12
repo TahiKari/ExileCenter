@@ -69,7 +69,8 @@ namespace GameHelper.Plugin
         }
 
         /// <inheritdoc />
-        public virtual string GetDescription() => this.PluginText.T("plugin.description", string.Empty);
+        public virtual string GetDescription() => this.PluginText.T("plugin.description",
+            OverlayLocalization.T("settings.plugin.help." + this.GetType().Assembly.GetName().Name, string.Empty));
 
         /// <inheritdoc />
         public virtual IReadOnlyCollection<string> ConflictsWith => Array.Empty<string>();

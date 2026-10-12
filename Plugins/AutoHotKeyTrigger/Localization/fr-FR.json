@@ -35,7 +35,7 @@
   "profiles.tooltip": "Les règles (onglets) peuvent être déplacées par glisser-déposer. Ils peuvent être clonés par clic droit.",
   "rule.cooldown": "Temps de recharge (secondes)",
   "rule.cooling": "Refroidissement {0:0} %",
-  "rule.delete_confirm": "Voulez-vous supprimer la règle portant le nom : {0} ?",
+  "rule.delete_confirm": "Veux-tu supprimer la règle « {0} » ?",
   "rule.enable": "Activer",
   "rule.existing_conditions": "Conditions existantes (?)",
   "rule.existing_conditions.tooltip": "Toutes les conditions doivent être vraies. Les conditions peuvent être déplacées de haut en bas par glisser-déposer lorsqu'elles ne sont pas développées.",

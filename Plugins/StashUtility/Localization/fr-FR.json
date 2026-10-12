@@ -1594,7 +1594,7 @@
   "stashutility.tablet.selector.Breach": "Brèche",
   "stashutility.tablet.selector.Abyss": "Abysse",
   "stashutility.tablet.selector.Temple": "Temple",
-  "stashutility.tablet.selector.Boss": "Boss",
+  "stashutility.tablet.selector.Boss": "Superviseur",
   "stashutility.filters.tablet_rank_conditions": "Les quatre mods explicites déterminent le classement, indépendamment de leur ordre et des minimums de valeur. Les filtres de surlignage et la flèche d’excellence restent séparés. Un rang inconnu ou un mod manquant donne N/C (non classé).",
   "stashutility.filters.farm_preset": "Classement farm - PoE 2 0.5.5",
   "stashutility.filters.farm_preset_help": "Classement pour le farm de butin et de monnaie, modifiable : S = prioritaire, A = excellent, B = utile, C = secondaire, D = peu prioritaire. Tous les mods sont cochés, y compris D. Tes minimums sont conservés. Les rangs peu documentés sont des estimations ; le meilleur choix dépend de ton Atlas et du farm visé.",
@@ -1688,5 +1688,13 @@
   "stashutility.meta.error.import-schema": "Format, version, type ou identifiants de profils invalides.",
   "stashutility.meta.error.import-rule": "Une règle importée est invalide ou appartient à un autre type.",
   "stashutility.meta.error.import-active-profile": "Le profil actif est absent de l’import.",
-  "stashutility.meta.actions_help": "Conserver affiche le résultat. Signaler ajoute une alerte ambre. Ignorer masque l’indication."
+  "stashutility.meta.actions_help": "Conserver affiche le résultat. Signaler ajoute une alerte ambre. Ignorer masque l’indication.",
+  "stashutility.meta.rank_order": "Rangs individuels : S > A > B > C > D > E > F. Dans chaque rang, 1 est le meilleur. Les rangs sont ceux du classeur, sans modification.",
+  "stashutility.meta.mode_workbook": "Filtre actif : profil du classeur. Choisis ton profil dans Règles ; Analyse explique chaque résultat.",
+  "stashutility.meta.mode_legacy": "Filtre actif : réglages historiques. Le catalogue ci-dessous affiche toujours les rangs S à F du classeur. Crée un profil dans Règles, puis active-le avec la case ci-dessus pour utiliser ses filtres.",
+  "stashutility.meta.legacy_settings": "Réglages historiques · classement des combinaisons S à D",
+  "stashutility.meta.rules_help": "Crée ou sélectionne un profil, ajoute des conditions, puis choisis ET ou OU dans chaque groupe. Seul ce type de tablette est concerné. Complète les groupes vides pour que le profil puisse accepter une tablette.",
+  "stashutility.meta.sources": "À propos des rangs et des sources",
+  "stashutility.meta.code": "Code",
+  "stashutility.meta.show_both": "Afficher les textes français et anglais"
 }

@@ -103,5 +103,12 @@
   "atlas.show_connections": "Afficher les connexions des nœuds",
   "atlas.show_connections_hint": "Trace le graphe de connexions de l'atlas — une ligne discrète le long de chaque arête entre nœuds de carte adjacents, sous les libellés et les itinéraires.",
   "atlas.connection_color": "Couleur des connexions",
-  "atlas.connection_thickness": "Épaisseur des connexions"
+  "atlas.connection_thickness": "Épaisseur des connexions",
+  "atlas.ritual_planner_font": "Taille du texte des récompenses",
+  "atlas.ritual_planner_font_hint": "Échelle du texte de la fenêtre des récompenses de la Tête du roi. 1,00 correspond à la taille habituelle.",
+  "atlas.offscreen_pointer": "Repérer le contenu hors écran",
+  "atlas.offscreen_pointer_hint": "Affiche au bord de l’écran une flèche vers le contenu ciblé, avec le nombre de cartes à parcourir. Elle nécessite un itinéraire valide et le tracé des itinéraires à travers les nœuds. Une fois la carte visible, le repère se place sous son nom.",
+  "atlas.offscreen_range": "Portée hors écran (nombre d’écrans)",
+  "atlas.offscreen_range_hint": "Distance maximale d’affichage des flèches hors écran. 0 signifie aucune limite. Ce réglage utilise la distance à l’écran, indépendamment du nombre de cartes de l’itinéraire.",
+  "atlas.expmod_entry_hint": "Cherche la carte la plus proche qui possède ce mod d’Expédition. Ses mods doivent être révélés ; les cartes encore dans le brouillard ne fournissent pas ces données."
 }

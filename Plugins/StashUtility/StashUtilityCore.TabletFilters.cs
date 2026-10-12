@@ -17,13 +17,11 @@ namespace StashUtility
         private string lastMetaItemName = "";
         private DateTime lastMetaObservedUtc;
         private string MT(string key, string fallback) => PluginText.T("stashutility.meta." + key, fallback);
-        private static void MetaText(string text)
-        {
-            ImGui.PushTextWrapPos(0);
-            ImGui.TextUnformatted(text);
-            ImGui.PopTextWrapPos();
-        }
+        private static void MetaText(string text) => ImGuiHelper.WrappedText(text);
         private static TabletMetaCatalog MetaCatalog => Data.ModDatabase.TabletMeta;
+        private static string MetaDisplayText(TabletMetaModifier modifier) =>
+            GameHelper.Localization.OverlayLocalization.CurrentLanguage == GameHelper.Localization.OverlayLanguage.French
+                ? modifier.FrenchText : modifier.EnglishText;
         private static TabletFilterProfile ActiveMetaProfile(TabletProfile settings)
             => settings.MetaProfiles?.FirstOrDefault(p => p != null && p.Id == settings.ActiveMetaProfileId);
 
@@ -32,12 +30,17 @@ namespace StashUtility
             settings.MetaProfiles ??= new(); settings.ManualMetaModifiers ??= new(); settings.MetaSearch ??= "";
             ImGui.SeparatorText(MT("title", "Reference workbook · individual modifiers S to F"));
             MetaText(MetaCatalog.SourceFile + " · " + MetaCatalog.Version + " · " + MetaCatalog.ForType(type).Count() + " " + MT("mods", "modifiers"));
-            MetaText(MT("editorial", "Individual subranks come from the editorial workbook, not an official GGG or streamer tier list. Legacy combination grades remain separate."));
+            MetaText(MT("rank_order", "Individual ranks: S > A > B > C > D > E > F. Within a rank, 1 is best. These are the exact workbook ranks."));
             if (ImGui.Checkbox(MT("enable", "Use workbook AND / OR filters for this type"), ref settings.UseMetaFilters)) SaveSettings();
+            MetaText(MT(settings.UseMetaFilters ? "mode_workbook" : "mode_legacy", settings.UseMetaFilters ?
+                "Active filter: workbook profile. Select a profile in Rules; Analysis explains each decision." :
+                "Active filter: legacy settings. The catalogue below always shows the workbook S to F ranks. Create a profile in Rules and enable it above to use those filters."));
             if (ImGui.BeginTabBar("TabletMetaTabs"))
             {
+                if (ImGui.BeginTabItem(MT("catalog", "Catalogue"))) { DrawMetaCatalog(type, settings, false); ImGui.EndTabItem(); }
                 if (ImGui.BeginTabItem(MT("rules", "Rules")))
                 {
+                    MetaText(MT("rules_help", "Create or select a profile, add conditions, then choose AND or OR for each group. Only this tablet type is affected. Empty groups must be completed before the profile can accept a tablet."));
                     DrawMetaProfiles(type, settings);
                     var active = ActiveMetaProfile(settings);
                     if (active != null)
@@ -47,8 +50,9 @@ namespace StashUtility
                         changed |= DrawMetaAction(MT("on_miss", "When not matched"), ref active.OnMiss);
                         MetaText(MT("actions_help", "Keep displays the result. Signal adds an amber alert. Ignore hides the indication."));
                         ImGui.Separator();
-                        if (ImGui.BeginChild("MetaRuleTree", new Vector2(0, Math.Clamp(ImGui.GetContentRegionAvail().Y - 110, 180, 340)),
-                            ImGuiChildFlags.Borders, ImGuiWindowFlags.HorizontalScrollbar)) changed |= DrawMetaNode(active.Rule, type, 0);
+                        if (ImGui.BeginChild("MetaRuleTree", Vector2.Zero,
+                            ImGuiChildFlags.Borders | ImGuiChildFlags.AutoResizeY | ImGuiChildFlags.AlwaysAutoResize,
+                            ImGuiWindowFlags.HorizontalScrollbar)) changed |= DrawMetaNode(active.Rule, type, 0);
                         ImGui.EndChild();
                         MetaText(MT("summary", "Rule") + " : " + MetaSummary(active.Rule, type));
                         string error = TabletFilterEngine.Validate(active, MetaCatalog);
@@ -58,12 +62,10 @@ namespace StashUtility
                     else MetaText(MT("create_hint", "Create a profile and add conditions or groups. Empty groups never accept a tablet."));
                     ImGui.EndTabItem();
                 }
-                if (ImGui.BeginTabItem(MT("catalog", "Catalogue"))) { DrawMetaCatalog(type, settings, false); ImGui.EndTabItem(); }
                 if (ImGui.BeginTabItem(MT("analysis", "Analysis"))) { DrawMetaAnalysis(type, settings); ImGui.EndTabItem(); }
                 if (ImGui.BeginTabItem(MT("exchange", "Import / export"))) { DrawMetaExchange(type, settings); ImGui.EndTabItem(); }
                 ImGui.EndTabBar();
             }
-            if (!settings.UseMetaFilters) MetaText(MT("legacy", "Legacy settings remain active below. Enable workbook filters to use the profiles above."));
         }
 
         private void DrawMetaProfiles(string type, TabletProfile settings)
@@ -141,11 +143,11 @@ namespace StashUtility
                     if (node.Kind == TabletRuleKind.Modifier)
                     {
                         var selected = MetaCatalog.Find(type, node.ModifierId); ImGui.SetNextItemWidth(-1);
-                        if (ImGui.BeginCombo("##modifier", selected == null ? MT("choose_mod", "Choose a modifier") : selected.RankLabel + " · " + selected.FrenchText))
+                        if (ImGui.BeginCombo("##modifier", selected == null ? MT("choose_mod", "Choose a modifier") : selected.RankLabel + " · " + MetaDisplayText(selected)))
                         {
                             foreach (var modifier in MetaCatalog.ForType(type).Where(m => m.Availability == "active"))
                             {
-                                if (ImGui.Selectable(modifier.RankLabel + " · " + modifier.FrenchText + "##" + modifier.Id, modifier == selected)) { node.ModifierId = modifier.Id; changed = true; }
+                                if (ImGui.Selectable(modifier.RankLabel + " · " + MetaDisplayText(modifier) + "##" + modifier.Id, modifier == selected)) { node.ModifierId = modifier.Id; changed = true; }
                                 if (ImGui.IsItemHovered()) MetaTooltip(modifier);
                             }
                             ImGui.EndCombo();
@@ -210,14 +212,21 @@ namespace StashUtility
         private void DrawMetaCatalog(string type, TabletProfile settings, bool manual)
         {
             bool changed = ImGui.InputText(MT("search", "Search French or English"), ref settings.MetaSearch, 200);
-            changed |= ImGui.Checkbox(MT("show_english", "Show English text"), ref settings.ShowMetaEnglish);
+            changed |= ImGui.Checkbox(MT("show_both", "Show both French and English texts"), ref settings.ShowMetaEnglish);
             var modifiers = MetaCatalog.ForType(type).Where(m => string.IsNullOrWhiteSpace(settings.MetaSearch) ||
                 m.FrenchText.Contains(settings.MetaSearch, StringComparison.OrdinalIgnoreCase) || m.EnglishText.Contains(settings.MetaSearch, StringComparison.OrdinalIgnoreCase) ||
                 m.Code.Contains(settings.MetaSearch, StringComparison.OrdinalIgnoreCase) || m.RankLabel.Equals(settings.MetaSearch, StringComparison.OrdinalIgnoreCase));
-            if (ImGui.BeginTable("MetaCatalogue" + manual, manual ? 4 : 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
+            if (!manual && ImGui.CollapsingHeader(MT("sources", "About the rankings and sources")))
+            {
+                MetaText(MT("editorial", "Individual subranks come from the editorial workbook, not an official GGG or streamer tier list. Legacy combination grades remain separate."));
+                foreach (var note in MetaCatalog.MethodAndSources)
+                    MetaText(string.Join(" · ", note.Values.Where(v => !string.IsNullOrWhiteSpace(v))));
+            }
+            if (ImGui.BeginTable("MetaCatalogue" + manual, manual ? 5 : 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
             {
                 if (manual) ImGui.TableSetupColumn(MT("present", "Present"), ImGuiTableColumnFlags.WidthFixed, 65);
                 ImGui.TableSetupColumn(MT("rank", "Rank"), ImGuiTableColumnFlags.WidthFixed, 55);
+                ImGui.TableSetupColumn(MT("code", "Code"), ImGuiTableColumnFlags.WidthFixed, 50);
                 ImGui.TableSetupColumn(MT("affix", "Affix"), ImGuiTableColumnFlags.WidthFixed, 75);
                 ImGui.TableSetupColumn(MT("modifier", "Modifier")); ImGui.TableSetupScrollFreeze(0, 1); ImGui.TableHeadersRow();
                 foreach (var modifier in modifiers)
@@ -231,10 +240,11 @@ namespace StashUtility
                         ImGui.EndDisabled();
                     }
                     ImGui.TableNextColumn(); ImGui.TextUnformatted(modifier.RankLabel);
+                    ImGui.TableNextColumn(); ImGui.TextUnformatted(modifier.Code);
                     ImGui.TableNextColumn(); ImGui.TextUnformatted(MT(modifier.Affix, modifier.Affix));
-                    ImGui.TableNextColumn(); MetaText(modifier.FrenchText);
+                    ImGui.TableNextColumn(); MetaText(MetaDisplayText(modifier));
                     if (ImGui.IsItemHovered()) MetaTooltip(modifier);
-                    if (settings.ShowMetaEnglish) MetaText(modifier.EnglishText);
+                    if (settings.ShowMetaEnglish) MetaText(MetaDisplayText(modifier) == modifier.FrenchText ? modifier.EnglishText : modifier.FrenchText);
                     ImGui.PopID();
                 }
                 ImGui.EndTable();
@@ -266,7 +276,7 @@ namespace StashUtility
         private void DrawMetaResult(TabletFilterResult result)
         {
             MetaText(MT("combination", "Detected combination") + " : " + string.Join(" + ", result.Observation?.Mods.Select(m => m.Modifier?.RankLabel ?? "?") ?? Array.Empty<string>()));
-            foreach (var mod in result.Observation?.Mods ?? new()) MetaText(mod.Modifier == null ? MT("unknown", "Unknown modifier") + " : " + mod.RawId : mod.Modifier.RankLabel + " · " + mod.Modifier.FrenchText);
+            foreach (var mod in result.Observation?.Mods ?? new()) MetaText(mod.Modifier == null ? MT("unknown", "Unknown modifier") + " : " + mod.RawId : mod.Modifier.RankLabel + " · " + MetaDisplayText(mod.Modifier));
             ImGui.TextColored(MetaResultColor(result), MT(result.State.ToString().ToLowerInvariant(), result.State.ToString().ToUpperInvariant()));
             if (result.Error.Length > 0) MetaText(MetaError(result.Error));
             if (result.Observation?.Uncertain == true) MetaText(MT("uncertain_help", "Unknown, duplicated, unreadable or excessive modifiers: no automatic keep/reject decision. Manual analysis remains available."));

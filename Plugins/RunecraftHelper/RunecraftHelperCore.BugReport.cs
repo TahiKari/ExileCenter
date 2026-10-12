@@ -100,13 +100,13 @@ namespace RunecraftHelper
             if (GameHelper.Ui.ImGuiTheme.BeginWindow("Monolith bug report###RunecraftBugReport", ref open))
             {
                 ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1f, 0.82f, 0.32f, 1f));
-                ImGui.Text("Send this to Yokken");
+                ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.send_this_to_yokken", "Send this to Yokken"));
                 ImGui.PopStyleColor();
                 ImGui.TextWrapped(this.bugReportCopied
                     ? "Already copied to your clipboard — just paste it. Nothing here identifies your account."
                     : "Clipboard copy failed — select the text below and copy it manually.");
 
-                if (ImGui.Button("Copy to clipboard"))
+                if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.copy_to_clipboard", "Copy to clipboard", "Copy to clipboard")))
                 {
                     try
                     {
@@ -120,9 +120,9 @@ namespace RunecraftHelper
                 }
 
                 ImGui.SameLine();
-                if (ImGui.Button("Refresh")) this.bugReportText = this.BuildBugReport(null);
+                if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.refresh", "Refresh", "Refresh"))) this.bugReportText = this.BuildBugReport(null);
                 ImGui.SameLine();
-                if (ImGui.Button("Close")) open = false;
+                if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.close", "Close", "Close"))) open = false;
                 ImGui.SameLine();
                 ImGui.TextDisabled($"{this.bugReportText.Length} chars");
 

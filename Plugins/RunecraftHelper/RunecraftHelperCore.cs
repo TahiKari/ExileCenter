@@ -366,9 +366,9 @@ namespace RunecraftHelper
                     
                     if (ImGui.CollapsingHeader(this.Loc.Title("common.debug", "Debug", "rh_exp_debug")))
                     {
-                        //ImGui.Checkbox("Show Expedition debug window", ref this.Settings.ShowExpeditionDebug);
+                        //ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_expedition_debug_window", "Show Expedition debug window", "Show Expedition debug window"), ref this.Settings.ShowExpeditionDebug);
                         ImGui.Checkbox(this.L("exp.show_grid_value", "Show grid value"), ref this.Settings.ShowExpeditionGridValue);
-                        //ImGui.Checkbox("Show path blockers (gates)", ref this.Settings.ShowExpeditionGates);
+                        //ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_path_blockers_gates", "Show path blockers (gates)", "Show path blockers (gates)"), ref this.Settings.ShowExpeditionGates);
                         //if (this.Settings.ShowExpeditionGates)
                         //{
                         //    ImGui.TextDisabled("Paints, on the large map (Tab), the footprint of each TriggerableBlockage\n" +
@@ -376,23 +376,23 @@ namespace RunecraftHelper
                         //        "green dot = open. Visualization + route now uses blast-opened paths (WIP).");
                         //    ImGui.Indent();
                         //    ImGui.SetNextItemWidth(160);
-                        //    ImGui.SliderInt("flood max radius", ref this.Settings.ExpGateFloodMaxRadius, 5, 120);
+                        //    ImGui.SliderInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.flood_max_radius", "flood max radius", "flood max radius"), ref this.Settings.ExpGateFloodMaxRadius, 5, 120);
                         //    ImGui.SetNextItemWidth(160);
-                        //    ImGui.SliderInt("flood max cells", ref this.Settings.ExpGateFloodMaxCells, 100, 8000);
+                        //    ImGui.SliderInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.flood_max_cells", "flood max cells", "flood max cells"), ref this.Settings.ExpGateFloodMaxCells, 100, 8000);
                         //    ImGui.SetNextItemWidth(160);
-                        //    ImGui.SliderInt("disk fallback radius", ref this.Settings.ExpGateDiskRadius, 2, 40);
-                        //    ImGui.TextDisabled("Tune until the red footprint covers the blocker (re-floods live).");
+                        //    ImGui.SliderInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.disk_fallback_radius", "disk fallback radius", "disk fallback radius"), ref this.Settings.ExpGateDiskRadius, 2, 40);
+                        //    ImGui.TextDisabled(GameHelper.Localization.OverlayLocalization.T("ui.labels.tune_until_the_red_footprint_covers_the_blocker_re_floods_live", "Tune until the red footprint covers the blocker (re-floods live)."));
                         //    ImGui.Unindent();
                         //}
                     
-                        //ImGui.Checkbox("Show weight heatmap (all)", ref this.Settings.ShowExpeditionHeatmap);
-                        //ImGui.Checkbox("Show marker heatmap (non-monolith)", ref this.Settings.ShowExpeditionHeatmapMarkers);
+                        //ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_weight_heatmap_all", "Show weight heatmap (all)", "Show weight heatmap (all)"), ref this.Settings.ShowExpeditionHeatmap);
+                        //ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_marker_heatmap_non_monolith", "Show marker heatmap (non-monolith)", "Show marker heatmap (non-monolith)"), ref this.Settings.ShowExpeditionHeatmapMarkers);
                         //if (this.Settings.ShowExpeditionHeatmap || this.Settings.ShowExpeditionHeatmapMarkers)
                         //{
                         //    ImGui.Indent();
                         //    ImGui.SetNextItemWidth(160);
-                        //    ImGui.SliderInt("heatmap radius", ref this.Settings.ExpHeatmapRadius, 20, 200);
-                        //    ImGui.TextDisabled("Dumps expedition_inventory.txt.");
+                        //    ImGui.SliderInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.heatmap_radius", "heatmap radius", "heatmap radius"), ref this.Settings.ExpHeatmapRadius, 20, 200);
+                        //    ImGui.TextDisabled(GameHelper.Localization.OverlayLocalization.T("ui.labels.dumps_expedition_inventory_txt", "Dumps expedition_inventory.txt."));
                         //    ImGui.Unindent();
                         //}
                     

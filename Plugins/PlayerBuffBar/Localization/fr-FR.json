@@ -62,5 +62,6 @@
   "status.dump_failed_state": "Échec du vidage : entrez d'abord une carte ou une ville.",
   "status.dump_saved": "Dump enregistré ({0} buffs) : Plugins/PlayerBuffBar/player_buff_dump.txt",
   "tab.bar": "Barre {0}",
-  "tab.off_suffix": "(désactivé)"
+  "tab.off_suffix": "(désactivé)",
+  "settings.show_totems": "Afficher les totems"
 }

@@ -103,5 +103,12 @@
   "atlas.show_connections": "Show node connections",
   "atlas.show_connections_hint": "Draw the atlas connection graph — a faint line along every edge between adjacent map nodes, beneath the labels and routes.",
   "atlas.connection_color": "Connection Color",
-  "atlas.connection_thickness": "Connection Thickness"
+  "atlas.connection_thickness": "Connection Thickness",
+  "atlas.ritual_planner_font": "Rewards window font size",
+  "atlas.ritual_planner_font_hint": "Text scale for the \"Head of the king Rewards\" window (1.00x = default).",
+  "atlas.offscreen_pointer": "Off-screen content pointer",
+  "atlas.offscreen_pointer_hint": "While a map that an enabled entry below routes to is off-screen, pin a pointer to the screen edge in its direction, labelled \"[hops] target\". Scroll that way and once the map is on screen the pointer settles under its name without the hop count — skipped for entries that route to a named map, where the map's own name is already the label. Only the nearest map per target and screen edge gets a pointer.\n\nA pointer needs a real route: a map with no path from your accessible maps, or one farther than the entry's hop limit, gets none. Needs \"Route lines through nodes\".",
+  "atlas.offscreen_range": "Off-screen range (screens)",
+  "atlas.offscreen_range_hint": "How far outside the view a pointer may reach, in screens (0 = no limit). The hop count can't do this job: hops are counted from your accessible maps, which are scattered over the whole atlas, so a map on the far side of the world reads as 0-3 hops just like the one next door — its pointer would send you scrolling forever.",
+  "atlas.expmod_entry_hint": "Routes to the nearest map that ROLLED this Expedition modifier. A map's modifiers are only known once its chunk is revealed — maps still under fog carry no modifier data at all."
 }

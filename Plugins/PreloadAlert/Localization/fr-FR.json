@@ -22,7 +22,7 @@
   "preloads.header.path.tooltip": "Chemin du préchargement que vous souhaitez afficher dans la fenêtre de préchargement. Appuyez sur Entrée pour enregistrer les modifications.",
   "preloads.header.priority": "Priorité",
   "preloads.header.priority.tooltip": "Définit la priorité du préchargement. Les nombres inférieurs apparaissent en haut de la fenêtre de préchargement.",
-  "preloads.none_found": "Aucune précharge importante trouvée. Avez-vous oublié de copier le fichier preload.txt dans le dossier du plugin d'alerte de préchargement ?",
+  "preloads.none_found": "Aucune alerte de préchargement trouvée. Vérifie que preload.txt est présent dans le dossier du plugin.",
   "section.all_important_preloads": "Tous les préchargements importants",
   "section.settings": "Paramètres",
   "settings.description": "Si vous trouvez quelque chose de nouveau et que vous souhaitez l'ajouter au préchargement, vous pouvez utiliser la fonctionnalité Core -> Data Visualization -> CurrentAreaLoadedFiles.",

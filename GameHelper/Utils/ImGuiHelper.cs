@@ -17,6 +17,15 @@ namespace GameHelper.Utils
     /// </summary>
     public static class ImGuiHelper
     {
+        /// <summary>Wraps display text without interpreting percent signs as format strings.</summary>
+        /// <param name="text">Text to display.</param>
+        public static void WrappedText(string text)
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextUnformatted(text);
+            ImGui.PopTextWrapPos();
+        }
+
         /// <summary>
         ///     Screen positions already used by <see cref="DrawText"/> in the current frame,
         ///     so overlapping entity labels can be shifted down instead of stacking on top

@@ -864,7 +864,6 @@ namespace StashUtility
             if (ImGui.Checkbox(PluginText.T("stashutility.tablet.auto_hide", "Hide tablet indications when hovering an item"), ref Settings.HideTabletHighlightsOnItemHover)) SaveSettings();
             ImGuiHelper.ToolTip(PluginText.T("stashutility.tablet.auto_hide_help", "Temporarily hides tablet colors and ranks when hovering an item in the stash, inventory or merchant, or when a game tooltip is detected. They return when the tooltip and hover end."));
             DrawTabletVisibilityButton(false);
-            ImGui.TextWrapped(PluginText.T("stashutility.filters.rank_help", "Choose S, A, B, C or D for each wanted modifier. Four known mod ranks determine S1-S35, A1-A20, B1-B10, C1-C4 or D1. Number 1 is best. Unknown ranks stay unclassified. Minimum-roll filters are preserved; uncheck to ignore."));
             DrawTabletTypeSelector();
             string type = StashUtilitySettings.TabletTypes[tabletFilterType];
             if (!Settings.TabletProfiles.TryGetValue(type, out var profile) || profile == null)
@@ -872,6 +871,8 @@ namespace StashUtility
 
             DrawTabletMetaFilters(type, profile);
             if (profile.UseMetaFilters) return;
+            if (!ImGui.CollapsingHeader(PluginText.T("stashutility.meta.legacy_settings", "Legacy combination settings (S to D)"))) return;
+            ImGui.TextWrapped(PluginText.T("stashutility.filters.rank_help", "Choose S, A, B, C or D for each wanted modifier. Four known mod ranks determine S1-S35, A1-A20, B1-B10, C1-C4 or D1. Number 1 is best. Unknown ranks stay unclassified. Minimum-roll filters are preserved; uncheck to ignore."));
             if (ImGui.CollapsingHeader(PluginText.T("stashutility.filters.farm_preset", "Farming ranks - PoE 2 0.5.5")))
             {
                 ImGui.TextWrapped(PluginText.T("stashutility.filters.farm_preset_help", "Loot/currency farming synthesis, editable: S = priority, A = excellent, B = useful, C = secondary, D = low priority. All modifiers are selected, including D. Your minimum rolls are retained. Less documented grades are estimates; the best choice depends on your Atlas and farming strategy."));

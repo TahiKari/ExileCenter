@@ -414,7 +414,7 @@ namespace PickupHelper
                 ImGui.Separator();
                 if (!haveItem)
                 {
-                    ImGui.Text("No ground item under cursor.");
+                    ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.no_ground_item_under_cursor", "No ground item under cursor."));
                 }
                 else
                 {

@@ -1,0 +1,12 @@
+{
+  "plugin.description": "Affiche un cercle autour des esprits rituels actifs et change sa couleur lorsque le personnage entre dans leur portée.",
+  "settings.enable_overlay": "Afficher la portée des esprits rituels",
+  "settings.hide_unfocused_or_paused": "Masquer lorsque le jeu est en arrière-plan ou en pause",
+  "settings.inside_color": "Couleur à l’intérieur de la portée",
+  "settings.offset_x": "Décalage horizontal du centre",
+  "settings.offset_y": "Décalage vertical du centre",
+  "settings.offset_z": "Décalage en hauteur",
+  "settings.outside_color": "Couleur hors de la portée",
+  "settings.radius": "Rayon du cercle (mètres)",
+  "settings.thickness": "Épaisseur du cercle"
+}

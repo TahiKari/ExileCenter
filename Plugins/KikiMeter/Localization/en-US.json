@@ -123,5 +123,6 @@
   "meter.map_details": "Details / compare",
   "meter.map_all_short": "Whole map",
   "meter.map_single_short": "Single",
-  "meter.map_multi_short": "Multi"
+  "meter.map_multi_short": "Multi",
+  "meter.new_test": "New test"
 }

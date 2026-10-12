@@ -1587,7 +1587,7 @@ namespace RunecraftHelper
             if (this.expHasDetonator)
                 ImGui.Text($"Detonator: ({this.expDetonatorPos.X:F0}, {this.expDetonatorPos.Y:F0})");
             else
-                ImGui.TextDisabled("Detonator: not found");
+                ImGui.TextDisabled(GameHelper.Localization.OverlayLocalization.T("ui.labels.detonator_not_found", "Detonator: not found"));
 
             if (this.expCtrlResolved)
             {
@@ -1615,18 +1615,18 @@ namespace RunecraftHelper
 
             ImGui.Separator();
             ImGui.Text($"Targets — chests {chests} · markers {markers} · remnants {remnants} · monoliths {monos}");
-            ImGui.TextDisabled("charges: S/P/C = straight / A* path / A* raw-cost, from the PREVIOUS chain node");
+            ImGui.TextDisabled(GameHelper.Localization.OverlayLocalization.T("ui.labels.charges_s_p_c_straight_a_path_a_raw_cost_from_the_previous_chain_node", "charges: S/P/C = straight / A* path / A* raw-cost, from the PREVIOUS chain node"));
             ImGui.Spacing();
 
             if (ImGui.BeginTable("expitems", 6,
                     ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders | ImGuiTableFlags.ScrollY))
             {
-                ImGui.TableSetupColumn("kind", ImGuiTableColumnFlags.WidthFixed, 64f);
-                ImGui.TableSetupColumn("grid", ImGuiTableColumnFlags.WidthFixed, 88f);
+                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.kind", "kind", "kind"), ImGuiTableColumnFlags.WidthFixed, 64f);
+                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.grid", "grid", "grid"), ImGuiTableColumnFlags.WidthFixed, 88f);
                 ImGui.TableSetupColumn("S", ImGuiTableColumnFlags.WidthFixed, 42f);
                 ImGui.TableSetupColumn("P", ImGuiTableColumnFlags.WidthFixed, 42f);
                 ImGui.TableSetupColumn("C", ImGuiTableColumnFlags.WidthFixed, 42f);
-                ImGui.TableSetupColumn("info", ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.info", "info", "info"), ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupScrollFreeze(0, 1);
                 ImGui.TableHeadersRow();
 
@@ -3678,8 +3678,8 @@ namespace RunecraftHelper
                          ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.ScrollY,
                          new Vector2(0f, Math.Min(rewardRows.Count + 1, 9) * ImGui.GetFrameHeightWithSpacing())))
             {
-                ImGui.TableSetupColumn("Reward", ImGuiTableColumnFlags.WidthStretch);
-                ImGui.TableSetupColumn("Weight", ImGuiTableColumnFlags.WidthFixed, 120f);
+                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.reward", "Reward", "Reward"), ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.weight", "Weight", "Weight"), ImGuiTableColumnFlags.WidthFixed, 120f);
                 ImGui.TableSetupColumn("##rm", ImGuiTableColumnFlags.WidthFixed, 22f);
                 ImGui.TableSetupScrollFreeze(0, 1);
                 ImGui.TableHeadersRow();
@@ -3720,7 +3720,7 @@ namespace RunecraftHelper
                     if (profile.Weights.ContainsKey(icon))
                     {
                         if (ImGui.SmallButton($"×##rm_{icon}")) removeKey = icon;
-                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Remove from table");
+                        if (ImGui.IsItemHovered()) ImGui.SetTooltip(GameHelper.Localization.OverlayLocalization.T("ui.labels.remove_from_table", "Remove from table"));
                     }
                 }
 
@@ -3728,7 +3728,7 @@ namespace RunecraftHelper
                 if (removeKey != null) profile.Weights.Remove(removeKey);
             }
 
-            if (ImGui.BeginCombo("Add reward type", "+ add…", ImGuiComboFlags.HeightLarge))
+            if (ImGui.BeginCombo(GameHelper.Localization.OverlayLocalization.Title("ui.labels.add_reward_type", "Add reward type", "Add reward type"), "+ add…", ImGuiComboFlags.HeightLarge))
             {
                 foreach (var kv in ExpRewardLabels)
                 {
@@ -3931,9 +3931,9 @@ namespace RunecraftHelper
                 if (ImGui.IsWindowAppearing()) ImGui.SetKeyboardFocusHere();
                 ImGui.SetNextItemWidth(220f);
                 bool enter = ImGui.InputText($"##{popupId}_in", ref buf, 48, ImGuiInputTextFlags.EnterReturnsTrue);
-                bool save = ImGui.Button($"Save##{popupId}") || enter;
+                bool save = ImGui.Button(GameHelper.Localization.OverlayLocalization.T("ui.labels.save", "Save") + $"###Save{popupId}") || enter;
                 ImGui.SameLine();
-                bool cancel = ImGui.Button($"Cancel##{popupId}");
+                bool cancel = ImGui.Button(GameHelper.Localization.OverlayLocalization.T("ui.labels.cancel", "Cancel") + $"###Cancel{popupId}");
                 if (save && !string.IsNullOrWhiteSpace(buf)) { result = buf.Trim(); confirmed = true; ImGui.CloseCurrentPopup(); }
                 else if (cancel) ImGui.CloseCurrentPopup();
                 ImGui.EndPopup();

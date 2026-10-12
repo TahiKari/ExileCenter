@@ -20,7 +20,7 @@ namespace GameHelper.Ui
         private static Vector2 backgroundSize;
 
         internal static void DrawSettingsBackground(bool independent)
-            => DrawWindowBackground(ImGuiWindowFlags.MenuBar | (independent ? ImGuiWindowFlags.NoTitleBar : ImGuiWindowFlags.None), 0.60f);
+            => DrawWindowBackground(ImGuiWindowFlags.MenuBar | (independent ? ImGuiWindowFlags.NoTitleBar : ImGuiWindowFlags.None), 0.80f);
 
         /// <summary>Opens a themed panel without decorating transparent gameplay markers.</summary>
         public static bool BeginWindow(string name, ImGuiWindowFlags flags = ImGuiWindowFlags.None)
@@ -82,7 +82,7 @@ namespace GameHelper.Ui
 
         public static readonly Vector4 Accent = new(0.78f, 0.61f, 0.37f, 1f);
         public static readonly Vector4 AccentMuted = new(0.44f, 0.33f, 0.21f, 1f);
-        internal static readonly Vector4 TextMuted = new(0.675f, 0.646f, 0.4875f, 1f);
+        internal static readonly Vector4 TextMuted = new(0.76f, 0.72f, 0.62f, 1f);
         internal static readonly Vector4 Success = new(0.35f, 0.78f, 0.45f, 1f);
         internal static readonly Vector4 Danger = new(0.85f, 0.35f, 0.35f, 1f);
         internal static readonly Vector4 SectionBg = new(0.171f, 0.1425f, 0.105f, 1f);
@@ -91,8 +91,8 @@ namespace GameHelper.Ui
         internal static void PushSettingsStyle()
         {
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(18f, 16f));
-            ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(10f, 6f));
-            ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(10f, 9f));
+            ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(8f, 4f));
+            ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(10f, 7f));
             ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 8f);
             ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 8f);
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5f);
@@ -137,7 +137,7 @@ namespace GameHelper.Ui
             style.FramePadding = new Vector2(8f, 5f);
             style.ItemSpacing = new Vector2(10f, 7f);
             style.ItemInnerSpacing = new Vector2(8f, 5f);
-            style.ScrollbarSize = 14f;
+            style.ScrollbarSize = 17f;
             style.IndentSpacing = 18f;
 
             var colors = style.Colors;

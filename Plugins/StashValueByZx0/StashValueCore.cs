@@ -105,27 +105,27 @@ namespace StashValue
             this.DrawSettingsTabs("StashValueByZx0Settings",
                 ("general", "Settings", () =>
                 {
-                    changed |= ImGui.Checkbox("Show stash item prices", ref this.Settings.ShowOverlay);
-                    changed |= ImGui.Checkbox("Show inventory item prices", ref this.Settings.ShowInventoryOverlay);
-                    changed |= ImGui.Checkbox("Hide price when hovering item", ref this.Settings.HidePriceOnHover);
-                    changed |= ImGui.SliderFloat($"Min Price Threshold ({currencyLabel})##threshold", ref this.Settings.MinValueEx, 0.0f, maxThreshold, $"%.2f {currencyLabel}");
-                    ImGui.Text("Display Currency");
-                    if (ImGui.RadioButton("Chaos", this.Settings.DisplayCurrency == 2)) { this.Settings.DisplayCurrency = 2; changed = true; }
+                    changed |= ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_stash_item_prices", "Show stash item prices", "Show stash item prices"), ref this.Settings.ShowOverlay);
+                    changed |= ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_inventory_item_prices", "Show inventory item prices", "Show inventory item prices"), ref this.Settings.ShowInventoryOverlay);
+                    changed |= ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.hide_price_when_hovering_item", "Hide price when hovering item", "Hide price when hovering item"), ref this.Settings.HidePriceOnHover);
+                    changed |= ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.F("ui.stashvalue.minimum", "Minimum value ({0})", currencyLabel) + "###threshold", ref this.Settings.MinValueEx, 0.0f, maxThreshold, $"%.2f {currencyLabel}");
+                    ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.display_currency", "Display Currency"));
+                    if (ImGui.RadioButton(GameHelper.Localization.OverlayLocalization.Title("ui.labels.chaos", "Chaos", "Chaos"), this.Settings.DisplayCurrency == 2)) { this.Settings.DisplayCurrency = 2; changed = true; }
                     ImGui.SameLine();
-                    if (ImGui.RadioButton("Exalted", this.Settings.DisplayCurrency == 1)) { this.Settings.DisplayCurrency = 1; changed = true; }
+                    if (ImGui.RadioButton(GameHelper.Localization.OverlayLocalization.Title("ui.labels.exalted", "Exalted", "Exalted"), this.Settings.DisplayCurrency == 1)) { this.Settings.DisplayCurrency = 1; changed = true; }
                     ImGui.SameLine();
-                    if (ImGui.RadioButton("Divine", this.Settings.DisplayCurrency == 0)) { this.Settings.DisplayCurrency = 0; changed = true; }
+                    if (ImGui.RadioButton(GameHelper.Localization.OverlayLocalization.Title("ui.labels.divine", "Divine", "Divine"), this.Settings.DisplayCurrency == 0)) { this.Settings.DisplayCurrency = 0; changed = true; }
                 }),
                 ("appearance", "Appearance", () =>
                 {
-                    changed |= ImGui.SliderFloat("Font Scale", ref this.Settings.PriceFontScale, 0.5f, 2f, "%.2f");
-                    changed |= ImGui.SliderFloat("Horizontal Offset", ref this.Settings.PriceOffsetX, -50f, 50f);
-                    changed |= ImGui.SliderFloat("Vertical Offset", ref this.Settings.PriceOffsetY, -50f, 50f);
-                    changed |= ImGui.ColorEdit4("Text Color", ref this.Settings.TextColor);
+                    changed |= ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.font_scale_14a2ee", "Font Scale", "Font Scale"), ref this.Settings.PriceFontScale, 0.5f, 2f, "%.2f");
+                    changed |= ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.horizontal_offset", "Horizontal Offset", "Horizontal Offset"), ref this.Settings.PriceOffsetX, -50f, 50f);
+                    changed |= ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.vertical_offset", "Vertical Offset", "Vertical Offset"), ref this.Settings.PriceOffsetY, -50f, 50f);
+                    changed |= ImGui.ColorEdit4(GameHelper.Localization.OverlayLocalization.Title("ui.labels.text_color", "Text Color", "Text Color"), ref this.Settings.TextColor);
                 }),
                 ("pricing", "Prices", () =>
                 {
-                    ImGui.Text("Price Source");
+                    ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.price_source", "Price Source"));
                     if (ImGui.RadioButton("poe2scout", this.Settings.PriceSource == PoeNinjaPriceFetcher.SourcePoe2Scout))
                     {
                         this.Settings.PriceSource = PoeNinjaPriceFetcher.SourcePoe2Scout;
@@ -138,10 +138,10 @@ namespace StashValue
                         changed = true;
                     }
                     
-                    changed |= ImGui.InputText("League", ref this.Settings.League, 64);
-                    changed |= ImGui.SliderInt("Refresh interval (min)", ref this.Settings.RefreshIntervalMin, 1, 120);
+                    changed |= ImGui.InputText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.league", "League", "League"), ref this.Settings.League, 64);
+                    changed |= ImGui.SliderInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.refresh_interval_min", "Refresh interval (min)", "Refresh interval (min)"), ref this.Settings.RefreshIntervalMin, 1, 120);
                     
-                    if (ImGui.Button("Refresh prices now"))
+                    if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.refresh_prices_now", "Refresh prices now", "Refresh prices now")))
                     {
                         PoeNinjaPriceFetcher.Configure(this.Settings.PriceSource, this.Settings.League ?? string.Empty, this.Settings.RefreshIntervalMin);
                         PoeNinjaPriceFetcher.ForceRefresh(this.DllDirectory, ignoreCooldown: true);
@@ -150,17 +150,17 @@ namespace StashValue
                     ImGui.SameLine();
                     if (PoeNinjaPriceFetcher.IsFetching)
                     {
-                        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.2f, 1f), "Loading...");
+                        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.2f, 1f), GameHelper.Localization.OverlayLocalization.T("ui.labels.loading", "Loading..."));
                     }
                     else if (PoeNinjaPriceFetcher.LastFetchUtc > DateTime.MinValue)
                     {
                         var mins = Math.Max(0, (int)(DateTime.UtcNow - PoeNinjaPriceFetcher.LastFetchUtc).TotalMinutes);
-                        ImGui.TextColored(new Vector4(0.5f, 0.8f, 0.5f, 1f), $"{PoeNinjaPriceFetcher.LoadedItemCount} items | {mins} min ago");
+                        ImGui.TextColored(new Vector4(0.5f, 0.8f, 0.5f, 1f), GameHelper.Localization.OverlayLocalization.F("ui.stashvalue.updated", "{0} items, updated {1} min ago", PoeNinjaPriceFetcher.LoadedItemCount, mins));
                     }
                 }),
                 ("diagnostics", "Diagnostics", () =>
                 {
-                    changed |= ImGui.Checkbox("Show Debug Info (Draw Boxes & Diagnostics)", ref this.Settings.ShowDebugInfo);
+                    changed |= ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_debug_info_draw_boxes_diagnostics", "Show Debug Info (Draw Boxes & Diagnostics)", "Show Debug Info (Draw Boxes & Diagnostics)"), ref this.Settings.ShowDebugInfo);
                 }));
             if (changed)
             {
@@ -179,7 +179,7 @@ namespace StashValue
             }
             else
             {
-                ImGui.Text("GameUi is NULL");
+                ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.gameui_is_null", "GameUi is NULL"));
             }
 
             var serverData = Core.States.InGameStateObject.CurrentAreaInstance.ServerDataObject;
@@ -203,7 +203,7 @@ namespace StashValue
             }
             else
             {
-                ImGui.Text("ServerData is NULL");
+                ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.serverdata_is_null", "ServerData is NULL"));
             }
             ImGui.End();
         }

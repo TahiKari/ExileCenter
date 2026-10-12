@@ -53,22 +53,22 @@ namespace SimpleBars
             this.DrawSettingsTabs("SimpleBarsSettings",
                 ("general", "Settings", () =>
                 {
-                    ImGui.Text("Turn off in game health bars for best result.");
-                    ImGui.Text("Disable the built-in HealthBars plugin when using SimpleBars.");
+                    ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.turn_off_in_game_health_bars_for_best_result", "Turn off in game health bars for best result."));
+                    ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.disable_the_built_in_healthbars_plugin_when_using_simplebars", "Disable the built-in HealthBars plugin when using SimpleBars."));
                         if (ImGui.BeginTable("common_config_table", 1))
                         {
                             ImGui.TableNextColumn();
-                            ImGui.Checkbox("Draw healthbars in town", ref this.Settings.DrawInTown);
+                            ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.draw_healthbars_in_town", "Draw healthbars in town", "Draw healthbars in town"), ref this.Settings.DrawInTown);
                             ImGui.TableNextColumn();
-                            ImGui.Checkbox("Draw healthbars in hideout", ref this.Settings.DrawInHideout);
+                            ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.draw_healthbars_in_hideout", "Draw healthbars in hideout", "Draw healthbars in hideout"), ref this.Settings.DrawInHideout);
                             ImGui.TableNextColumn();
-                            ImGui.Checkbox("Draw healthbars when game is in background", ref this.Settings.DrawWhenGameInBackground);
+                            ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.draw_healthbars_when_game_is_in_background", "Draw healthbars when game is in background", "Draw healthbars when game is in background"), ref this.Settings.DrawWhenGameInBackground);
                             ImGui.TableNextColumn();
-                            ImGui.Checkbox("Interpolate position", ref this.Settings.InterpolatePosition);
-                            ImGuiHelper.ToolTip("Enable this if your healthbar is stuttering.");
+                            ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.interpolate_position", "Interpolate position", "Interpolate position"), ref this.Settings.InterpolatePosition);
+                            ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.enable_this_if_your_healthbar_is_stuttering", "Enable this if your healthbar is stuttering."));
                             if (this.Settings.InterpolatePosition)
                             {
-                                if (ImGui.DragInt("Interpolation Rate", ref this.Settings.InterpolationRate, 1f, 1, 1000))
+                                if (ImGui.DragInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.interpolation_rate", "Interpolation Rate", "Interpolation Rate"), ref this.Settings.InterpolationRate, 1f, 1, 1000))
                                 {
                                     if (this.Settings.InterpolationRate <= 0)
                                     {
@@ -82,10 +82,10 @@ namespace SimpleBars
                             }
                     
                             ImGui.TableNextColumn();
-                            ImGui.Text("white       magic      rare         unique");
-                            ImGui.DragInt4("Cull Strike (%health)", ref this.Settings.CullingStrikeRangePerRarity[0], 1, 0, 100);
+                            ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.white_magic_rare_unique", "white       magic      rare         unique"));
+                            ImGui.DragInt4(GameHelper.Localization.OverlayLocalization.Title("ui.labels.cull_strike_health", "Cull Strike (%health)", "Cull Strike (%health)"), ref this.Settings.CullingStrikeRangePerRarity[0], 1, 0, 100);
                             ImGui.TableNextColumn();
-                            ImGui.Checkbox("Use gradient textures globally", ref this.Settings.UseGradientBarsGlobal);
+                            ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.use_gradient_textures_globally", "Use gradient textures globally", "Use gradient textures globally"), ref this.Settings.UseGradientBarsGlobal);
                             ImGui.TableNextColumn();
                             // ShowManaRatherThanESOnSelf removed in SimpleBars fork.
                             ImGui.EndTable();
@@ -97,7 +97,7 @@ namespace SimpleBars
                     {
                         foreach (var item in this.Settings.Monster)
                         {
-                            if (ImGui.BeginTabItem(item.Key))
+                            if (ImGui.BeginTabItem(GameHelper.Localization.OverlayLocalization.T("ui.entity." + item.Key.ToLowerInvariant(), item.Key) + "###" + item.Key))
                             {
                                 item.Value.Draw(false, this.textures, this.Settings.UseGradientBarsGlobal);
                                 ImGui.EndTabItem();
@@ -113,7 +113,7 @@ namespace SimpleBars
                     {
                         foreach (var item in this.Settings.Player)
                         {
-                            if (ImGui.BeginTabItem(item.Key))
+                            if (ImGui.BeginTabItem(GameHelper.Localization.OverlayLocalization.T("ui.entity." + item.Key.ToLowerInvariant(), item.Key) + "###" + item.Key))
                             {
                                 // Expose self-only controls and show live preview
                                 item.Value.Draw(item.Key == "self", this.textures, this.Settings.UseGradientBarsGlobal);
@@ -127,13 +127,13 @@ namespace SimpleBars
                 ("poi", "Points of interest", () =>
                 {
                     ImGui.SetNextItemWidth(ImGui.GetFontSize() * 10);
-                    if(ImGui.InputInt("Group Number##poimonsterconfig", ref this.poiMonsterConfigToAdd) && this.poiMonsterConfigToAdd < 0)
+                    if(ImGui.InputInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.group_number_poimonsterconfig", "Group Number", "Group Number##poimonsterconfig"), ref this.poiMonsterConfigToAdd) && this.poiMonsterConfigToAdd < 0)
                     {
                         this.poiMonsterConfigToAdd = 0;
                     }
                     
                     ImGui.SameLine();
-                    if (ImGui.Button("Add"))
+                    if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.add", "Add", "Add")))
                     {
                         this.Settings.POIMonster.TryAdd(this.poiMonsterConfigToAdd, new());
                     }
@@ -142,7 +142,7 @@ namespace SimpleBars
                     {
                         foreach (var conf in this.Settings.POIMonster)
                         {
-                            var text = conf.Key < 0 ? "Default" : $"Group {conf.Key}";
+                            var text = conf.Key < 0 ? GameHelper.Localization.OverlayLocalization.T("ui.default", "Default") : GameHelper.Localization.OverlayLocalization.F("ui.group", "Group {0}", conf.Key);
                             var shouldNotDelete = true;
                             if (ImGui.BeginTabItem(text, ref shouldNotDelete, ImGuiTabItemFlags.NoAssumedClosure))
                             {
@@ -163,8 +163,8 @@ namespace SimpleBars
                 }),
                 ("diagnostics", "Diagnostics", () =>
                 {
-                    ImGui.Text("Enable/Disable plugin to reload textures.");
-                    ImGui.Text($"Total Textures loaded: {this.textures.TotalTexturesLoaded}");
+                    ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.enable_disable_plugin_to_reload_textures", "Enable/Disable plugin to reload textures."));
+                    ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.F("ui.simplebars.textures", "Textures loaded: {0}", this.textures.TotalTexturesLoaded));
                 }));
             
         }
@@ -598,9 +598,9 @@ AfterBars:
             ImGui.SetNextWindowPos(new Vector2(Core.Overlay.Size.Width / 3f, Core.Overlay.Size.Height / 3f));
             if (ImGui.BeginPopup("POIConfigHealthbarDeleteConfirmation"))
             {
-                ImGui.Text($"Do you want to delete group {this.poiMonsterConfigToDelete} POI Monster healthbar config?");
+                GameHelper.Utils.ImGuiHelper.WrappedText(GameHelper.Localization.OverlayLocalization.F("ui.simplebars.delete", "Delete the health-bar settings for monster group {0}?", this.poiMonsterConfigToDelete));
                 ImGui.Separator();
-                if (ImGui.Button("Yes",
+                if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.yes", "Yes", "Yes"),
                     new Vector2(ImGui.GetContentRegionAvail().X / 2f, ImGui.GetTextLineHeight() * 2)))
                 {
                     _ = this.Settings.POIMonster.Remove(poiMonsterConfigToDelete);
@@ -608,7 +608,7 @@ AfterBars:
                 }
 
                 ImGui.SameLine();
-                if (ImGui.Button("No", new Vector2(ImGui.GetContentRegionAvail().X, ImGui.GetTextLineHeight() * 2)))
+                if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.no", "No", "No"), new Vector2(ImGui.GetContentRegionAvail().X, ImGui.GetTextLineHeight() * 2)))
                 {
                     ImGui.CloseCurrentPopup();
                 }

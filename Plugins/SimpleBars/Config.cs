@@ -279,39 +279,39 @@
         /// </summary>
         public void Draw(bool isSelf = false, TextureLoader? textures = null, bool useGradientGlobal = false)
         {
-            ImGui.Text("NOTE: For going above/below the limit, or for manual editing, press CTRL + Left Mouse Button click.");
+            ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.note_for_going_above_below_the_limit_or_for_manual_editing_press_ctrl_", "NOTE: For going above/below the limit, or for manual editing, press CTRL + Left Mouse Button click."));
             if (ImGui.BeginTable("config_table", 1))
             {
                 // Left column toggles (Self ordering)
                 ImGui.TableNextColumn();
-                ImGui.Checkbox("Enable bars", ref this.Enable);
+                ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.enable_bars", "Enable bars", "Enable bars"), ref this.Enable);
                 ImGui.TableNextColumn();
                 // Right column aligned control next to Enable: Shift
-                ImGuiHelper.Vector2SliderInt("Shift (x, y)", ImGui.GetColumnWidth(), ref this.Shift, -4000, 4000, -2500, 2500, ImGuiSliderFlags.Logarithmic);
+                ImGuiHelper.Vector2SliderInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.shift_x_y", "Shift (x, y)", "Shift (x, y)"), ImGui.GetColumnWidth(), ref this.Shift, -4000, 4000, -2500, 2500, ImGuiSliderFlags.Logarithmic);
 
                 // Use gradient textures (placed directly under Enable bars)
                 ImGui.TableNextColumn();
-                ImGui.Checkbox("Use gradient textures", ref this.UseGradientBars);
+                ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.use_gradient_textures", "Use gradient textures", "Use gradient textures"), ref this.UseGradientBars);
                 ImGui.TableNextColumn();
                 // No right-side control
 
                 // Use circle dot mode
                 ImGui.TableNextColumn();
-                ImGui.Checkbox("Use circle dot", ref this.UseCircleDot);
+                ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.use_circle_dot", "Use circle dot", "Use circle dot"), ref this.UseCircleDot);
                 ImGui.TableNextColumn();
-                ImGui.DragFloat("Circle scale", ref this.CircleScale, 0.01f, 0.5f, 3.0f, "%.2fx");
-                ImGui.TableNextColumn();
-                ImGui.Text("");
-                ImGui.TableNextColumn();
-                ImGui.DragFloat("Background radius", ref this.CircleBackgroundRadius, 0.5f, 0f, 128f, "%.1f px");
+                ImGui.DragFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.circle_scale", "Circle scale", "Circle scale"), ref this.CircleScale, 0.01f, 0.5f, 3.0f, "%.2fx");
                 ImGui.TableNextColumn();
                 ImGui.Text("");
                 ImGui.TableNextColumn();
-                ImGui.ColorEdit4("Background dot", ref this.CircleBackgroundColor);
+                ImGui.DragFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.background_radius", "Background radius", "Background radius"), ref this.CircleBackgroundRadius, 0.5f, 0f, 128f, "%.1f px");
                 ImGui.TableNextColumn();
                 ImGui.Text("");
                 ImGui.TableNextColumn();
-                ImGui.DragFloat("Arc offset (px)", ref this.CircleArcOffset, 0.5f, 0f, 128f, "%.1f px");
+                ImGui.ColorEdit4(GameHelper.Localization.OverlayLocalization.Title("ui.labels.background_dot", "Background dot", "Background dot"), ref this.CircleBackgroundColor);
+                ImGui.TableNextColumn();
+                ImGui.Text("");
+                ImGui.TableNextColumn();
+                ImGui.DragFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.arc_offset_px", "Arc offset (px)", "Arc offset (px)"), ref this.CircleArcOffset, 0.5f, 0f, 128f, "%.1f px");
 
                 // Spacer row before sections below
                 ImGui.TableNextColumn(); ImGui.Text("");
@@ -319,75 +319,72 @@
 
                 // Show ES Bar
                 ImGui.TableNextColumn();
-                ImGui.Checkbox("Show Energy Shield", ref this.ShowESBar);
+                ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_energy_shield", "Show Energy Shield", "Show Energy Shield"), ref this.ShowESBar);
                 ImGui.TableNextColumn();
-                ImGui.ColorEdit4("ES Bar", ref this.ESColor);
+                ImGui.ColorEdit4(GameHelper.Localization.OverlayLocalization.Title("ui.labels.es_bar", "ES Bar", "ES Bar"), ref this.ESColor);
                 if (isSelf && this.UseIndividualBarScale)
                 {
-                    ImGuiHelper.Vector2SliderInt("ES Scale (x, y)", ImGui.GetColumnWidth(), ref this.ESScale, MinBarScaleX, MaxBarScaleX, MinBarScaleY, MaxBarScaleY, ImGuiSliderFlags.Logarithmic);
+                    ImGuiHelper.Vector2SliderInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.es_scale_x_y", "ES Scale (x, y)", "ES Scale (x, y)"), ImGui.GetColumnWidth(), ref this.ESScale, MinBarScaleX, MaxBarScaleX, MinBarScaleY, MaxBarScaleY, ImGuiSliderFlags.Logarithmic);
                 }
 
                 // Show Health Bar
                 ImGui.TableNextColumn();
-                ImGui.Checkbox("Show Health", ref this.ShowHealthBar);
+                ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_health", "Show Health", "Show Health"), ref this.ShowHealthBar);
                 ImGui.TableNextColumn();
-                ImGui.ColorEdit4("Healthbar", ref this.HealthbarColor);
+                ImGui.ColorEdit4(GameHelper.Localization.OverlayLocalization.Title("ui.labels.healthbar", "Healthbar", "Healthbar"), ref this.HealthbarColor);
                 // Background color directly under Healthbar color
                 ImGui.TableNextColumn(); ImGui.Text("");
-                ImGui.TableNextColumn(); ImGui.ColorEdit4("Background", ref this.BackgroundColor);
+                ImGui.TableNextColumn(); ImGui.ColorEdit4(GameHelper.Localization.OverlayLocalization.Title("ui.labels.background", "Background", "Background"), ref this.BackgroundColor);
                 if (isSelf && this.UseIndividualBarScale)
                 {
-                    if (ImGuiHelper.Vector2SliderInt("Health Scale (x, y)", ImGui.GetColumnWidth(), ref this.HealthScale, MinBarScaleX, MaxBarScaleX, MinBarScaleY, MaxBarScaleY, ImGuiSliderFlags.Logarithmic))
+                    if (ImGuiHelper.Vector2SliderInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.health_scale_x_y", "Health Scale (x, y)", "Health Scale (x, y)"), ImGui.GetColumnWidth(), ref this.HealthScale, MinBarScaleX, MaxBarScaleX, MinBarScaleY, MaxBarScaleY, ImGuiSliderFlags.Logarithmic))
                     {
                         this.UpdateGrauationsLocationData();
                     }
                 }
                 else
                 {
-                    if (ImGuiHelper.Vector2SliderInt("Scale (x, y)", ImGui.GetColumnWidth(), ref this.Scale, MinBarScaleX, MaxBarScaleX, MinBarScaleY, MaxBarScaleY, ImGuiSliderFlags.Logarithmic))
+                    if (ImGuiHelper.Vector2SliderInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.scale_x_y", "Scale (x, y)", "Scale (x, y)"), ImGui.GetColumnWidth(), ref this.Scale, MinBarScaleX, MaxBarScaleX, MinBarScaleY, MaxBarScaleY, ImGuiSliderFlags.Logarithmic))
                     {
                         this.UpdateGrauationsLocationData();
                     }
                 }
 
-                ImGuiHelper.ToolTip("By default texture is of height 16, " +
-                    "If increasing the Y axis ruins the texture, " +
-                    "feel free to modify the texture height via your fav texture editor. " +
-                    "This doesn't apply to x axis.");
+                ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.by_default_texture_is_of_height_16_if_increasing_the_y_axis_ruins_the_", "By default texture is of height 16, If increasing the Y axis ruins the texture, feel free to modify the texture height via your fav texture editor. This doesn't apply to x axis."));
                 // Show Mana Bar
                 ImGui.TableNextColumn();
-                ImGui.Checkbox("Show Mana", ref this.ShowManaBar);
+                ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_mana", "Show Mana", "Show Mana"), ref this.ShowManaBar);
                 ImGui.TableNextColumn();
-                ImGui.ColorEdit4("Mana Bar", ref this.ManaColor);
+                ImGui.ColorEdit4(GameHelper.Localization.OverlayLocalization.Title("ui.labels.mana_bar", "Mana Bar", "Mana Bar"), ref this.ManaColor);
                 if (isSelf && this.UseIndividualBarScale)
                 {
-                    ImGuiHelper.Vector2SliderInt("Mana Scale (x, y)", ImGui.GetColumnWidth(), ref this.ManaScale, MinBarScaleX, MaxBarScaleX, MinBarScaleY, MaxBarScaleY, ImGuiSliderFlags.Logarithmic);
+                    ImGuiHelper.Vector2SliderInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.mana_scale_x_y", "Mana Scale (x, y)", "Mana Scale (x, y)"), ImGui.GetColumnWidth(), ref this.ManaScale, MinBarScaleX, MaxBarScaleX, MinBarScaleY, MaxBarScaleY, ImGuiSliderFlags.Logarithmic);
                 }
 
                 // Visualize culling strike
                 ImGui.TableNextColumn();
-                ImGui.Checkbox("Visualize Culling Strike Range", ref this.ShowCullStrike);
+                ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.visualize_culling_strike_range", "Visualize Culling Strike Range", "Visualize Culling Strike Range"), ref this.ShowCullStrike);
                 ImGui.TableNextColumn();
                 // No right-side control
 
                 // Show text
                 ImGui.TableNextColumn();
-                ImGui.Checkbox("Show health+ES (absolute) as text", ref this.ShowText);
+                ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_health_es_absolute_as_text", "Show health+ES (absolute) as text", "Show health+ES (absolute) as text"), ref this.ShowText);
                 ImGui.TableNextColumn();
-                ImGui.ColorEdit4("Text Color", ref this.TextColor);
+                ImGui.ColorEdit4(GameHelper.Localization.OverlayLocalization.Title("ui.labels.text_color", "Text Color", "Text Color"), ref this.TextColor);
                 ImGui.TableNextColumn(); ImGui.Text("");
-                ImGui.TableNextColumn(); ImGui.Checkbox("Show text background", ref this.ShowTextBackground);
+                ImGui.TableNextColumn(); ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_text_background", "Show text background", "Show text background"), ref this.ShowTextBackground);
                 ImGui.TableNextColumn(); ImGui.Text("");
-                ImGui.TableNextColumn(); ImGui.ColorEdit4("Text background", ref this.TextBackgroundColor);
+                ImGui.TableNextColumn(); ImGui.ColorEdit4(GameHelper.Localization.OverlayLocalization.Title("ui.labels.text_background", "Text background", "Text background"), ref this.TextBackgroundColor);
 
                 // HP Gradation Marks
                 ImGui.TableNextColumn();
-                ImGui.Checkbox("HP Gradation Marks", ref this.ShowHPGraduations);
-                ImGuiHelper.ToolTip("Graduation thickness depends on Font size. Also, Gradation marks are expensive to draw.");
+                ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.hp_gradation_marks", "HP Gradation Marks", "HP Gradation Marks"), ref this.ShowHPGraduations);
+                ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.graduation_thickness_depends_on_font_size_also_gradation_marks_are_exp", "Graduation thickness depends on Font size. Also, Gradation marks are expensive to draw."));
                 ImGui.TableNextColumn();
                 if (this.ShowHPGraduations)
                 {
-                    if (ImGui.DragInt("HP Marks##hpgrad", ref this.Graduations, 0.05f, 0, 9))
+                    if (ImGui.DragInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.hp_marks_hpgrad", "HP Marks", "HP Marks##hpgrad"), ref this.Graduations, 0.05f, 0, 9))
                     {
                         this.UpdateGrauationsLocationData();
                     }
@@ -401,11 +398,11 @@
                 if (isSelf)
                 {
                     ImGui.TableNextColumn();
-                    ImGui.Checkbox("ES Gradation Marks", ref this.ShowESGraduations);
+                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.es_gradation_marks", "ES Gradation Marks", "ES Gradation Marks"), ref this.ShowESGraduations);
                     ImGui.TableNextColumn();
                     if (this.ShowESGraduations)
                     {
-                        ImGui.DragInt("ES Marks##esgrad", ref this.ESGraduations, 0.05f, 0, 9);
+                        ImGui.DragInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.es_marks_esgrad", "ES Marks", "ES Marks##esgrad"), ref this.ESGraduations, 0.05f, 0, 9);
                     }
                     else
                     {
@@ -415,13 +412,13 @@
 
                 // Left column: Bar Gap
                 ImGui.TableNextColumn();
-                ImGui.DragFloat("Bar Gap (px)", ref this.BarGap, 0.5f, 0f, 12f);
+                ImGui.DragFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.bar_gap_px", "Bar Gap (px)", "Bar Gap (px)"), ref this.BarGap, 0.5f, 0f, 12f);
                 ImGui.TableNextColumn();
                 ImGui.Text("");
 
                 // Left column: Border thickness
                 ImGui.TableNextColumn();
-                ImGui.DragFloat("Border thickness", ref this.BorderThicknessScale, 0.05f, 0.25f, 4f);
+                ImGui.DragFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.border_thickness", "Border thickness", "Border thickness"), ref this.BorderThicknessScale, 0.05f, 0.25f, 4f);
                 ImGui.TableNextColumn();
                 ImGui.Text("");
 
@@ -429,7 +426,7 @@
                 if (isSelf)
                 {
                     ImGui.TableNextColumn();
-                    ImGui.Checkbox("Use individual bar scales (self)", ref this.UseIndividualBarScale);
+                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.use_individual_bar_scales_self", "Use individual bar scales (self)", "Use individual bar scales (self)"), ref this.UseIndividualBarScale);
                     ImGui.TableNextColumn();
                     ImGui.Text(this.UseIndividualBarScale ? "Using individual scales above" : "Uses main Scale/Health Scale");
                 }
@@ -438,7 +435,7 @@
 
             // --- Live Preview ---
             ImGui.Separator();
-            ImGui.Text("Preview");
+            ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.preview", "Preview"));
             float pad = 1f;
             float borderThickness = MathF.Max(1f, ImGui.GetFontSize() / 12f) * this.BorderThicknessScale;
             float gradThickness = ImGui.GetFontSize() / 9f;

@@ -197,7 +197,7 @@ namespace StashUtility
         public bool UseMetaFilters;
         public string ActiveMetaProfileId = "";
         public List<Models.TabletFilterProfile> MetaProfiles = new();
-        public bool ShowMetaEnglish = true;
+        public bool ShowMetaEnglish;
         public string MetaSearch = "";
         public List<string> ManualMetaModifiers = new();
 

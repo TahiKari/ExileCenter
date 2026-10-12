@@ -581,11 +581,11 @@ namespace RunecraftHelper
                     ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.ScrollY,
                     new Vector2(0f, Math.Min(rows.Count + 1, 12) * ImGui.GetFrameHeightWithSpacing())))
             {
-                ImGui.TableSetupColumn("Rune", ImGuiTableColumnFlags.WidthFixed, 92f);
-                ImGui.TableSetupColumn("Loot ×", ImGuiTableColumnFlags.WidthFixed, 76f);
-                ImGui.TableSetupColumn("Ex/wave", ImGuiTableColumnFlags.WidthFixed, 76f);
-                ImGui.TableSetupColumn("Avoid", ImGuiTableColumnFlags.WidthFixed, 44f);
-                ImGui.TableSetupColumn("Effect", ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.rune", "Rune", "Rune"), ImGuiTableColumnFlags.WidthFixed, 92f);
+                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.loot_e18b22", "Loot ×", "Loot ×"), ImGuiTableColumnFlags.WidthFixed, 76f);
+                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.ex_wave", "Ex/wave", "Ex/wave"), ImGuiTableColumnFlags.WidthFixed, 76f);
+                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.avoid", "Avoid", "Avoid"), ImGuiTableColumnFlags.WidthFixed, 44f);
+                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.effect", "Effect", "Effect"), ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupColumn("##rm", ImGuiTableColumnFlags.WidthFixed, 22f);
                 ImGui.TableSetupScrollFreeze(0, 1);
                 ImGui.TableHeadersRow();
@@ -628,7 +628,7 @@ namespace RunecraftHelper
                             d => string.Equals(d.Rune, e.Rune, StringComparison.Ordinal)) < 0)
                     {
                         if (ImGui.SmallButton("×")) removeKey = e.Rune;
-                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Remove from table");
+                        if (ImGui.IsItemHovered()) ImGui.SetTooltip(GameHelper.Localization.OverlayLocalization.T("ui.labels.remove_from_table", "Remove from table"));
                     }
 
                     ImGui.PopID();
@@ -640,7 +640,7 @@ namespace RunecraftHelper
             if (removeKey != null)
                 rows.RemoveAll(e => string.Equals(e.Rune, removeKey, StringComparison.Ordinal));
 
-            if (ImGui.BeginCombo("Add rune##rc", "+ add…", ImGuiComboFlags.HeightLarge))
+            if (ImGui.BeginCombo(GameHelper.Localization.OverlayLocalization.Title("ui.labels.add_rune_rc", "Add rune", "Add rune##rc"), "+ add…", ImGuiComboFlags.HeightLarge))
             {
                 foreach (var name in AllRuneNames)
                 {

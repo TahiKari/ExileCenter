@@ -107,5 +107,17 @@
     "lt.currency_short.greater_exalted":  "Ex M",
     "lt.currency_short.greater_chaos":  "Ch M",
     "lt.game_mode":  "En jeu",
-    "lt.desktop_mode":  "Autre écran"
+    "lt.desktop_mode":  "Autre écran",
+  "lt.league_hint": "Les prix correspondent exactement à la ligue poe.ninja sélectionnée.",
+  "lt.custom_league": "Saisir le nom de la ligue manuellement",
+  "lt.custom_league_hint": "Utilise le nom de la ligue avec ses espaces, par exemple « Runes of Aldur ». Le nom utilisé dans l’adresse web, comme « runesofaldur », peut renvoyer une liste vide.",
+  "lt.league_softcore": "Standard",
+  "lt.league_hardcore": "Extrême",
+  "lt.refresh_leagues": "Actualiser la liste des ligues",
+  "lt.leagues_loading": "Chargement des ligues...",
+  "lt.leagues_offline_cached": "Hors ligne : liste enregistrée il y a {0}",
+  "lt.leagues_offline_builtin": "Hors ligne : liste intégrée",
+  "lt.leagues_ok": "{0} ligues, actualisées il y a {1}",
+  "lt.league_adopted": "La ligue « {0} » n’est plus proposée par poe.ninja. La ligue « {1} » est sélectionnée.",
+  "lt.status_zero_rows": "poe.ninja a répondu sans données pour cette ligue. Vérifie son nom : utilise le nom avec ses espaces (« Runes of Aldur »), et non celui de l’adresse web (« runesofaldur »)."
 }
