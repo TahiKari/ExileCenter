@@ -97,7 +97,7 @@ namespace GameHelper.Ui
                 }
 
                 Parents.UpdateAllParentsParallel();
-                if (ImGui.Begin("Game UiExplorer", ref Core.GHSettings.ShowGameUiExplorer))
+                if (GameHelper.Ui.ImGuiTheme.BeginWindow("Game UiExplorer", ref Core.GHSettings.ShowGameUiExplorer))
                 {
                     if (ImGui.TreeNode("NOTES"))
                     {

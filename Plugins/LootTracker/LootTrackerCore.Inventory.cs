@@ -218,7 +218,7 @@ namespace LootTracker
             var size = ImGui.GetIO().DisplaySize;
             ImGui.SetNextWindowPos(System.Numerics.Vector2.Zero);
             ImGui.SetNextWindowSize(size);
-            bool visible = ImGui.Begin("##LootTrackerDesktop", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove |
+            bool visible = GameHelper.Ui.ImGuiTheme.BeginWindow("##LootTrackerDesktop", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove |
                 ImGuiWindowFlags.NoSavedSettings);
             try
             {
@@ -277,7 +277,7 @@ namespace LootTracker
                 ImGuiWindowFlags.NoNav | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.AlwaysAutoResize |
                 ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.NoMove;
             flags = this.TrackerWindowFlags(flags);
-            if (!ImGui.Begin(this.L("lt.move_window", "LootTracker · drag to move") + "###loottracker_bar", flags))
+            if (!GameHelper.Ui.ImGuiTheme.BeginWindow(this.L("lt.move_window", "LootTracker · drag to move") + "###loottracker_bar", flags))
             {
                 ImGui.End();
                 return;
@@ -385,7 +385,7 @@ namespace LootTracker
             flags = this.TrackerWindowFlags(flags);
             if (resize) flags &= ~ImGuiWindowFlags.NoResize;
             ImGui.SetNextWindowSizeConstraints(new System.Numerics.Vector2(Math.Min(320f, ImGui.GetIO().DisplaySize.X), 160 * scale), ImGui.GetIO().DisplaySize);
-            if (!ImGui.Begin(this.L("lt.move_window", "LootTracker · drag to move") + "###loottracker_compact", flags))
+            if (!GameHelper.Ui.ImGuiTheme.BeginWindow(this.L("lt.move_window", "LootTracker · drag to move") + "###loottracker_compact", flags))
             {
                 ImGui.End();
                 return;
@@ -607,7 +607,7 @@ namespace LootTracker
                 if (headerVisible)
                 {
                     width = ImGui.GetContentRegionAvail().X;
-                    ImGui.TextColored(new System.Numerics.Vector4(0.48f, 0.69f, 1f, 1f), this.L("lt.dashboard", "LOOT TRACKER"));
+                    ImGui.TextColored(GameHelper.Ui.ImGuiTheme.Accent, this.L("lt.dashboard", "LOOT TRACKER"));
                     this.DrawTrackerModeButton();
                     string timer = this.LF("lt.session_timer", "Session: {0}", FormatDuration(DateTime.UtcNow - this.sessionStartUtc));
                     if (ImGui.GetItemRectMax().X + ImGui.CalcTextSize(timer).X + 20 * s < ImGui.GetCursorScreenPos().X + width)

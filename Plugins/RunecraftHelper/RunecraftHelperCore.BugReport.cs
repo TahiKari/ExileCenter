@@ -97,7 +97,7 @@ namespace RunecraftHelper
 
             ImGui.SetNextWindowSize(new Vector2(760f, 560f), ImGuiCond.FirstUseEver);
             bool open = this.bugReportOpen;
-            if (ImGui.Begin("Monolith bug report###RunecraftBugReport", ref open))
+            if (GameHelper.Ui.ImGuiTheme.BeginWindow("Monolith bug report###RunecraftBugReport", ref open))
             {
                 ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1f, 0.82f, 0.32f, 1f));
                 ImGui.Text("Send this to Yokken");

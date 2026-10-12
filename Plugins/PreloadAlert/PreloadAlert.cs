@@ -144,13 +144,13 @@ namespace PreloadAlert
                 ImGui.SetNextWindowPos(this.Settings.Pos);
                 ImGui.SetNextWindowSize(this.Settings.Size);
                 ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0f);
-                ImGui.Begin(windowName, ImGuiHelper.TransparentWindowFlags);
+                GameHelper.Ui.ImGuiTheme.BeginWindow(windowName, ImGuiHelper.TransparentWindowFlags);
                 ImGui.PopStyleVar();
                 this.isPreloadAlertHovered = ImGui.IsMouseHoveringRect(this.Settings.Pos, this.Settings.Pos + this.Settings.Size);
             }
             else
             {
-                ImGui.Begin(windowName, ImGuiWindowFlags.NoSavedSettings);
+                GameHelper.Ui.ImGuiTheme.BeginWindow(windowName, ImGuiWindowFlags.NoSavedSettings);
                 ImGui.TextColored(new Vector4(.86f, .71f, .36f, 1), this.PluginText.T("window.edit_background_color", "Edit Background Color: "));
                 ImGui.SameLine();
                 ImGui.ColorEdit4(

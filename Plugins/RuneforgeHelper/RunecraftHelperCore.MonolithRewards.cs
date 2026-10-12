@@ -185,7 +185,7 @@ namespace RunecraftHelper
             // as recipe tables are expanded/collapsed. The constraint keeps width sane and caps height so a
             // long list can't run off-screen (it scrolls past the cap instead).
             ImGui.SetNextWindowSizeConstraints(new Vector2(260, 0), new Vector2(640, 900));
-            if (ImGui.Begin("Monolith Rewards", ImGuiWindowFlags.AlwaysAutoResize))
+            if (GameHelper.Ui.ImGuiTheme.BeginWindow("Monolith Rewards", ImGuiWindowFlags.AlwaysAutoResize))
             {
                 float min = this.Settings.MonolithRewardsMinExalted;
 
@@ -309,7 +309,7 @@ namespace RunecraftHelper
         private void DrawMonolithDebugWindow()
         {
             ImGui.SetNextWindowSize(new Vector2(680, 460), ImGuiCond.FirstUseEver);
-            if (!ImGui.Begin("Monolith Debug###RunecraftMonolithDebug"))
+            if (!GameHelper.Ui.ImGuiTheme.BeginWindow("Monolith Debug###RunecraftMonolithDebug"))
             {
                 ImGui.End();
                 return;

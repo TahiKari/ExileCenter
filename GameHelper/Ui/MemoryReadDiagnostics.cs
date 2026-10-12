@@ -86,7 +86,7 @@ public static class MemoryReadDiagnostics
             }
 
             ImGui.SetNextWindowSize(new Vector2(900, 500), ImGuiCond.FirstUseEver);
-            if (ImGui.Begin("Memory Read Diagnostics", ref Core.GHSettings.ShowMemoryDiagnostics, ImGuiWindowFlags.MenuBar))
+            if (GameHelper.Ui.ImGuiTheme.BeginWindow("Memory Read Diagnostics", ref Core.GHSettings.ShowMemoryDiagnostics, ImGuiWindowFlags.MenuBar))
             {
                 RefreshRowsThrottled();
 

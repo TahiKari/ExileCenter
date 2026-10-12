@@ -203,7 +203,7 @@ namespace GameHelper.Ui
                     continue;
                 }
 
-                if (ImGui.Begin("Element Finder", ref Core.GHSettings.ShowElementFinder))
+                if (GameHelper.Ui.ImGuiTheme.BeginWindow("Element Finder", ref Core.GHSettings.ShowElementFinder))
                 {
                     // Root address input.
                     ImGui.AlignTextToFramePadding();

@@ -1170,7 +1170,7 @@ namespace LootValue
         private void DrawSlotDiagnosticsWindow()
         {
             ImGui.SetNextWindowSize(new Vector2(720f, 420f), ImGuiCond.FirstUseEver);
-            if (ImGui.Begin(
+            if (GameHelper.Ui.ImGuiTheme.BeginWindow(
                     this.PluginText.Title("diagnostics.slots.window_title", "LootValue Slot Diagnostics", "LootValueSlotDiagnostics"),
                     ref this.Settings.ShowSlotDebugInfo))
             {
@@ -1346,7 +1346,7 @@ namespace LootValue
         private void DrawDiagnosticsWindow()
         {
             ImGui.SetNextWindowSize(new Vector2(580, 440), ImGuiCond.FirstUseEver);
-            if (ImGui.Begin(this.PluginText.Title("diagnostics.window_title", "LootValue Diagnostics", "LootValueDiagnostics"), ref this.Settings.DiagnosticsMode))
+            if (GameHelper.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("diagnostics.window_title", "LootValue Diagnostics", "LootValueDiagnostics"), ref this.Settings.DiagnosticsMode))
             {
                 ImGui.TextUnformatted(this.diagSummary);
                 ImGui.Separator();

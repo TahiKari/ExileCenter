@@ -42,7 +42,7 @@ namespace GameHelper.Ui
                 }
 
                 ImGui.SetNextWindowSize(Size);
-                ImGui.Begin(L.Title("overlay_killer.title", "Player Vs Player (PVP) Detected", "PvpDetected"));
+                GameHelper.Ui.ImGuiTheme.BeginWindow(L.Title("overlay_killer.title", "Player Vs Player (PVP) Detected", "PvpDetected"));
                 ImGui.TextWrapped(
                     L.F(
                         "overlay_killer.message",

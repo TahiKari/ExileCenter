@@ -132,7 +132,7 @@ namespace GameHelper.Ui
 
                 OccludeRects.Clear();
                 ImGui.SetNextWindowSize(new Vector2(720, 640), ImGuiCond.FirstUseEver);
-                if (ImGui.Begin("OffsetHelper (OH)", ref Core.GHSettings.ShowOffsetHelper))
+                if (GameHelper.Ui.ImGuiTheme.BeginWindow("OffsetHelper (OH)", ref Core.GHSettings.ShowOffsetHelper))
                 {
                     RecordOcclusion();
                     DrawToolbar();
@@ -978,7 +978,7 @@ namespace GameHelper.Ui
                 var e = PinnedEntities[i];
                 var open = true;
                 ImGui.SetNextWindowSize(new Vector2(560, 520), ImGuiCond.FirstUseEver);
-                if (ImGui.Begin($"{e.EntityType}#{e.Id}###odcard_{e.GetHashCode()}", ref open))
+                if (GameHelper.Ui.ImGuiTheme.BeginWindow($"{e.EntityType}#{e.Id}###odcard_{e.GetHashCode()}", ref open))
                 {
                     RecordOcclusion();
                     DrawCardBody(e);
@@ -1273,7 +1273,7 @@ namespace GameHelper.Ui
                                            ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoNav |
                                            ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBackground |
                                            ImGuiWindowFlags.NoBringToFrontOnFocus;
-            if (ImGui.Begin("##odboxhit", flags))
+            if (GameHelper.Ui.ImGuiTheme.BeginWindow("##odboxhit", flags))
             {
                 ImGui.SetCursorScreenPos(min);
                 if (ImGui.InvisibleButton("##odboxbody", new Vector2(Math.Max(1f, max.X - min.X), Math.Max(1f, max.Y - min.Y))))

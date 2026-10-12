@@ -1242,7 +1242,7 @@ namespace Atlas2
 
             ImGui.SetNextWindowSize(new Vector2(760, 500), ImGuiCond.FirstUseEver);
             bool open = true;
-            if (!ImGui.Begin(this.Loc.Title("atlas.planner_title", "Head of the king Rewards", "AtlasRitualPlanner"), ref open))
+            if (!GameHelper.Ui.ImGuiTheme.BeginWindow(this.Loc.Title("atlas.planner_title", "Head of the king Rewards", "AtlasRitualPlanner"), ref open))
             {
                 ImGui.End();
                 return;

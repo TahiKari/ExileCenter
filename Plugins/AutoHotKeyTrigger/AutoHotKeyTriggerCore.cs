@@ -169,7 +169,7 @@ namespace AutoHotKeyTrigger
             if (this.Settings.DebugMode)
             {
                 ImGui.SetNextWindowSize(size, ImGuiCond.FirstUseEver);
-                if (ImGui.Begin(this.PluginText.Title("window.debug", "AHK Debug Window", "AhkDebugWindow"), ref this.Settings.DebugMode,
+                if (GameHelper.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("window.debug", "AHK Debug Window", "AhkDebugWindow"), ref this.Settings.DebugMode,
                     this.isDebugWindowHovered ? ImGuiWindowFlags.MenuBar : ImGuiWindowFlags.None))
                 {
                     this.isDebugWindowHovered =  ImGui.IsWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem);

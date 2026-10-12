@@ -39,7 +39,7 @@ namespace GameHelper.Ui
                     continue;
                 }
 
-                if (ImGui.Begin("Data Visualization", ref Core.GHSettings.ShowDataVisualization))
+                if (GameHelper.Ui.ImGuiTheme.BeginWindow("Data Visualization", ref Core.GHSettings.ShowDataVisualization))
                 {
                     if (ImGui.CollapsingHeader("Settings"))
                     {

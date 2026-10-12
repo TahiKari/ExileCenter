@@ -432,7 +432,7 @@ namespace AmanamuVoidAlert
         private void DrawDebugWindow(AreaInstance area)
         {
             ImGui.SetNextWindowSize(new Vector2(820f, 460f), ImGuiCond.FirstUseEver);
-            if (!ImGui.Begin(this.PluginText.Title("debug.window_title", "Amanamu Void Alert Debug", "AmanamuVoidAlertDebug"), ref this.Settings.ShowDebugWindow))
+            if (!GameHelper.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("debug.window_title", "Amanamu Void Alert Debug", "AmanamuVoidAlertDebug"), ref this.Settings.ShowDebugWindow))
             {
                 ImGui.End();
                 return;

@@ -418,7 +418,7 @@ namespace Hiveblood
             ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0f);
             ImGui.PushStyleColor(ImGuiCol.WindowBg, Vector4.Zero);
 
-            if (!ImGui.Begin(
+            if (!GameHelper.Ui.ImGuiTheme.BeginWindow(
                     "###HivebloodPositionDummy",
                     ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove |
                     ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoBackground))

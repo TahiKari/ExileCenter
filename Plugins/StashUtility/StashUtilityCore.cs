@@ -3718,7 +3718,7 @@ namespace StashUtility
             if (affinityTransferRunning || sortRunning) flags |= ImGuiWindowFlags.NoInputs;
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4));
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(4));
-            if (ImGui.Begin("##stashInventoryTransfer", flags))
+            if (GameHelper.Ui.ImGuiTheme.BeginWindow("##stashInventoryTransfer", flags))
             {
                 DrawToolbarPositionControls(anchor, location, windowSize, ref Settings.InventoryTransferButtonOffset,
                     ref Settings.InventoryTransferButtonLocked, lockFirst: true);
@@ -3910,7 +3910,7 @@ namespace StashUtility
             if (sortRunning || affinityTransferRunning) flags |= ImGuiWindowFlags.NoInputs;
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4));
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(4));
-            if (ImGui.Begin(merchant ? "##sortMerchantStash" : "##sortCurrentStash", flags))
+            if (GameHelper.Ui.ImGuiTheme.BeginWindow(merchant ? "##sortMerchantStash" : "##sortCurrentStash", flags))
             {
                 if (Settings.ShowStashSortButton)
                 {
@@ -3956,7 +3956,7 @@ namespace StashUtility
             ImGui.SetNextWindowPos(viewport.Pos + new Vector2(viewport.Size.X / 2f, 25), ImGuiCond.Always, new Vector2(0.5f, 0));
             ImGui.SetNextWindowSize(new Vector2(Math.Min(compact ? 360f : 650f, Math.Max(250f, viewport.Size.X - 40f)), 0), ImGuiCond.Always);
             ImGui.SetNextWindowBgAlpha(compact ? 0.72f : 0.85f);
-            if (ImGui.Begin("##stashAffinityFeedback", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoInputs |
+            if (GameHelper.Ui.ImGuiTheme.BeginWindow("##stashAffinityFeedback", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoInputs |
                 ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.AlwaysAutoResize))
             {
                 ImGui.SetWindowFontScale(compact ? 0.9f : 1f);

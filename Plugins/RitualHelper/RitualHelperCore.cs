@@ -1045,7 +1045,7 @@ namespace RitualHelper
         {
             ImGui.SetNextWindowSize(new Vector2(400, 400), ImGuiCond.FirstUseEver);
             var flags = ImGuiWindowFlags.NoFocusOnAppearing;
-            if (ImGui.Begin(this.PluginText.Title("window.debug_inventories", "Ritual Debug Inventories", "RitualHelperDebug"), ref this.Settings.DebugMode, flags))
+            if (GameHelper.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("window.debug_inventories", "Ritual Debug Inventories", "RitualHelperDebug"), ref this.Settings.DebugMode, flags))
             {
                 ImGui.TextWrapped(
                     this.PluginText.T("debug.inventories_help", "Showing all active ServerData PlayerInventories with >0 items."));

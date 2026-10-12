@@ -53,7 +53,7 @@ namespace GameHelper.Ui
 
                 var skillTreeNodes = Core.States.InGameStateObject.GameUi.SkillTreeNodesUiElements;
                 ImGui.SetNextWindowSize(size, ImGuiCond.FirstUseEver);
-                if (ImGui.Begin("Krangled Passive Detector", ref Core.GHSettings.ShowKrangledPassiveDetector))
+                if (GameHelper.Ui.ImGuiTheme.BeginWindow("Krangled Passive Detector", ref Core.GHSettings.ShowKrangledPassiveDetector))
                 {
                     if (ImGui.BeginPopup("KrangledPassiveDetectorPopUp"))
                     {

@@ -446,7 +446,7 @@ namespace Autopot
         {
             ImGui.SetNextWindowBgAlpha(0.55f);
             ImGui.SetNextWindowSize(new Vector2(220, 0), ImGuiCond.FirstUseEver);
-            if (!ImGui.Begin($"AutoPot · Ressources###AutopotVitals",
+            if (!GameHelper.Ui.ImGuiTheme.BeginWindow($"AutoPot · Ressources###AutopotVitals",
                     ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.AlwaysAutoResize))
             {
                 ImGui.End();
@@ -736,7 +736,7 @@ namespace Autopot
         {
             ImGui.SetNextWindowPos(new Vector2(ImGui.GetIO().DisplaySize.X * .5f, 30), ImGuiCond.Always, new Vector2(.5f, 0));
             ImGui.SetNextWindowSize(new Vector2(Math.Min(490, ImGui.GetIO().DisplaySize.X - 24), 0), ImGuiCond.Always);
-            if (ImGui.Begin("AutoPot · Retour sécurisé###AutoPotReturn",
+            if (GameHelper.Ui.ImGuiTheme.BeginWindow("AutoPot · Retour sécurisé###AutoPotReturn",
                 ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing |
                 ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse))
             {

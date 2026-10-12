@@ -1575,7 +1575,7 @@ namespace RunecraftHelper
         private void DrawExpeditionDebugWindow()
         {
             ImGui.SetNextWindowSize(new Vector2(500, 470), ImGuiCond.FirstUseEver);
-            if (!ImGui.Begin("Expedition Debug###RunecraftExpeditionDebug"))
+            if (!GameHelper.Ui.ImGuiTheme.BeginWindow("Expedition Debug###RunecraftExpeditionDebug"))
             {
                 ImGui.End();
                 return;
@@ -3987,7 +3987,7 @@ namespace RunecraftHelper
             }
 
             ImGui.SetNextWindowSize(new Vector2(340f, 0f), ImGuiCond.FirstUseEver);
-            if (!ImGui.Begin(this.Loc.Title("exp.planner_title", "Expedition Planner", "RunecraftExpeditionPlanner")))
+            if (!GameHelper.Ui.ImGuiTheme.BeginWindow(this.Loc.Title("exp.planner_title", "Expedition Planner", "RunecraftExpeditionPlanner")))
             {
                 ImGui.End();
                 return;

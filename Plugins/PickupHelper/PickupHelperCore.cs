@@ -398,7 +398,7 @@ namespace PickupHelper
         private void DrawDebugWindow(bool haveItem, HoveredItem info)
         {
             ImGui.SetNextWindowSize(new Vector2(380, 320), ImGuiCond.FirstUseEver);
-            if (ImGui.Begin(
+            if (GameHelper.Ui.ImGuiTheme.BeginWindow(
                 this.PluginText.Title("window.debug", "PickupHelper Debug", "PHDebugWindow"),
                 ref this.Settings.ShowDebugWindow))
             {

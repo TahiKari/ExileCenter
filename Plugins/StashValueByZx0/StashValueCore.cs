@@ -170,7 +170,7 @@ namespace StashValue
 
         private void DrawDebugWindow()
         {
-            ImGui.Begin("StashValue Debugger");
+            GameHelper.Ui.ImGuiTheme.BeginWindow("StashValue Debugger");
             var gameUi = Core.States.InGameStateObject.GameUi;
             if (gameUi != null)
             {

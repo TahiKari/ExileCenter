@@ -363,7 +363,7 @@ namespace Radar
             {
                 ImGui.SetNextWindowPos(largeMap.Center, ImGuiCond.Appearing);
                 ImGui.SetNextWindowSize(new Vector2(400f), ImGuiCond.Appearing);
-                ImGui.Begin(this.PluginText.Title("window.large_map_culling", "Large Map Culling Window", "RadarLargeMapCullingWindow"));
+                GameHelper.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("window.large_map_culling", "Large Map Culling Window", "RadarLargeMapCullingWindow"));
                 ImGui.TextWrapped(this.PluginText.T("window.large_map_culling.help", "This is a culling window for the large map icons. " +
                                   "Any large map icons outside of this window will be hidden automatically. " +
                                   "Feel free to change the position/size of this window. " +
@@ -460,7 +460,7 @@ namespace Radar
                 ImGui.SetNextWindowSize(this.Settings.CullWindowSize);
                 ImGui.SetNextWindowBgAlpha(0f);
                 ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0f);
-                ImGui.Begin(this.PluginText.Title("window.large_map_culling", "Large Map Culling Window", "RadarLargeMapCullingWindow"), ImGuiHelper.TransparentWindowFlags);
+                GameHelper.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("window.large_map_culling", "Large Map Culling Window", "RadarLargeMapCullingWindow"), ImGuiHelper.TransparentWindowFlags);
                 ImGui.PopStyleVar();
                 this.DrawLargeMap(largeMapRealCenter, trackingPos, trackingHeight);
                 this.DrawTgtFiles(largeMapRealCenter, trackingPos, trackingHeight);
@@ -493,7 +493,7 @@ namespace Radar
                 ImGui.SetNextWindowSize(miniMap.Size);
                 ImGui.SetNextWindowBgAlpha(0f);
                 ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0f);
-                ImGui.Begin("###minimapRadar", ImGuiHelper.TransparentWindowFlags);
+                GameHelper.Ui.ImGuiTheme.BeginWindow("###minimapRadar", ImGuiHelper.TransparentWindowFlags);
                 ImGui.PopStyleVar();
                 this.DrawLargeMap(miniMapCenter, trackingPos, trackingHeight, true);
                 this.DrawTgtFiles(miniMapCenter, trackingPos, trackingHeight, true);

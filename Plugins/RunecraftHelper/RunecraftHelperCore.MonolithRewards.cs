@@ -402,7 +402,7 @@ namespace RunecraftHelper
             // as recipe tables are expanded/collapsed. The constraint keeps width sane and caps height so a
             // long list can't run off-screen (it scrolls past the cap instead).
             ImGui.SetNextWindowSizeConstraints(new Vector2(260, 0), new Vector2(640, 900));
-            if (ImGui.Begin("Monolith Rewards", ImGuiWindowFlags.AlwaysAutoResize))
+            if (GameHelper.Ui.ImGuiTheme.BeginWindow("Monolith Rewards", ImGuiWindowFlags.AlwaysAutoResize))
             {
                 // Only shown when an 8+ hole monolith is in the area: that is the case still reported
                 // as wrong, it is rare enough that a reporter gets one shot at capturing it, and on
@@ -547,7 +547,7 @@ namespace RunecraftHelper
         private void DrawMonolithDebugWindow()
         {
             ImGui.SetNextWindowSize(new Vector2(680, 460), ImGuiCond.FirstUseEver);
-            if (!ImGui.Begin("Monolith Debug###RunecraftMonolithDebug"))
+            if (!GameHelper.Ui.ImGuiTheme.BeginWindow("Monolith Debug###RunecraftMonolithDebug"))
             {
                 ImGui.End();
                 return;
@@ -660,7 +660,7 @@ namespace RunecraftHelper
         private void DrawOverlayRowsDebugWindow()
         {
             ImGui.SetNextWindowSize(new Vector2(640, 320), ImGuiCond.FirstUseEver);
-            if (!ImGui.Begin("Overlay Rows Debug###RunecraftOverlayRowsDebug"))
+            if (!GameHelper.Ui.ImGuiTheme.BeginWindow("Overlay Rows Debug###RunecraftOverlayRowsDebug"))
             {
                 ImGui.End();
                 return;
