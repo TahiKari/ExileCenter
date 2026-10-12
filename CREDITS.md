@@ -51,6 +51,8 @@ Open **Plugins** in the GameHelper menu (top bar). The plugin table shows each p
 
 Includes (non-exhaustive): ImGui.NET, ClickableTransparentOverlay, Newtonsoft.Json, Coroutine, GameOffsets, AsmResolver, Vortice, SixLabors.ImageSharp, and NuGet dependencies listed in each project's `.csproj`.
 
+CorpseCleaner uses [LibGGPK3 / LibBundle3 / LibBundledGGPK3](https://github.com/aianlinb/LibGGPK3), version 2.7.5, by aianlinb, under AGPLv3. The plugin's source is distributed under AGPLv3; its license is included in `Plugins/CorpseCleaner/LICENSE`. The native Oodle library is supplied locally by the user and is not distributed in GameHelper packages.
+
 ## License
 
 Upstream GameHelper2 is GPLv3. This fork is distributed under the same license — see [LICENSE](LICENSE).

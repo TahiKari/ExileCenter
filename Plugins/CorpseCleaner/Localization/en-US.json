@@ -1,0 +1,15 @@
+{
+  "plugin.description": "Hide monster corpses with a reversible PoE 2 file patch. Supports Steam, Epic and the standalone launcher; apply and restore with the game closed.",
+  "help": "Hide monster corpses using a reversible game-file patch. Supports Steam/Epic bundles and the standalone Content.ggpk. Changes take effect after restarting the game.",
+  "scope": "Only corpse rendering is changed. Health values, health bars and gameplay settings are preserved. CPU/FPS gains depend on the scene.",
+  "directory": "PoE 2 folder",
+  "native": "oo2core.dll or Exile Forge executable",
+  "native_help": "The Oodle library is supplied by your own installation. Selecting Exile Forge extracts only oo2core.dll; its executable is never launched.",
+  "close_game": "PoE is open. Close the game to apply or restore this patch. There is no instant in-game toggle.",
+  "backup": "The original archive is kept in .GameHelperCadavres inside the game folder. Standalone installations need enough free space for a full copy of Content.ggpk. Restoration is refused if a game update or another tool has changed the patched archive.",
+  "apply": "Hide corpses (game closed)",
+  "restore": "Restore original files",
+  "cancel": "Cancel preparation",
+  "cancelled": "Preparation cancelled.",
+  "working": "Preparing…"
+}

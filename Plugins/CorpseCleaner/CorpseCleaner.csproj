@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <NoWarn>1701;1702;1591</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\GameHelper\GameHelper.csproj" Private="false" CopyLocalSatelliteAssemblies="false" />
+    <PackageReference Include="LibGGPK3.LibBundledGGPK3" Version="2.7.5" />
+    <CorpseLocalization Include="Localization\*.json" />
+    <None Include="LICENSE" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="CopyFiles" AfterTargets="Build">
+    <ItemGroup>
+      <CorpseFiles Include="$(TargetPath);$(OutDir)$(AssemblyName).deps.json;$(OutDir)LibBundle3.dll;$(OutDir)LibGGPK3.dll;$(OutDir)LibBundledGGPK3.dll;$(OutDir)SystemExtensions.dll;$(OutDir)LICENSE" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CorpseFiles)" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\CorpseCleaner" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(CorpseLocalization)" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\CorpseCleaner\Localization" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

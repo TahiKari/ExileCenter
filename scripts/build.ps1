@@ -255,6 +255,7 @@ function Test-PluginDeploy {
         @{ Plugin = "SekhemaHelper"; Files = @("SekhemaHelper.dll") },
         @{ Plugin = "AuraTracker"; Files = @("AuraTracker.dll") },
         @{ Plugin = "KikiMeter"; Files = @("KikiMeter.dll") },
+        @{ Plugin = "CorpseCleaner"; Files = @("CorpseCleaner.dll", "CorpseCleaner.deps.json", "LibBundle3.dll", "LibGGPK3.dll", "LibBundledGGPK3.dll", "SystemExtensions.dll", "LICENSE") },
         @{ Plugin = "Atlas"; Files = @("Atlas.dll") },
         @{ Plugin = "LootTracker"; Files = @("LootTracker.dll") },
         @{ Plugin = "LootValue"; Files = @("LootValue.dll") },
