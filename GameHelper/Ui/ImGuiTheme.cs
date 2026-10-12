@@ -4,14 +4,55 @@
 
 namespace GameHelper.Ui
 {
+    using System;
     using System.Numerics;
     using ImGuiNET;
+    using SixLabors.ImageSharp;
+    using SixLabors.ImageSharp.PixelFormats;
 
     /// <summary>
     ///     Central dark theme for all GameHelper windows.
     /// </summary>
     internal static class ImGuiTheme
     {
+        private static bool backgroundLoaded;
+        private static IntPtr backgroundTexture;
+        private static Vector2 backgroundSize;
+
+        internal static void DrawSettingsBackground(bool independent)
+        {
+            if (!backgroundLoaded && Core.Overlay != null)
+            {
+                backgroundLoaded = true;
+                try
+                {
+                    using var stream = typeof(ImGuiTheme).Assembly.GetManifestResourceStream("GameHelper.Data.Poe2Background.png");
+                    if (stream == null) return;
+                    var configuration = Configuration.Default.Clone();
+                    configuration.PreferContiguousImageBuffers = true;
+                    using var image = Image.Load<Rgba32>(new SixLabors.ImageSharp.Formats.DecoderOptions { Configuration = configuration }, stream);
+                    backgroundSize = new Vector2(image.Width, image.Height);
+                    Core.Overlay.AddOrGetImagePointer("GameHelper.Poe2Background", image, false, out backgroundTexture);
+                }
+                catch (Exception ex) { Console.WriteLine($"[Settings.Background] {ex.Message}"); }
+            }
+            if (backgroundTexture == IntPtr.Zero || backgroundSize.X <= 0 || backgroundSize.Y <= 0) return;
+
+            var min = ImGui.GetWindowPos() + new Vector2(1, ImGui.GetFrameHeight() * (independent ? 1 : 2));
+            var max = ImGui.GetWindowPos() + ImGui.GetWindowSize() - Vector2.One;
+            var size = max - min;
+            if (size.X <= 0 || size.Y <= 0) return;
+            // Fill the body without stretching the artwork or covering the title/menu bars.
+            float sourceAspect = backgroundSize.X / backgroundSize.Y;
+            float targetAspect = size.X / size.Y;
+            var crop = sourceAspect > targetAspect
+                ? new Vector2((1 - targetAspect / sourceAspect) / 2, 0)
+                : new Vector2(0, (1 - sourceAspect / targetAspect) / 2);
+            var draw = ImGui.GetWindowDrawList();
+            draw.AddImage(backgroundTexture, min, max, crop, Vector2.One - crop);
+            draw.AddRectFilled(min, max, ImGui.GetColorU32(new Vector4(0.035f, 0.045f, 0.06f, 0.32f)));
+        }
+
         internal static readonly Vector4 Accent = new(0.36f, 0.55f, 0.94f, 1f);
         internal static readonly Vector4 AccentMuted = new(0.28f, 0.42f, 0.72f, 1f);
         internal static readonly Vector4 TextMuted = new(0.65f, 0.68f, 0.75f, 1f);
@@ -31,7 +72,7 @@ namespace GameHelper.Ui
             ImGui.PushStyleVar(ImGuiStyleVar.TabRounding, 5f);
             ImGui.PushStyleVar(ImGuiStyleVar.SelectableTextAlign, new Vector2(0f, 0.5f));
             ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.075f, 0.085f, 0.105f, 0.98f));
-            ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.105f, 0.12f, 0.15f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.105f, 0.12f, 0.15f, 0.42f));
             ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(0.24f, 0.28f, 0.35f, 0.55f));
             ImGui.PushStyleColor(ImGuiCol.FrameBg, new Vector4(0.15f, 0.175f, 0.22f, 1f));
             ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, new Vector4(0.20f, 0.235f, 0.30f, 1f));

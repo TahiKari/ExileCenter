@@ -1197,6 +1197,7 @@ namespace GameHelper.Settings
                     ref isOverlayRunningLocal, flags);
                 try
                 {
+                    if (expanded) ImGuiTheme.DrawSettingsBackground(independent);
                     if (!independent && DrawTitleBarHideButton())
                     {
                         HideSettingsWindow();

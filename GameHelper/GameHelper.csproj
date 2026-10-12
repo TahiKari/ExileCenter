@@ -9,7 +9,7 @@
     <Authors>Arsenic</Authors>
     <Description>An overlay to help play the game.</Description>
     <Version>1.5.11</Version>
-    <GameHelperReleaseTag Condition="'$(GameHelperReleaseTag)' == ''">v1.5.11-personnalise.16</GameHelperReleaseTag>
+    <GameHelperReleaseTag Condition="'$(GameHelperReleaseTag)' == ''">v1.5.11-personnalise.17</GameHelperReleaseTag>
     <AssemblyVersion>1.5.11.0</AssemblyVersion>
     <FileVersion>1.5.11.0</FileVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -40,6 +40,7 @@
     <EmbeddedResource Include="Data\WorldAreaNames.tsv" />
     <EmbeddedResource Include="Data\WorldAreaTags.json" />
     <EmbeddedResource Include="Data\MonsterCategories.tsv" />
+    <EmbeddedResource Include="Data\Poe2Background.png" />
   </ItemGroup>
   <ItemGroup>
     <!-- Bundled fonts for the optional Universal Font mode (DejaVuSans + GNU Unifont). -->
