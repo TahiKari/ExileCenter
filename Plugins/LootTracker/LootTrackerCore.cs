@@ -349,7 +349,10 @@ namespace LootTracker
 
         public override void DrawSettings()
         {
-            
+            this.DrawTrackingToggleButton(false);
+            if (!this.Settings.TrackingEnabled)
+                ImGui.TextWrapped(this.L("lt.disabled_hint", "Tracking is disabled. History is kept. Reactivate it here to resume."));
+            ImGui.Separator();
             this.DrawSettingsTabs("LootTrackerSettings",
                 ("session", "Session", () =>
                 {
@@ -587,6 +590,11 @@ namespace LootTracker
 
         public override void DrawUI()
         {
+            if (!this.Settings.TrackingEnabled)
+            {
+                this.trackerDisplay?.Render(false);
+                return;
+            }
             // Session-history windows are independent of game state (they read from disk).
             if (!this.Settings.SeparateWindow)
             {
@@ -641,6 +649,44 @@ namespace LootTracker
 
                 this.DrawPickupToasts();
             }
+        }
+
+        private void SetTrackingEnabled(bool enabled)
+        {
+            if (this.Settings.TrackingEnabled == enabled) return;
+            if (!enabled)
+            {
+                this.BankActiveTime(DateTime.UtcNow);
+                // Keep already observed loot, then re-baseline on resume to exclude disabled time.
+                if (this.onMapArea && this.current != null && this.baseline != null)
+                    MergeInto(this.current.Gained, this.liveLegDelta);
+                this.baseline = null;
+                this.baselinePending = false;
+                this.prevSnapshot = null;
+                this.liveLegDelta.Clear();
+                this.onMapArea = false;
+                this.lastProcessedZoneHash = string.Empty;
+                this.ResetKillTally();
+                this.ClearPickupToasts();
+                this.ResetHandle();
+                this.SaveActiveState();
+            }
+            else
+            {
+                this.Settings.SeparateWindowVisible = true;
+            }
+            this.Settings.TrackingEnabled = enabled;
+            this.SaveSettings();
+        }
+
+        private void DrawTrackingToggleButton(bool compact)
+        {
+            string label = this.Settings.TrackingEnabled
+                ? this.L("lt.disable_tracking", "Disable tracking")
+                : this.L("lt.enable_tracking", "Reactivate tracking");
+            if (compact) ContinueTrackerRow(ImGui.CalcTextSize(label).X + ImGui.GetStyle().FramePadding.X * 2);
+            if (compact ? ImGui.SmallButton(label + "##TrackingEnabled") : ImGui.Button(label + "##TrackingEnabled"))
+                this.SetTrackingEnabled(!this.Settings.TrackingEnabled);
         }
 
         // Include the current leg in the same live totals shown on the map strip.

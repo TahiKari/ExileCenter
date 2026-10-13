@@ -6,6 +6,7 @@ namespace LootTracker
 
     public sealed class LootTrackerSettings : IPSettings
     {
+        public bool TrackingEnabled = true;
         // Overlay and native-window positions are independent; old configurations keep XP anchoring.
         public bool SeparateWindow = false;
         // Closing the window only hides it until the next GameHelper start.

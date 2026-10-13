@@ -1,5 +1,8 @@
 {
     "lt.settings":  "Paramètres",
+    "lt.disable_tracking":  "Désactiver le suivi",
+    "lt.enable_tracking":  "Réactiver le suivi",
+    "lt.disabled_hint":  "Le suivi est désactivé. L’historique est conservé. Réactivez-le ici pour reprendre.",
     "lt.compact_bar":  "Panneau responsive (en ville)",
     "lt.compact_height":  "Hauteur du panneau (px)",
     "lt.compact_width":  "Largeur du panneau (px)",

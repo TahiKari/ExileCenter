@@ -1,5 +1,8 @@
 {
     "lt.settings":  "Settings",
+    "lt.disable_tracking":  "Disable tracking",
+    "lt.enable_tracking":  "Reactivate tracking",
+    "lt.disabled_hint":  "Tracking is disabled. History is kept. Reactivate it here to resume.",
     "lt.compact_bar":  "Responsive panel (hideout)",
     "lt.compact_height":  "Panel height (px)",
     "lt.compact_width":  "Panel width (px)",

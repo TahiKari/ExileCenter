@@ -120,7 +120,7 @@ namespace LootTracker
         {
             if (this.Settings.FreePosition && !this.Settings.LockPosition)
                 return flags & ~(ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoInputs);
-            // Only the mode button captures input on an otherwise locked game overlay.
+            // Only the display-mode and tracking buttons capture input on a locked game overlay.
             if (this.trackerModeButtonMax.X > this.trackerModeButtonMin.X &&
                 this.trackerModeButtonMax.Y > this.trackerModeButtonMin.Y &&
                 ImGui.GetCurrentContext() != IntPtr.Zero &&
@@ -146,6 +146,12 @@ namespace LootTracker
             {
                 this.trackerModeButtonMin = ImGui.GetItemRectMin();
                 this.trackerModeButtonMax = ImGui.GetItemRectMax();
+            }
+            this.DrawTrackingToggleButton(true);
+            if (!detached)
+            {
+                this.trackerModeButtonMin = System.Numerics.Vector2.Min(this.trackerModeButtonMin, ImGui.GetItemRectMin());
+                this.trackerModeButtonMax = System.Numerics.Vector2.Max(this.trackerModeButtonMax, ImGui.GetItemRectMax());
             }
         }
 
