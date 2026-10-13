@@ -17,6 +17,17 @@ namespace GameHelper.Utils
     /// </summary>
     public static class ImGuiHelper
     {
+        public static bool HelpTooltipsEnabled { get; private set; } = true;
+
+        /// <summary>Controls optional help for a settings page without affecting other plugins.</summary>
+        public static HelpTooltipScope UseHelpTooltips(bool enabled) => new(enabled);
+
+        public readonly struct HelpTooltipScope : IDisposable
+        {
+            private readonly bool previous;
+            internal HelpTooltipScope(bool enabled) { this.previous = HelpTooltipsEnabled; HelpTooltipsEnabled = enabled; }
+            public void Dispose() => HelpTooltipsEnabled = this.previous;
+        }
         /// <summary>Wraps display text without interpreting percent signs as format strings.</summary>
         /// <param name="text">Text to display.</param>
         public static void WrappedText(string text)
@@ -312,7 +323,7 @@ namespace GameHelper.Utils
         /// <param name="maxwidth">max number of characters to display in a single line before wrapping it into a new line</param>
         public static void ToolTip(string text, float maxwidth = 35.0f)
         {
-            if (ImGui.IsItemHovered())
+            if (HelpTooltipsEnabled && ImGui.IsItemHovered())
             {
                 if (ImGui.BeginTooltip())
                 {

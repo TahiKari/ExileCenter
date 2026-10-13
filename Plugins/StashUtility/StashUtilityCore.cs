@@ -414,6 +414,7 @@ namespace StashUtility
             if (!ImGui.BeginTabBar("##stashSettingsPages", ImGuiTabBarFlags.FittingPolicyScroll)) return;
             for (int i = 0; i < pages.Length; i++)
             {
+                using var theme = GameHelper.Ui.ImGuiTheme.UsePluginTheme("StashUtility/" + pages[i]);
                 if (!ImGui.BeginTabItem(PluginText.T("stashutility.ui." + pages[i], labels[i]) + "###stashSettings_" + pages[i])) continue;
                 if (ImGui.BeginChild("##stashSettingsBody", Vector2.Zero))
                 {
@@ -441,6 +442,7 @@ namespace StashUtility
             if (!ImGui.BeginTabBar("##stashFilterPages", ImGuiTabBarFlags.FittingPolicyScroll)) return;
             for (int i = 0; i < groups.Length; i++)
             {
+                using var theme = GameHelper.Ui.ImGuiTheme.UsePluginTheme("StashUtility/" + groups[i]);
                 if (!ImGui.BeginTabItem(PluginText.T("stashutility.ui." + groups[i], labels[i]) + "###stashFilter_" + groups[i])) continue;
                 switch (i)
                 {
@@ -860,33 +862,47 @@ namespace StashUtility
         private void DrawTabletFilterSettings()
         {
             if (ImGui.Checkbox(PluginText.T("stashutility.enable_tablet_manager", "Enable Tablet Manager"), ref Settings.EnableTabletManager)) SaveSettings();
+            string helpLabel = MT(Settings.TabletHelpTooltips ? "help_on" : "help_off", Settings.TabletHelpTooltips ? "Tooltips: ON" : "Tooltips: OFF");
+            if (ImGui.GetItemRectMax().X + ImGui.CalcTextSize(helpLabel).X + ImGui.GetStyle().FramePadding.X * 2 + 12 <
+                ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X) ImGui.SameLine();
+            if (ImGui.SmallButton(helpLabel + "##TabletHelp"))
+            { Settings.TabletHelpTooltips = !Settings.TabletHelpTooltips; SaveSettings(); }
+            using var help = ImGuiHelper.UseHelpTooltips(Settings.TabletHelpTooltips);
             if (!Settings.EnableTabletManager) return;
-            if (ImGui.Checkbox(PluginText.T("stashutility.tablet.auto_hide", "Hide tablet indications when hovering an item"), ref Settings.HideTabletHighlightsOnItemHover)) SaveSettings();
-            ImGuiHelper.ToolTip(PluginText.T("stashutility.tablet.auto_hide_help", "Temporarily hides tablet colors and ranks when hovering an item in the stash, inventory or merchant, or when a game tooltip is detected. They return when the tooltip and hover end."));
             DrawTabletVisibilityButton(false);
-            DrawTabletTypeSelector();
+            TabletProfile SelectedProfile(string selectedType)
+            {
+                if (!Settings.TabletProfiles.TryGetValue(selectedType, out var selected) || selected == null)
+                    Settings.TabletProfiles[selectedType] = selected = new TabletProfile();
+                return selected;
+            }
             string type = StashUtilitySettings.TabletTypes[tabletFilterType];
-            if (!Settings.TabletProfiles.TryGetValue(type, out var profile) || profile == null)
-                Settings.TabletProfiles[type] = profile = new TabletProfile();
-
+            var profile = SelectedProfile(type);
             DrawTabletMetaFilters(type, profile);
-            if (!ImGui.CollapsingHeader(PluginText.T("stashutility.meta.legacy_settings", "Modifier and tablet ranks (S to F)"), ImGuiTreeNodeFlags.DefaultOpen)) return;
-            ImGui.TextWrapped(PluginText.T("stashutility.filters.rank_help", "Choose S to F for each modifier. Four known ranks determine S1-S84, A1-A56, B1-B35, C1-C20, D1-D10, E1-E4 or F1. Number 1 is best. AND / OR filters control highlighting without replacing the tablet's rank. Unknown or incomplete data stays unclassified."));
+            if (ImGui.CollapsingHeader(MT("display_options", "Display options")))
+            {
+                if (ImGui.Checkbox(PluginText.T("stashutility.tablet.auto_hide", "Hide tablet indications when hovering an item"), ref Settings.HideTabletHighlightsOnItemHover)) SaveSettings();
+                TabletHelp(PluginText.T("stashutility.tablet.auto_hide_help", "Temporarily hide indications while hovering an item or viewing its game tooltip."));
+            }
             if (ImGui.CollapsingHeader(PluginText.T("stashutility.filters.farm_preset", "Farming ranks - PoE 2 0.5.5")))
             {
-                ImGui.TextWrapped(PluginText.T("stashutility.filters.farm_preset_help", "Apply the reference workbook's S to F ranks to the eight tablet types. E and F remain distinct. Your minimum rolls and AND / OR profiles are retained."));
-                ImGui.TextWrapped(Data.ModDatabase.TabletMeta.SourceFile);
                 if (ImGui.Button(PluginText.T("stashutility.filters.farm_preset_apply", "Reapply farming ranks to all 8 tablets")))
                 {
                     if (ApplyTabletFarmPreset(true)) SaveSettings();
                 }
-                ImGuiHelper.ToolTip(PluginText.T("stashutility.filters.farm_preset_apply_help", "Replaces ranks and selects every catalogued modifier for all eight tablet types. Keeps minimum rolls and other settings. Later edits are not overwritten on restart."));
+                TabletHelp(PluginText.T("stashutility.filters.farm_preset_apply_help", "Apply workbook ranks without changing minimum rolls or AND / OR profiles."));
             }
             if (ImGui.CollapsingHeader(PluginText.T("stashutility.filters.highlight_rules", "Highlight rules")))
             {
-                ImGui.TextWrapped(PluginText.T("stashutility.filters.tablet_rank_conditions", "Four explicit modifiers with known ranks determine the grade, independently of their order and roll thresholds. Minimum-roll and excellence filters remain separate. Unknown or incomplete data stays unclassified."));
                 DrawFilterThreshold("stashutility.filter_tablet_great", "Excellent highlight", "tabletGreat", ref Settings.FilterTabletGreat, ref Settings.MinTabletGoodMods, 4);
+                TabletHelp(PluginText.T("stashutility.filters.tablet_rank_conditions", "Four known explicit modifiers determine the rank. Unknown or incomplete data stays unclassified."));
             }
+            ImGui.Separator();
+            ImGui.TextColored(ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark], MT("rank_settings", "Modifier ranks S to F"));
+            TabletHelp(PluginText.T("stashutility.filters.rank_help", "Choose S to F for each modifier. AND / OR conditions control highlighting; the tablet keeps its combination rank."));
+            DrawTabletTypeSelector();
+            type = StashUtilitySettings.TabletTypes[tabletFilterType];
+            profile = SelectedProfile(type);
             var catalog = Data.ModDatabase.AllTabletMods.Where(m => m.TabletTypes.Contains(type)).ToList();
             profile.ModRanks ??= new Dictionary<string, string>();
             if (MigrateTabletModRanks(profile)) SaveSettings();
@@ -927,13 +943,15 @@ namespace StashUtility
             Vector4[] colors = { new(.8f,.35f,.9f,1), new(.9f,.7f,.3f,1), new(.65f,.68f,.74f,1), new(.62f,.43f,1,1),
                 new(.45f,.83f,.48f,1), new(1,.45f,.3f,1), new(.72f,.82f,.26f,1), new(.35f,.77f,.8f,1) };
             float gap = ImGui.GetStyle().ItemSpacing.X;
-            float width = Math.Max(100, (ImGui.GetContentRegionAvail().X - gap * 7 - 8) / 8);
+            int columns = Math.Clamp((int)((ImGui.GetContentRegionAvail().X + gap) / (100 + gap)), 1, 8);
+            float width = Math.Max(40, (ImGui.GetContentRegionAvail().X - gap * (columns - 1)) / columns);
             float height = 44 + ImGui.GetTextLineHeight();
-            ImGui.BeginChild("tabletTypes", new Vector2(0, height + ImGui.GetStyle().ScrollbarSize + 8), ImGuiChildFlags.None, ImGuiWindowFlags.HorizontalScrollbar);
+            int rows = (8 + columns - 1) / columns;
+            ImGui.BeginChild("tabletTypes", new Vector2(0, height * rows + gap * (rows - 1) + 8), ImGuiChildFlags.None, ImGuiWindowFlags.NoScrollbar);
             for (int n = 0; n < order.Length; n++)
             {
                 int i = order[n];
-                if (n > 0) ImGui.SameLine();
+                if (n % columns > 0) ImGui.SameLine();
                 ImGui.PushID(i);
                 var pos = ImGui.GetCursorScreenPos();
                 if (ImGui.InvisibleButton("type", new Vector2(width, height)))

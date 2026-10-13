@@ -639,6 +639,7 @@ namespace GameHelper.Plugin
                         try
                         {
                             using var _ = PerformanceProfiler.Profile(container.Plugin.GetType().FullName ?? string.Empty, "DrawUI");
+                            using var theme = ImGuiTheme.UsePluginTheme(container.Name);
                             container.Plugin.DrawUI();
                         }
                         catch (Exception ex)

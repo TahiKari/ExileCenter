@@ -167,7 +167,10 @@ namespace GameHelper.Settings
             {
                 if (filteredPlugins.Count == 0) ImGui.TextWrapped(L.T("settings.navigation.no_results", "No matching plugin."));
                 foreach (var container in filteredPlugins)
+                {
+                    using var theme = ImGuiTheme.UsePluginTheme(container.Name);
                     DrawNavigationItem(PluginPageId(container.Name), PluginDisplayName(container));
+                }
             }
             ImGui.EndChild();
             ImGui.Separator();
@@ -181,7 +184,8 @@ namespace GameHelper.Settings
             var selected = selectedSettingsPage == pageId;
             if (selected)
             {
-                ImGui.PushStyleColor(ImGuiCol.Header, ImGuiTheme.AccentMuted);
+                var accent = ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark];
+                ImGui.PushStyleColor(ImGuiCol.Header, new Vector4(accent.X * .45f, accent.Y * .45f, accent.Z * .45f, 1));
                 ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.98f, 0.99f, 1f, 1f));
             }
 
@@ -202,7 +206,7 @@ namespace GameHelper.Settings
 
             if (selected)
             {
-                ImGui.GetWindowDrawList().AddRectFilled(rowPosition + new Vector2(0, 3), rowPosition + new Vector2(3, rowHeight - 3), ImGui.GetColorU32(ImGuiTheme.Accent), 2f);
+                ImGui.GetWindowDrawList().AddRectFilled(rowPosition + new Vector2(0, 3), rowPosition + new Vector2(3, rowHeight - 3), ImGui.GetColorU32(ImGuiCol.CheckMark), 2f);
                 ImGui.PopStyleColor(2);
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(label);
@@ -241,13 +245,13 @@ namespace GameHelper.Settings
                 container => selectedSettingsPage == PluginPageId(container.Name));
             if (selectedPlugin != null)
             {
+                using var theme = ImGuiTheme.UsePluginTheme(selectedPlugin.Name);
                 var description = selectedPlugin.Plugin.GetDescription();
-                ImGuiTheme.SectionHeader(
-                    PluginDisplayName(selectedPlugin),
-                    string.IsNullOrWhiteSpace(description) ? null : description);
+                ImGuiTheme.SectionHeader(PluginDisplayName(selectedPlugin));
                 if (ImGui.CollapsingHeader(L.T("settings.plugin.quickstart", "Getting started") + "###PluginQuickStart"))
                 {
                     ImGui.PushTextWrapPos(0);
+                    if (!string.IsNullOrWhiteSpace(description)) ImGui.TextUnformatted(description);
                     ImGui.TextUnformatted(L.T("settings.plugin.help." + selectedPlugin.Name,
                         L.T("settings.plugin.help.default", "Use the tabs to choose a section. Scroll with the mouse wheel. Hover controls for details. Settings are saved when you close the menu.")));
                     ImGui.PopTextWrapPos();

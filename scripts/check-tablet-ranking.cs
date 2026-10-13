@@ -42,6 +42,7 @@ internal static class TabletRankingCheck
             RunMetaFilters(args.Length > 1 ? args[1] : null);
             CheckWorkbookPreset();
             CheckTooltipGeometry(root);
+            CheckTabletSettingsUi(root, args.Length > 2 ? args[2] : null);
             Console.WriteLine(checks + " tablet classification checks passed.");
             return 0;
         }
@@ -443,6 +444,173 @@ internal static class TabletRankingCheck
             ImGuiNET.ImGui.DestroyContext(context);
             Directory.SetCurrentDirectory(previousDirectory);
         }
+    }
+
+    private static void CheckTabletSettingsUi(string root, string previewDirectory)
+    {
+        const BindingFlags flags = BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic;
+        var context = ImGuiNET.ImGui.CreateContext();
+        string previousDirectory = Directory.GetCurrentDirectory();
+        var previousLanguage = GameHelper.Core.GHSettings.UiLanguage;
+        var isolated = Path.Combine(Path.GetDirectoryName(typeof(TabletRankingCheck).Assembly.Location), "tablet-layout-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(isolated, "Localization"));
+        foreach (string language in new[] { "fr-FR", "en-US" })
+            File.Copy(Path.Combine(root, "Plugins", "StashUtility", "Localization", language + ".json"), Path.Combine(isolated, "Localization", language + ".json"));
+        try
+        {
+            Directory.SetCurrentDirectory(isolated);
+            GameHelper.Core.GHSettings.UiLanguage = GameHelper.Localization.OverlayLanguage.French;
+            var io = ImGuiNET.ImGui.GetIO();
+            unsafe { io.NativePtr->IniFilename = null; }
+            io.DisplaySize = new Vector2(1280, 960); io.DeltaTime = 1f / 60;
+            io.Fonts.AddFontDefault();
+            io.Fonts.GetTexDataAsRGBA32(out IntPtr atlas, out int atlasWidth, out int atlasHeight, out int bytes);
+            io.Fonts.SetTexID(new IntPtr(1));
+            var pixels = new byte[atlasWidth * atlasHeight * bytes]; Marshal.Copy(atlas, pixels, 0, pixels.Length);
+            typeof(GameHelper.Ui.ImGuiTheme).GetMethod("Apply", flags).Invoke(null, null);
+            Vector4[] Colors() => Enumerable.Range(0, (int)ImGuiNET.ImGuiCol.COUNT).Select(i => ImGuiNET.ImGui.GetStyle().Colors[i]).ToArray();
+            var original = Colors();
+            var names = (string[])typeof(GameHelper.Ui.ImGuiTheme).GetField("PluginThemeNames", flags).GetValue(null);
+            Check(names.Select(GameHelper.Ui.ImGuiTheme.PluginAccent).Distinct().Count() == names.Length, "Every bundled plugin has a distinct accent");
+            foreach (string name in names)
+            {
+                using (GameHelper.Ui.ImGuiTheme.UsePluginTheme(name))
+                {
+                    var accent = ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark];
+                    Check(accent == GameHelper.Ui.ImGuiTheme.PluginAccent(name), "Plugin theme is applied: " + name);
+                    using (GameHelper.Ui.ImGuiTheme.UsePluginTheme(name + "/appearance"))
+                        Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark] != accent, "Module has its own accent: " + name);
+                    Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark] == accent, "Nested theme restores plugin accent: " + name);
+                }
+                Check(Colors().SequenceEqual(original), "Theme cannot leak into the next plugin: " + name);
+            }
+            var secondary = ImGuiNET.ImGui.CreateContext();
+            ImGuiNET.ImGui.SetCurrentContext(secondary);
+            var secondaryColors = Colors();
+            ImGuiNET.ImGui.SetCurrentContext(context);
+            var scope = GameHelper.Ui.ImGuiTheme.UsePluginTheme("LootTracker");
+            ImGuiNET.ImGui.SetCurrentContext(secondary);
+            scope.Dispose();
+            Check(ImGuiNET.ImGui.GetCurrentContext() == secondary && Colors().SequenceEqual(secondaryColors), "Theme disposal respects the native-window ImGui context");
+            ImGuiNET.ImGui.DestroyContext(secondary); ImGuiNET.ImGui.SetCurrentContext(context);
+            Check(Colors().SequenceEqual(original), "Original context also restored after native-window theme");
+            using (GameHelper.Utils.ImGuiHelper.UseHelpTooltips(false))
+            {
+                Check(!GameHelper.Utils.ImGuiHelper.HelpTooltipsEnabled, "Help can be disabled");
+                using (GameHelper.Utils.ImGuiHelper.UseHelpTooltips(true)) Check(GameHelper.Utils.ImGuiHelper.HelpTooltipsEnabled, "Nested help can be enabled");
+                Check(!GameHelper.Utils.ImGuiHelper.HelpTooltipsEnabled, "Help preference restored after nested page");
+            }
+            Check(GameHelper.Utils.ImGuiHelper.HelpTooltipsEnabled, "Tablet help does not disable another plugin's help");
+            var plugin = new StashUtilityCore { DllDirectory = isolated };
+            typeof(StashUtilityCore).GetMethod("ApplyTabletFarmPreset", flags).Invoke(plugin, new object[] { true });
+            var profile = plugin.Settings.TabletProfiles["Breach Tablet"];
+            var meta = typeof(StashUtilityCore).GetMethod("DrawTabletMetaFilters", flags);
+            var draw = typeof(StashUtilityCore).GetMethod("DrawTabletFilterSettings", flags);
+            var push = typeof(GameHelper.Ui.ImGuiTheme).GetMethod("PushSettingsStyle", flags);
+            var pop = typeof(GameHelper.Ui.ImGuiTheme).GetMethod("PopSettingsStyle", flags);
+            (Vector2 center, float height, bool referenceOpen) MetaFrame(Vector2 mouse, bool down)
+            {
+                io.AddMousePosEvent(mouse.X, mouse.Y); io.AddMouseButtonEvent(0, down);
+                ImGuiNET.ImGui.NewFrame();
+                ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16)); ImGuiNET.ImGui.SetNextWindowSize(new Vector2(1200, 900));
+                ImGuiNET.ImGui.Begin("Meta layout fixture");
+                uint reference = ImGuiNET.ImGui.GetID("###TabletReferenceCatalogue");
+                meta.Invoke(plugin, new object[] { "Breach Tablet", profile });
+                var result = ((ImGuiNET.ImGui.GetItemRectMin() + ImGuiNET.ImGui.GetItemRectMax()) / 2, ImGuiNET.ImGui.GetCursorPosY(), ImGuiNET.ImGui.GetStateStorage().GetInt(reference, 0) != 0);
+                ImGuiNET.ImGui.End(); ImGuiNET.ImGui.Render(); return result;
+            }
+            var closed = MetaFrame(new Vector2(-100), false);
+            Check(!closed.referenceOpen && closed.height < 200, "Reference catalogue and rule editor are collapsed by default");
+            MetaFrame(closed.center, false); MetaFrame(closed.center, true); var opened = MetaFrame(closed.center, false);
+            Check(opened.referenceOpen && opened.height > closed.height + 250, "Reference catalogue opens with one click");
+            MetaFrame(closed.center, true); var hidden = MetaFrame(closed.center, false);
+            Check(!hidden.referenceOpen && hidden.height == closed.height, "Reference catalogue hides again with one click");
+            float previousPaneWidth = 0;
+            Vector2 Pane(float width, string filename, Vector2? mouse = null, bool down = false)
+            {
+                var position = mouse ?? new Vector2(-100);
+                io.AddMousePosEvent(position.X, position.Y); io.AddMouseButtonEvent(0, down);
+                ImGuiNET.ImGui.NewFrame(); push.Invoke(null, null);
+                Vector2 helpCenter;
+                using (GameHelper.Ui.ImGuiTheme.UsePluginTheme("StashUtility/tablets"))
+                {
+                    ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16)); ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width, 900));
+                    ImGuiNET.ImGui.Begin("Tablettes · GameHelper", ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                    helpCenter = ImGuiNET.ImGui.GetCursorScreenPos() + new Vector2(70, ImGuiNET.ImGui.GetFrameHeight() + ImGuiNET.ImGui.GetStyle().ItemSpacing.Y + ImGuiNET.ImGui.GetFontSize() / 2);
+                    draw.Invoke(plugin, null);
+                    if (previousPaneWidth == width)
+                        Check(ImGuiNET.ImGui.GetScrollMaxX() == 0, "Tablet layout fits horizontally at width " + width);
+                    ImGuiNET.ImGui.End();
+                }
+                pop.Invoke(null, null); ImGuiNET.ImGui.Render();
+                if (previewDirectory != null)
+                {
+                    Directory.CreateDirectory(previewDirectory);
+                    SaveUiPreview(Path.Combine(previewDirectory, filename), pixels, atlasWidth, atlasHeight);
+                }
+                Check(Colors().SequenceEqual(original), "Tablet pane restores plugin style and help state");
+                previousPaneWidth = width;
+                return helpCenter;
+            }
+            Pane(1200, "tablets-wide.png"); Pane(1200, "tablets-wide.png"); Pane(460, "tablets-compact.png");
+            var helpCenter = Pane(460, "tablets-compact.png");
+            Pane(460, "tablets-compact.png", helpCenter); Pane(460, "tablets-compact.png", helpCenter, true); Pane(460, "tablets-help-off.png", helpCenter);
+            Check(!plugin.Settings.TabletHelpTooltips, "Actual help button disables tablet tooltips in one click");
+            var reload = JsonConvert.DeserializeObject<StashUtilitySettings>(File.ReadAllText(Path.Combine(isolated, "config", "settings.txt")));
+            Check(!reload.TabletHelpTooltips && reload.TabletProfiles["Breach Tablet"].ModRanks.Count == profile.ModRanks.Count, "Help preference persists without changing tablet ranks");
+            Pane(460, "tablets-help-off.png", helpCenter, true); Pane(460, "tablets-help-on.png", helpCenter);
+            Check(plugin.Settings.TabletHelpTooltips, "Actual help button re-enables tablet tooltips in one click");
+            Check(JsonConvert.DeserializeObject<StashUtilitySettings>("{}").TabletHelpTooltips, "Existing configurations retain available tooltips");
+        }
+        finally
+        {
+            GameHelper.Core.GHSettings.UiLanguage = previousLanguage;
+            Directory.SetCurrentDirectory(previousDirectory); ImGuiNET.ImGui.DestroyContext(context);
+        }
+    }
+
+    private static void SaveUiPreview(string file, byte[] atlas, int atlasWidth, int atlasHeight)
+    {
+        var data = ImGuiNET.ImGui.GetDrawData();
+        using var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(1280, 960, new(22, 20, 17, 255));
+        for (int listIndex = 0; listIndex < data.CmdListsCount; listIndex++)
+        {
+            var list = data.CmdLists[listIndex];
+            foreach (int commandIndex in Enumerable.Range(0, list.CmdBuffer.Size))
+            {
+                var command = list.CmdBuffer[commandIndex];
+                if (command.UserCallback != IntPtr.Zero) continue;
+                for (int offset = 0; offset < command.ElemCount; offset += 3)
+                {
+                    int At(int i) => list.IdxBuffer[(int)command.IdxOffset + offset + i] + (int)command.VtxOffset;
+                    var a = list.VtxBuffer[At(0)]; var b = list.VtxBuffer[At(1)]; var c = list.VtxBuffer[At(2)];
+                    var p = a.pos; var q = b.pos; var r = c.pos;
+                    float denominator = (q.Y - r.Y) * (p.X - r.X) + (r.X - q.X) * (p.Y - r.Y);
+                    if (Math.Abs(denominator) < .0001f) continue;
+                    int minX = (int)Math.Max(0, Math.Max(command.ClipRect.X, Math.Floor(Math.Min(p.X, Math.Min(q.X, r.X)))));
+                    int minY = (int)Math.Max(0, Math.Max(command.ClipRect.Y, Math.Floor(Math.Min(p.Y, Math.Min(q.Y, r.Y)))));
+                    int maxX = (int)Math.Min(image.Width, Math.Min(command.ClipRect.Z, Math.Ceiling(Math.Max(p.X, Math.Max(q.X, r.X)))));
+                    int maxY = (int)Math.Min(image.Height, Math.Min(command.ClipRect.W, Math.Ceiling(Math.Max(p.Y, Math.Max(q.Y, r.Y)))));
+                    Vector4 Color(uint packed) => new(packed & 255, (packed >> 8) & 255, (packed >> 16) & 255, (packed >> 24) & 255);
+                    var ca = Color(a.col); var cb = Color(b.col); var cc = Color(c.col);
+                    for (int y = minY; y < maxY; y++) for (int x = minX; x < maxX; x++)
+                    {
+                        float u = ((q.Y - r.Y) * (x + .5f - r.X) + (r.X - q.X) * (y + .5f - r.Y)) / denominator;
+                        float v = ((r.Y - p.Y) * (x + .5f - r.X) + (p.X - r.X) * (y + .5f - r.Y)) / denominator;
+                        float w = 1 - u - v;
+                        if (u < 0 || v < 0 || w < 0) continue;
+                        var uv = a.uv * u + b.uv * v + c.uv * w;
+                        int texel = (Math.Clamp((int)(uv.Y * atlasHeight), 0, atlasHeight - 1) * atlasWidth + Math.Clamp((int)(uv.X * atlasWidth), 0, atlasWidth - 1)) * 4;
+                        var color = ca * u + cb * v + cc * w;
+                        float alpha = color.W / 255f * atlas[texel + 3] / 255f;
+                        var old = image[x, y];
+                        image[x, y] = new((byte)(color.X * alpha + old.R * (1 - alpha)), (byte)(color.Y * alpha + old.G * (1 - alpha)), (byte)(color.Z * alpha + old.B * (1 - alpha)), 255);
+                    }
+                }
+            }
+        }
+        using var stream = File.Create(file);
+        image.Save(stream, new SixLabors.ImageSharp.Formats.Png.PngEncoder());
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

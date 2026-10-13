@@ -25,31 +25,37 @@ namespace StashUtility
         private static TabletFilterProfile ActiveMetaProfile(TabletProfile settings)
             => settings.MetaProfiles?.FirstOrDefault(p => p != null && p.Id == settings.ActiveMetaProfileId);
 
+        private void TabletHelp(string text)
+        {
+            if (!Settings.TabletHelpTooltips || !ImGuiHelper.HelpTooltipsEnabled) return;
+            if (ImGui.GetItemRectMax().X + 30 < ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X) ImGui.SameLine();
+            ImGui.TextDisabled("(?)");
+            ImGuiHelper.ToolTip(text);
+        }
+
         private void DrawTabletMetaFilters(string type, TabletProfile settings)
         {
             settings.MetaProfiles ??= new(); settings.ManualMetaModifiers ??= new(); settings.MetaSearch ??= "";
-            ImGui.SeparatorText(MT("title", "Reference workbook · individual modifiers S to F"));
-            MetaText(MetaCatalog.SourceFile + " · " + MetaCatalog.Version + " · " + MetaCatalog.ForType(type).Count() + " " + MT("mods", "modifiers"));
-            MetaText(MT("rank_order", "Individual ranks: S > A > B > C > D > E > F. Within a rank, 1 is best. These are the exact workbook ranks."));
-            if (ImGui.Checkbox(MT("enable", "Use workbook AND / OR filters for this type"), ref settings.UseMetaFilters)) SaveSettings();
-            MetaText(MT("rank_and_rules", "The tablet keeps its S to F combination rank. AND / OR rules choose which tablets to highlight. Add nested groups for conditions such as (S1 AND A1) OR (S1 AND B1)."));
-            MetaText(MT(settings.UseMetaFilters ? "mode_workbook" : "mode_legacy", settings.UseMetaFilters ?
-                "Active filter: workbook profile. Select a profile in Rules; Analysis explains each decision." :
-                "Active filter: legacy settings. The catalogue below always shows the workbook S to F ranks. Create a profile in Rules and enable it above to use those filters."));
-            if (ImGui.BeginTabBar("TabletMetaTabs"))
+            ImGui.TextDisabled(TabletTypeLabel(type));
+            bool changedMode = ImGui.Checkbox(MT("enable", "Use workbook AND / OR filters for this type"), ref settings.UseMetaFilters);
+            if (changedMode) SaveSettings();
+            TabletHelp(MT("rank_and_rules", "The tablet keeps its rank. AND / OR rules choose the combinations to highlight."));
+            if (settings.UseMetaFilters)
+                ImGui.TextDisabled(MT("active_profile", "Active profile") + " : " + (ActiveMetaProfile(settings)?.Name ?? MT("none", "None")));
+            if (changedMode && settings.UseMetaFilters) ImGui.SetNextItemOpen(true);
+            if (ImGui.CollapsingHeader(MT("rules_editor", "AND / OR rules and analysis") + "###TabletRulesEditor") && ImGui.BeginTabBar("TabletMetaTabs"))
             {
-                if (ImGui.BeginTabItem(MT("catalog", "Catalogue"))) { DrawMetaCatalog(type, settings, false); ImGui.EndTabItem(); }
                 if (ImGui.BeginTabItem(MT("rules", "Rules")))
                 {
-                    MetaText(MT("rules_help", "Create or select a profile, add conditions, then choose AND or OR for each group. Only this tablet type is affected. Empty groups must be completed before the profile can accept a tablet."));
                     DrawMetaProfiles(type, settings);
+                    TabletHelp(MT("rules_help", "Choose a profile and add AND / OR conditions or nested groups. Incomplete groups cannot accept a tablet."));
                     var active = ActiveMetaProfile(settings);
                     if (active != null)
                     {
                         bool changed = ImGui.InputText(MT("profile_name", "Profile name"), ref active.Name, 120);
                         changed |= DrawMetaAction(MT("on_match", "When matched"), ref active.OnMatch);
                         changed |= DrawMetaAction(MT("on_miss", "When not matched"), ref active.OnMiss);
-                        MetaText(MT("actions_help", "Keep displays the result. Signal adds an amber alert. Ignore hides the indication."));
+                        TabletHelp(MT("actions_help", "Keep displays the result. Signal adds an amber alert. Ignore hides the indication."));
                         ImGui.Separator();
                         if (ImGui.BeginChild("MetaRuleTree", Vector2.Zero,
                             ImGuiChildFlags.Borders | ImGuiChildFlags.AutoResizeY | ImGuiChildFlags.AlwaysAutoResize,
@@ -66,6 +72,11 @@ namespace StashUtility
                 if (ImGui.BeginTabItem(MT("analysis", "Analysis"))) { DrawMetaAnalysis(type, settings); ImGui.EndTabItem(); }
                 if (ImGui.BeginTabItem(MT("exchange", "Import / export"))) { DrawMetaExchange(type, settings); ImGui.EndTabItem(); }
                 ImGui.EndTabBar();
+            }
+            if (ImGui.CollapsingHeader(MT("reference_catalog", "Reference catalogue (show / hide)") + "###TabletReferenceCatalogue"))
+            {
+                ImGui.TextDisabled(MetaCatalog.Version + " · " + MetaCatalog.ForType(type).Count() + " " + MT("mods", "modifiers"));
+                DrawMetaCatalog(type, settings, false);
             }
         }
 
@@ -85,8 +96,8 @@ namespace StashUtility
                         SaveSettings();
                     }
                 }
-                MetaText(MT("fubgun_rule", "Additional random map modifiers AND (monster effectiveness OR increased number of rare monsters). The reference's 1-2 roll must reach 2 for Fubgun's exact recommendation."));
-                MetaText("https://mobalytics.gg/poe-2/atlas-trees/fubgun-atlas-tree-strats");
+                TabletHelp(MT("fubgun_rule", "At least 2 extra map modifiers AND (monster effectiveness OR more rare monsters).") +
+                    "\nhttps://mobalytics.gg/poe-2/atlas-trees/fubgun-atlas-tree-strats");
             }
             var active = ActiveMetaProfile(settings);
             if (ImGui.BeginCombo(MT("active_profile", "Active profile"), active?.Name ?? MT("none", "None")))
@@ -258,6 +269,7 @@ namespace StashUtility
 
         private void MetaTooltip(TabletMetaModifier modifier)
         {
+            if (!Settings.TabletHelpTooltips || !ImGuiHelper.HelpTooltipsEnabled) return;
             if (!ImGui.BeginTooltip()) return;
             ImGui.PushTextWrapPos(ImGui.GetFontSize() * 38);
             ImGui.TextUnformatted(modifier.CanonicalType + " · " + modifier.RankLabel + " · " + modifier.Code);
@@ -280,7 +292,9 @@ namespace StashUtility
                 foreach (var note in MetaCatalog.MethodAndSources)
                     MetaText(string.Join(" · ", note.Values.Where(v => !string.IsNullOrWhiteSpace(v))));
             }
-            if (ImGui.BeginTable("MetaCatalogue" + manual, manual ? 5 : 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
+            var tableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | (manual ? ImGuiTableFlags.None : ImGuiTableFlags.ScrollY);
+            var tableSize = manual ? Vector2.Zero : new Vector2(0, Math.Clamp(ImGui.GetContentRegionAvail().Y * .5f, 180f, 340f));
+            if (ImGui.BeginTable("MetaCatalogue" + manual, manual ? 5 : 4, tableFlags, tableSize))
             {
                 if (manual) ImGui.TableSetupColumn(MT("present", "Present"), ImGuiTableColumnFlags.WidthFixed, 65);
                 ImGui.TableSetupColumn(MT("rank", "Rank"), ImGuiTableColumnFlags.WidthFixed, 55);
@@ -313,7 +327,8 @@ namespace StashUtility
         private void DrawMetaAnalysis(string type, TabletProfile settings)
         {
             var active = ActiveMetaProfile(settings);
-            MetaText(MT("hover_hint", "Hover a tablet in the stash, inventory or merchant, then open this tab. The last observed tablet is shown without changing game input."));
+            ImGui.TextDisabled(MT("analysis", "Analysis"));
+            TabletHelp(MT("hover_hint", "Hover a tablet in the stash, inventory or merchant, then open this tab."));
             if (lastMetaObservation?.TabletType == type)
             {
                 ImGui.TextUnformatted(MT("last_hover", "Last observed tablet") + " : " + lastMetaItemName + " · " + lastMetaObservedUtc.ToLocalTime().ToString("HH:mm:ss"));

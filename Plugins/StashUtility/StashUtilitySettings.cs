@@ -9,6 +9,7 @@ namespace StashUtility
         // General
         public bool EnableWaystoneManager = true;
         public bool EnableTabletManager = true;
+        public bool TabletHelpTooltips = true;
         public bool EnableTabletUI = true;
         public bool HideTabletHighlightsOnItemHover = true;
         public bool DisableBadTabletHighlight = false;

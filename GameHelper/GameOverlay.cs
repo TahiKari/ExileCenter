@@ -288,7 +288,7 @@ namespace GameHelper
                 unsafe { io.NativePtr->FontDefault = mainIo.NativePtr->FontDefault; }
                 this.updateInput!();
                 ImGui.NewFrame();
-                try { this.draw(); }
+                try { using var theme = ImGuiTheme.UsePluginTheme(ImGuiTheme.ActivePluginTheme); this.draw(); }
                 finally { ImGui.Render(); }
                 this.deviceContext.OMSetRenderTargets(this.renderView!);
                 this.deviceContext.ClearRenderTargetView(this.renderView!, new Color4(0.075f, 0.085f, 0.105f, 1f));

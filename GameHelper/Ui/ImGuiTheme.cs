@@ -87,6 +87,69 @@ namespace GameHelper.Ui
         internal static readonly Vector4 Danger = new(0.85f, 0.35f, 0.35f, 1f);
         internal static readonly Vector4 SectionBg = new(0.171f, 0.1425f, 0.105f, 1f);
 
+        private static readonly string[] PluginThemeNames =
+        {
+            "LootTracker", "StashUtility", "AutoHotKeyTrigger", "KikiMeter", "CorpseCleaner", "AuraTracker",
+            "Radar", "RitualWispAlert", "WorldDrawing", "Atlas2", "PickupHelper", "PreloadAlert", "HealthBars",
+            "AutoPot", "SekhemaHelper", "AmanamuVoidAlert", "PlayerBuffBar", "SimpleBars", "Hiveblood",
+            "RunecraftHelper", "LootValue", "StashValueByZx0", "CameraZoom",
+        };
+
+        internal static string? ActivePluginTheme { get; private set; }
+
+        /// <summary>Returns a stable, muted accent for a plugin or one of its settings sections.</summary>
+        public static Vector4 PluginAccent(string key)
+        {
+            int index = Array.IndexOf(PluginThemeNames, key);
+            uint hash = 2166136261;
+            foreach (char character in key) hash = unchecked((hash ^ character) * 16777619);
+            float hue = index >= 0 ? (0.12f + index * 0.61803399f) % 1f : (hash % 3600) / 3600f;
+            ImGui.ColorConvertHSVtoRGB(hue, 0.38f, 0.84f, out var red, out var green, out var blue);
+            return new Vector4(red, green, blue, 1f);
+        }
+
+        /// <summary>Applies a plugin accent only during the current draw, then restores the previous style.</summary>
+        public static PluginThemeScope UsePluginTheme(string? key) => new(key);
+
+        public readonly struct PluginThemeScope : IDisposable
+        {
+            private readonly IntPtr context;
+            private readonly string? previousTheme;
+
+            internal PluginThemeScope(string? key)
+            {
+                this.context = string.IsNullOrEmpty(key) ? IntPtr.Zero : ImGui.GetCurrentContext();
+                this.previousTheme = ActivePluginTheme;
+                if (this.context == IntPtr.Zero) return;
+                ActivePluginTheme = key;
+                var accent = PluginAccent(key!);
+                Vector4 Tint(float amount) => Vector4.Lerp(new Vector4(.11f, .10f, .085f, 1), accent, amount);
+                ImGui.PushStyleColor(ImGuiCol.CheckMark, accent);
+                ImGui.PushStyleColor(ImGuiCol.SliderGrab, Tint(.55f));
+                ImGui.PushStyleColor(ImGuiCol.SliderGrabActive, accent);
+                ImGui.PushStyleColor(ImGuiCol.Button, Tint(.22f));
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Tint(.40f));
+                ImGui.PushStyleColor(ImGuiCol.ButtonActive, Tint(.53f));
+                ImGui.PushStyleColor(ImGuiCol.Header, Tint(.28f));
+                ImGui.PushStyleColor(ImGuiCol.HeaderHovered, Tint(.43f));
+                ImGui.PushStyleColor(ImGuiCol.HeaderActive, Tint(.53f));
+                ImGui.PushStyleColor(ImGuiCol.TabHovered, Tint(.40f));
+                ImGui.PushStyleColor(ImGuiCol.TabSelected, Tint(.32f));
+                ImGui.PushStyleColor(ImGuiCol.TabSelectedOverline, accent);
+                ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(accent.X, accent.Y, accent.Z, .40f));
+                ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, Tint(.20f));
+                ImGui.PushStyleColor(ImGuiCol.NavCursor, accent);
+            }
+
+            public void Dispose()
+            {
+                if (this.context == IntPtr.Zero) return;
+                var current = ImGui.GetCurrentContext();
+                try { ImGui.SetCurrentContext(this.context); ImGui.PopStyleColor(15); }
+                finally { ImGui.SetCurrentContext(current); ActivePluginTheme = this.previousTheme; }
+            }
+        }
+
         // Roomier settings controls share the warm palette used by plugin windows.
         internal static void PushSettingsStyle()
         {
@@ -188,7 +251,7 @@ namespace GameHelper.Ui
         internal static void SectionHeader(string title, string? subtitle = null)
         {
             ImGui.Spacing();
-            ImGui.PushStyleColor(ImGuiCol.Text, Accent);
+            ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark]);
             ImGui.TextUnformatted(title);
             ImGui.PopStyleColor();
             if (!string.IsNullOrEmpty(subtitle))
