@@ -32,6 +32,7 @@ namespace StashUtility
             MetaText(MetaCatalog.SourceFile + " · " + MetaCatalog.Version + " · " + MetaCatalog.ForType(type).Count() + " " + MT("mods", "modifiers"));
             MetaText(MT("rank_order", "Individual ranks: S > A > B > C > D > E > F. Within a rank, 1 is best. These are the exact workbook ranks."));
             if (ImGui.Checkbox(MT("enable", "Use workbook AND / OR filters for this type"), ref settings.UseMetaFilters)) SaveSettings();
+            MetaText(MT("rank_and_rules", "The tablet keeps its S to F combination rank. AND / OR rules choose which tablets to highlight. Add nested groups for conditions such as (S1 AND A1) OR (S1 AND B1)."));
             MetaText(MT(settings.UseMetaFilters ? "mode_workbook" : "mode_legacy", settings.UseMetaFilters ?
                 "Active filter: workbook profile. Select a profile in Rules; Analysis explains each decision." :
                 "Active filter: legacy settings. The catalogue below always shows the workbook S to F ranks. Create a profile in Rules and enable it above to use those filters."));
@@ -70,6 +71,23 @@ namespace StashUtility
 
         private void DrawMetaProfiles(string type, TabletProfile settings)
         {
+            if (type == "Irradiated Tablet")
+            {
+                if (ImGui.SmallButton(MT("fubgun_profile", "Use Fubgun's Irradiated combination")))
+                {
+                    var preset = CreateFubgunTabletProfile();
+                    if (!settings.MetaProfiles.Any(p => p?.Id == preset.Id) && settings.MetaProfiles.Count < 100)
+                        settings.MetaProfiles.Add(preset);
+                    if (settings.MetaProfiles.Any(p => p?.Id == preset.Id))
+                    {
+                        settings.ActiveMetaProfileId = preset.Id;
+                        settings.UseMetaFilters = true;
+                        SaveSettings();
+                    }
+                }
+                MetaText(MT("fubgun_rule", "Additional random map modifiers AND (monster effectiveness OR increased number of rare monsters). The reference's 1-2 roll must reach 2 for Fubgun's exact recommendation."));
+                MetaText("https://mobalytics.gg/poe-2/atlas-trees/fubgun-atlas-tree-strats");
+            }
             var active = ActiveMetaProfile(settings);
             if (ImGui.BeginCombo(MT("active_profile", "Active profile"), active?.Name ?? MT("none", "None")))
             {
@@ -96,6 +114,30 @@ namespace StashUtility
             if (ImGui.SmallButton(MT("delete", "Delete")))
             { settings.MetaProfiles.Remove(active); settings.ActiveMetaProfileId = settings.MetaProfiles.FirstOrDefault()?.Id ?? ""; SaveSettings(); }
             ImGui.EndDisabled();
+        }
+
+        private static TabletFilterProfile CreateFubgunTabletProfile()
+        {
+            const string type = "Irradiated Tablet";
+            TabletRuleNode Mod(string rawId) => new()
+            {
+                Kind = TabletRuleKind.Modifier,
+                ModifierId = MetaCatalog.Recognize(type, new[] { rawId }).Mods[0].Modifier?.Id ?? "",
+            };
+            var additional = Mod("TowerMapAdditionalModifier");
+            additional.MinimumRoll = 2;
+            return new TabletFilterProfile
+            {
+                Id = "fubgun-irradiated-combination", Name = "Fubgun - Irradiated", TabletType = type,
+                Rule = new() { Kind = TabletRuleKind.All, Children = new()
+                {
+                    additional,
+                    new() { Kind = TabletRuleKind.Any, Children = new()
+                    {
+                        Mod("TowerMonsterEffectiveness"), Mod("TowerRarePackIncrease"),
+                    } },
+                } },
+            };
         }
 
         private bool DrawMetaAction(string label, ref TabletFilterAction action)
@@ -139,7 +181,11 @@ namespace StashUtility
                 {
                     int kind = (int)node.Kind - (int)TabletRuleKind.Modifier; ImGui.SetNextItemWidth(Math.Min(240, ImGui.GetContentRegionAvail().X));
                     if (ImGui.Combo("##condition", ref kind, MT("conditions", "Specific modifier\0Exact rank\0Exact subrank\0Minimum count\0No rank below\0")))
-                    { node.Kind = (TabletRuleKind)(kind + (int)TabletRuleKind.Modifier); changed = true; }
+                    {
+                        node.Kind = (TabletRuleKind)(kind + (int)TabletRuleKind.Modifier);
+                        if (node.Kind is not (TabletRuleKind.Modifier or TabletRuleKind.SubRank)) node.MinimumRoll = null;
+                        changed = true;
+                    }
                     if (node.Kind == TabletRuleKind.Modifier)
                     {
                         var selected = MetaCatalog.Find(type, node.ModifierId); ImGui.SetNextItemWidth(-1);
@@ -176,6 +222,17 @@ namespace StashUtility
                             changed |= ImGui.Checkbox(MT("exact_count", "Count this exact rank only (otherwise: this rank or better)"), ref node.ExactCountRank);
                         }
                     }
+                    if (node.Kind is TabletRuleKind.Modifier or TabletRuleKind.SubRank)
+                    {
+                        bool requireRoll = node.MinimumRoll != null;
+                        if (ImGui.Checkbox(MT("minimum_roll", "Minimum roll"), ref requireRoll))
+                        { node.MinimumRoll = requireRoll ? 0f : null; changed = true; }
+                        if (node.MinimumRoll is { } minimum)
+                        {
+                            ImGui.SameLine(); ImGui.SetNextItemWidth(100);
+                            if (ImGui.InputFloat("##minimumRoll", ref minimum)) { node.MinimumRoll = minimum; changed = true; }
+                        }
+                    }
                 }
             }
             finally { ImGui.PopID(); }
@@ -185,7 +242,7 @@ namespace StashUtility
         private string MetaSummary(TabletRuleNode node, string type, int depth = 0)
         {
             if (node == null || depth > TabletFilterEngine.MaximumDepth) return "?";
-            return node.Kind switch
+            string summary = node.Kind switch
             {
                 TabletRuleKind.All or TabletRuleKind.Any => "(" + string.Join(" " + MT(node.Kind == TabletRuleKind.All ? "and" : "or", node.Kind == TabletRuleKind.All ? "AND" : "OR") + " ",
                     (node.Children ?? new()).Select(c => MetaSummary(c, type, depth + 1))) + ")",
@@ -196,6 +253,7 @@ namespace StashUtility
                 TabletRuleKind.NoRankBelow => MT("no_below", "No modifier below") + " " + node.Rank,
                 _ => "?"
             };
+            return summary + (node.MinimumRoll is { } minimum ? " (" + MT("minimum_roll", "Minimum roll") + " ≥ " + minimum + ")" : "");
         }
 
         private void MetaTooltip(TabletMetaModifier modifier)
@@ -330,8 +388,19 @@ namespace StashUtility
         private TabletFilterResult AnalyzeMetaTablet(string type, Mods mods)
         {
             Settings.TabletProfiles.TryGetValue(type ?? "", out var settings);
+            var observation = MetaCatalog.Recognize(type, mods?.ExplicitMods.Select(m => m.name),
+                mods != null && mods.Rarity != GameHelper.RemoteEnums.Rarity.Unique);
+            for (int i = 0; mods != null && i < observation.Mods.Count; i++)
+            {
+                var raw = mods.ExplicitMods[i];
+                var definition = Data.ModDatabase.AllTabletMods.FirstOrDefault(m =>
+                    m.TabletTypes.Contains(type) && MatchesModId(raw.name, m.Id));
+                float value = definition?.RollValueIndex == 1 ? raw.values.value1 : raw.values.value0;
+                value /= definition?.RollDivisor ?? 1f;
+                observation.Mods[i].Roll = float.IsFinite(value) ? value : null;
+            }
             return TabletFilterEngine.Evaluate(settings == null ? null : ActiveMetaProfile(settings), MetaCatalog,
-                MetaCatalog.Recognize(type, mods?.ExplicitMods.Select(m => m.name), mods != null && mods.Rarity != GameHelper.RemoteEnums.Rarity.Unique));
+                observation);
         }
 
         private void DrawMetaTabletHighlight(string name, string type, Vector2 pos, Vector2 size, Mods mods)
@@ -345,8 +414,11 @@ namespace StashUtility
             var color = result.Action == TabletFilterAction.Signal ? new Vector4(1, .73f, .3f, 1) : MetaResultColor(result); float scale = size.X / 52f;
             if (Settings.ShowTabletModBorder) ImGui.GetBackgroundDrawList().AddRect(pos + Vector2.One, pos + size - Vector2.One, ImGuiHelper.Color(color), 3, ImDrawFlags.RoundCornersAll, Math.Clamp(scale, 1, 2));
             if (Settings.ShowRarityBorder && mods != null) DrawItemRarityMarker(pos, size, scale, Settings.ShowTabletModBorder ? Math.Clamp(scale, 1, 2) : 0, mods.Rarity);
-            string badge = result.State is TabletFilterState.Uncertain or TabletFilterState.Invalid ? "?" :
+            Settings.TabletProfiles.TryGetValue(type, out var settings);
+            var classification = ClassifyTabletMods(mods, settings, type);
+            string status = result.State is TabletFilterState.Uncertain or TabletFilterState.Invalid ? "?" :
                 result.Action == TabletFilterAction.Signal ? "!" : result.State == TabletFilterState.Accepted ? "OK" : "NON";
+            string badge = (classification.IsRanked ? classification.RankLabel : PluginText.T("stashutility.filters.tablet_unclassified", "N/C")) + " · " + status;
             DrawTabletRankBadge(pos, size, badge, scale, Math.Max(2, Settings.BorderMargin * scale));
         }
 

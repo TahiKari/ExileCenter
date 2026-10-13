@@ -86,7 +86,7 @@ namespace StashUtility.Data
         public static readonly TabletMetaCatalog TabletMeta = LoadTabletMeta();
         public static readonly List<JewelMod> AllJewelMods = LoadCatalog<JewelMod>("jewel_mod_ranges.json");
 
-        public const int TabletFarmPresetVersion = 1;
+        public const int TabletFarmPresetVersion = 2;
 
         // Editable loot/currency farming synthesis for 0.5.5, not an official tier list.
         // Fubgun: mobalytics.gg/poe-2/profile/fubgun/atlas-trees/fubgun-s-atlas-tree-and-strats

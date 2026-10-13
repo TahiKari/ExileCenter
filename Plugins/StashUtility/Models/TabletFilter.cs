@@ -99,6 +99,7 @@ namespace StashUtility.Models
         public string ModifierId = "", Rank = "S", RankLabel = "S1";
         public int Minimum = 1;
         public bool ExactCountRank;
+        public float? MinimumRoll;
     }
 
     public sealed class TabletFilterProfile
@@ -120,6 +121,7 @@ namespace StashUtility.Models
     {
         public string RawId;
         public TabletMetaModifier Modifier;
+        public float? Roll;
     }
 
     public sealed class TabletObservation
@@ -165,6 +167,8 @@ namespace StashUtility.Models
                 if (node == null || !seen.Add(node) || depth > MaximumDepth || seen.Count > MaximumNodes) return "tree-limit";
                 if (string.IsNullOrWhiteSpace(node.Id) || node.Id.Length > 64 || !ids.Add(node.Id)) return "node-id";
                 if (!Enum.IsDefined(node.Kind)) return "condition-kind";
+                if (node.MinimumRoll is { } minimum && (!float.IsFinite(minimum) ||
+                    node.Kind is not (TabletRuleKind.Modifier or TabletRuleKind.SubRank))) return "minimum-roll";
                 if (node.Kind is TabletRuleKind.All or TabletRuleKind.Any)
                 {
                     if (node.Children == null || node.Children.Count == 0) return "empty-group";
@@ -217,6 +221,15 @@ namespace StashUtility.Models
                 };
                 bool matches = node.Kind == TabletRuleKind.MinimumCount ? value.Count >= node.Minimum :
                     node.Kind == TabletRuleKind.NoRankBelow ? value.Count == 0 : value.Count > 0;
+                if (node.MinimumRoll is { } minimum && value.Count > 0)
+                {
+                    var rolls = observation.Mods.Where(m => m?.Modifier != null &&
+                        (node.Kind == TabletRuleKind.Modifier ? m.Modifier.Id == node.ModifierId : m.Modifier.RankLabel == node.RankLabel))
+                        .Select(m => m.Roll).ToArray();
+                    matches = rolls.Any(r => r is { } roll && float.IsFinite(roll) && roll >= minimum);
+                    if (!matches && rolls.Any(r => r == null || !float.IsFinite(r.Value)))
+                    { value.Matches = null; return value; }
+                }
                 value.Matches = uncertain && node.Kind == TabletRuleKind.NoRankBelow ? value.Count > 0 ? false : null :
                     uncertain && !matches ? null : matches;
                 return value;

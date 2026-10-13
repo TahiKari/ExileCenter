@@ -870,13 +870,12 @@ namespace StashUtility
                 Settings.TabletProfiles[type] = profile = new TabletProfile();
 
             DrawTabletMetaFilters(type, profile);
-            if (profile.UseMetaFilters) return;
-            if (!ImGui.CollapsingHeader(PluginText.T("stashutility.meta.legacy_settings", "Legacy combination settings (S to D)"))) return;
-            ImGui.TextWrapped(PluginText.T("stashutility.filters.rank_help", "Choose S, A, B, C or D for each wanted modifier. Four known mod ranks determine S1-S35, A1-A20, B1-B10, C1-C4 or D1. Number 1 is best. Unknown ranks stay unclassified. Minimum-roll filters are preserved; uncheck to ignore."));
+            if (!ImGui.CollapsingHeader(PluginText.T("stashutility.meta.legacy_settings", "Modifier and tablet ranks (S to F)"), ImGuiTreeNodeFlags.DefaultOpen)) return;
+            ImGui.TextWrapped(PluginText.T("stashutility.filters.rank_help", "Choose S to F for each modifier. Four known ranks determine S1-S84, A1-A56, B1-B35, C1-C20, D1-D10, E1-E4 or F1. Number 1 is best. AND / OR filters control highlighting without replacing the tablet's rank. Unknown or incomplete data stays unclassified."));
             if (ImGui.CollapsingHeader(PluginText.T("stashutility.filters.farm_preset", "Farming ranks - PoE 2 0.5.5")))
             {
-                ImGui.TextWrapped(PluginText.T("stashutility.filters.farm_preset_help", "Loot/currency farming synthesis, editable: S = priority, A = excellent, B = useful, C = secondary, D = low priority. All modifiers are selected, including D. Your minimum rolls are retained. Less documented grades are estimates; the best choice depends on your Atlas and farming strategy."));
-                ImGui.TextWrapped(PluginText.T("stashutility.filters.farm_preset_sources", "Sources: Fubgun (Mobalytics), Ortenrosse (Ritual), koni_pu3 (Expedition), Dslily (Delirium), MisoxShiru (Abyss), community Breach/Temple tests."));
+                ImGui.TextWrapped(PluginText.T("stashutility.filters.farm_preset_help", "Apply the reference workbook's S to F ranks to the eight tablet types. E and F remain distinct. Your minimum rolls and AND / OR profiles are retained."));
+                ImGui.TextWrapped(Data.ModDatabase.TabletMeta.SourceFile);
                 if (ImGui.Button(PluginText.T("stashutility.filters.farm_preset_apply", "Reapply farming ranks to all 8 tablets")))
                 {
                     if (ApplyTabletFarmPreset(true)) SaveSettings();
@@ -6841,7 +6840,7 @@ namespace StashUtility
             else if (rule == 3) priority?.Add(id);
         }
 
-        private static readonly string[] TabletModRanks = { "S", "A", "B", "C", "D" };
+        private static readonly string[] TabletModRanks = { "S", "A", "B", "C", "D", "E", "F" };
 
         private bool ApplyTabletFarmPreset(bool force = false)
         {
@@ -6854,11 +6853,18 @@ namespace StashUtility
                 if (!Settings.TabletProfiles.TryGetValue(type, out var profile) || profile == null)
                     Settings.TabletProfiles[type] = profile = new TabletProfile();
                 MigrateTabletModRanks(profile);
-                foreach (var mod in Data.ModDatabase.AllTabletMods.Where(mod => mod.TabletTypes.Contains(type)))
+                var definitions = Data.ModDatabase.AllTabletMods.Where(mod => mod.TabletTypes.Contains(type)).ToArray();
+                // Upgrade only untouched presets; manual ranks and unchecked modifiers stay unchanged.
+                bool empty = profile.ModRanks.Count == 0 && profile.GoodModPatterns.Count == 0 &&
+                    profile.BadModPatterns.Count == 0 && profile.GodModPatterns.Count == 0;
+                bool oldPreset = Settings.TabletFarmPresetVersion == 1 && definitions.All(mod =>
+                    GetTabletModRank(mod.Id, profile.ModRanks, profile.GoodModPatterns, profile.BadModPatterns, profile.GodModPatterns) ==
+                    (Data.ModDatabase.GetTabletFarmRank(type, mod.Id) ?? ""));
+                if (!force && !empty && !oldPreset) continue;
+                foreach (var mod in definitions)
                 {
-                    string rank = Data.ModDatabase.GetTabletFarmRank(type, mod.Id);
-                    if (rank != null)
-                        SetTabletModRank(mod.Id, rank, profile.ModRanks, profile.GoodModPatterns, profile.BadModPatterns, profile.GodModPatterns);
+                    string rank = Data.ModDatabase.TabletMeta.Recognize(type, new[] { mod.Id }).Mods[0].Modifier?.Rank ?? "";
+                    SetTabletModRank(mod.Id, rank, profile.ModRanks, profile.GoodModPatterns, profile.BadModPatterns, profile.GodModPatterns);
                 }
             }
             Settings.TabletFarmPresetVersion = Data.ModDatabase.TabletFarmPresetVersion;
@@ -6869,14 +6875,13 @@ namespace StashUtility
         {
             new(1f, .8f, .3f, 1f),
             new(.78f, .6f, 1f, 1f), new(.4f, .7f, 1f, 1f), new(.35f, .85f, .65f, 1f),
-            new(1f, 1f, 1f, 1f)
+            new(1f, 1f, 1f, 1f), new(1f, .65f, .3f, 1f), new(.95f, .4f, .4f, 1f)
         };
 
         private static string NormalizeTabletModRank(string rank) => rank switch
         {
             "S+++" or "S++" or "S+" => "S",
-            "E" or "F" => "D",
-            "S" or "A" or "B" or "C" or "D" => rank,
+            "S" or "A" or "B" or "C" or "D" or "E" or "F" => rank,
             _ => ""
         };
 
@@ -6915,7 +6920,7 @@ namespace StashUtility
         public static Models.TabletClassification ClassifyTabletRanks(IReadOnlyList<string> ranks)
         {
             if (ranks == null || ranks.Count != 4) return UnclassifiedTablet;
-            Span<int> counts = stackalloc int[5];
+            Span<int> counts = stackalloc int[TabletModRanks.Length];
             counts.Clear();
             foreach (var rank in ranks)
             {
@@ -6938,8 +6943,10 @@ namespace StashUtility
                 if (string.IsNullOrEmpty(raw.name)) return UnclassifiedTablet;
                 var definition = TabletRankingDefinitions.FirstOrDefault(mod =>
                     mod.TabletTypes.Contains(type) && MatchesModId(raw.name, mod.Id));
-                if (definition == null || !profile.ModRanks.TryGetValue(definition.Id, out ranks[i]))
-                    return UnclassifiedTablet;
+                if (definition != null && profile.ModRanks.TryGetValue(definition.Id, out var configured))
+                    ranks[i] = NormalizeTabletModRank(configured);
+                else
+                    ranks[i] = Data.ModDatabase.TabletMeta.Recognize(type, new[] { raw.name }).Mods[0].Modifier?.Rank ?? "";
             }
             return ClassifyTabletRanks(ranks);
         }
