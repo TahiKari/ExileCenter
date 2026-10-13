@@ -128,7 +128,7 @@ jobs:
           Télécharger : https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/GameHelper-Personnalise-win-x64.zip
           Installation : extraire le ZIP dans un dossier puis lancer GameHelper.exe.
           Nécessite le runtime .NET 10 Desktop x64. GameOffsets.dll est conservée sans recompilation.
-          Les paramètres personnels ne sont pas inclus. Le code correspondant est disponible au tag $env:RELEASE_TAG.
+          Les nouvelles installations utilisent le profil de base de TahiKari ; les mises à jour conservent les réglages existants. Le code correspondant est disponible au tag $env:RELEASE_TAG.
           Après cette première installation, les nouvelles Releases sont proposées au démarrage (Oui/Non) ou signalées dans l'application.
           Le bouton « Mettre à jour et redémarrer » télécharge, vérifie et installe la mise à jour en conservant vos réglages.
           "@ | Set-Content "$output/notes.txt" -Encoding utf8NoBOM

@@ -69,6 +69,7 @@ namespace GameHelper
                 // exceptions on the main thread.
             };
 
+            JsonHelper.InitializeDefaultSettings(Directory.GetCurrentDirectory());
             if (await LocalUpdates.InstallBeforeStartupAsync()) return;
 
             using (Core.Overlay = new GameOverlay(MiscHelper.GenerateRandomString()))

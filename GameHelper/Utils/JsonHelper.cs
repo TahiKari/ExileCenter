@@ -7,12 +7,40 @@ namespace GameHelper.Utils
     using System;
     using System.IO;
     using Newtonsoft.Json;
+    using Newtonsoft.Json.Linq;
 
     /// <summary>
     ///     Utility functions to help read/write to Json files.
     /// </summary>
     internal static class JsonHelper
     {
+        /// <summary>Seeds bundled settings only when the user's file does not exist.</summary>
+        public static void InitializeDefaultSettings(string directory)
+        {
+            using var stream = typeof(JsonHelper).Assembly.GetManifestResourceStream("GameHelper.Data.DefaultSettings.json")
+                ?? throw new InvalidDataException("Bundled default settings are missing.");
+            using var reader = new StreamReader(stream);
+            var defaults = JObject.Parse(reader.ReadToEnd());
+            var root = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            foreach (var setting in defaults.Properties())
+            {
+                var target = Path.GetFullPath(Path.Combine(root, setting.Name));
+                if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Invalid default settings path: " + setting.Name);
+                if (File.Exists(target)) continue;
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                var temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try
+                {
+                    File.WriteAllText(temporary, setting.Value.ToString(Formatting.Indented));
+                    try { File.Move(temporary, target); }
+                    catch (IOException) when (File.Exists(target)) { }
+                }
+                finally { if (File.Exists(temporary)) File.Delete(temporary); }
+            }
+        }
+
         /// <summary>
         ///     Creates new instance or loads from the file if it exists.
         ///     If the file is unreadable or unparseable, logs a warning,
