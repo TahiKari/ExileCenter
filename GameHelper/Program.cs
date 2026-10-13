@@ -548,7 +548,8 @@ namespace GameHelper
             var target = Path.GetFullPath(Path.Combine(fullRoot, relative));
             if (!target.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException(relative);
             for (var current = target; current != null && current.Length >= fullRoot.Length - 1; current = Path.GetDirectoryName(current))
-                if ((File.Exists(current) || Directory.Exists(current)) && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                if ((File.Exists(current) || Directory.Exists(current)) && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0 &&
+                    !UpdatePathHelper.IsAllowedReparsePoint(current))
                     throw new InvalidDataException("Reparse point: " + current);
             return target;
         }
@@ -601,7 +602,11 @@ namespace GameHelper
 
         private static async Task StartInstallerAsync(string stage)
         {
-            var script = InstallerScript.Replace("__PLAN__", Path.Combine(stage, "plan.json").Replace("'", "''"));
+            using var source = typeof(UpdatePathHelper).Assembly.GetManifestResourceStream("GameHelper.Utils.UpdatePathHelper.cs")
+                ?? throw new InvalidDataException("Update path helper is missing.");
+            using var reader = new StreamReader(source);
+            var script = InstallerScript.Replace("__PLAN__", Path.Combine(stage, "plan.json").Replace("'", "''"))
+                .Replace("__UPDATE_PATH_HELPER__", reader.ReadToEnd());
             var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
             var powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
             using var process = Process.Start(new ProcessStartInfo(powershell)
@@ -644,7 +649,14 @@ namespace GameHelper
                 $path=[IO.Path]::GetFullPath((Join-Path $root $relative))
                 if(-not $path.StartsWith($root,[StringComparison]::OrdinalIgnoreCase)) {throw 'Invalid target path'}
                 for($parent=$path; $parent -and $parent.Length -ge $root.Length-1; $parent=[IO.Path]::GetDirectoryName($parent)) {
-                    if((Test-Path -LiteralPath $parent) -and ((Get-Item -LiteralPath $parent -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {throw 'Reparse point in target'}
+                    if((Test-Path -LiteralPath $parent) -and ((Get-Item -LiteralPath $parent -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                        if(-not ('GameHelper.Utils.UpdatePathHelper' -as [type])) {
+                            Add-Type -TypeDefinition @'
+            __UPDATE_PATH_HELPER__
+            '@
+                        }
+                        if(-not [GameHelper.Utils.UpdatePathHelper]::IsAllowedReparsePoint($parent)) {throw 'Reparse point in target'}
+                    }
                 }
                 return $path
             }
@@ -664,11 +676,16 @@ namespace GameHelper
                     $source=Join-Path (Join-Path $plan.Stage 'payload') $file.Relative
                     if((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $file.Hash) {throw 'Staged file checksum failed'}
                     if(Test-Path -LiteralPath $destination) {
-                        $handle=[IO.File]::Open($destination,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
-                        $handle.Dispose()
+                        for($attempt=0;$attempt -lt 20;$attempt++) {
+                            try {
+                                $handle=[IO.File]::Open($destination,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+                                $handle.Dispose()
+                                break
+                            } catch {if($attempt -eq 19){throw}; Start-Sleep -Milliseconds 150}
+                        }
                         $saved=Join-Path $backup $file.Relative
                         [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($saved)) | Out-Null
-                        [IO.File]::Copy($destination,$saved,$true)
+                        CopyRetry $destination $saved
                     }
                 }
                 $statePath=Target 'local-update-state.json'
@@ -702,6 +719,7 @@ namespace GameHelper
                     } catch {$failure+='; state: '+$_.Exception.Message}
                 }
                 try {[IO.File]::WriteAllText((Target 'local-update-error.txt'),$failure)} catch {}
+                try {[IO.File]::WriteAllText((Join-Path $plan.Stage 'error.txt'),$failure)} catch {}
                 if($canRestart){try {Start-Process -FilePath (Target 'GameHelper.exe') -WorkingDirectory $root -WindowStyle Hidden -ErrorAction Stop} catch {}}
             }
             """;
