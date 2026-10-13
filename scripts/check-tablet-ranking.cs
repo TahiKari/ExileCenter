@@ -225,6 +225,34 @@ internal static class TabletRankingCheck
         {
             handle.SetValue(process, reader);
             ImGuiNET.ImGui.GetIO().DisplaySize = new Vector2(640, 360);
+            ImGuiNET.ImGui.GetIO().DeltaTime = 1f / 60f;
+            unsafe { ImGuiNET.ImGui.GetIO().NativePtr->IniFilename = null; }
+            ImGuiNET.ImGui.GetIO().Fonts.AddFontDefault();
+            ImGuiNET.ImGui.GetIO().Fonts.GetTexDataAsRGBA32(out IntPtr pixels, out int width, out int height, out int bytes);
+            var highlightPlugin = new StashUtilityCore { DllDirectory = root };
+            highlightPlugin.Settings.EnableTabletManager = true;
+            highlightPlugin.Settings.HideTabletHighlightsOnItemHover = false;
+            var itemType = typeof(GameHelper.RemoteObjects.States.InGameStateObjects.Item);
+            var entityType = itemType.BaseType;
+            var highlight = typeof(StashUtilityCore).GetMethod("EvaluateAndHighlightItem", flags);
+            void CheckItemOverlay(string path, string name, bool expected)
+            {
+                var item = Activator.CreateInstance(itemType, flags, null, new object[] { IntPtr.Zero }, null);
+                entityType.GetProperty("Path").SetValue(item, path);
+                var baseComponent = new Base(IntPtr.Zero);
+                typeof(Base).GetProperty("BaseItemName").SetValue(baseComponent, name);
+                var components = (System.Collections.Concurrent.ConcurrentDictionary<string, GameHelper.RemoteObjects.Components.ComponentBase>)entityType.GetField("componentCache", flags).GetValue(item);
+                components["Base"] = baseComponent;
+                ImGuiNET.ImGui.NewFrame();
+                int before = ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer.Size;
+                highlight.Invoke(highlightPlugin, new object[] { item, new Vector2(200, 40), new Vector2(52) });
+                Check((ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer.Size > before) == expected, "Tablet overlay only on real tablets: " + path);
+                ImGuiNET.ImGui.EndFrame();
+            }
+            CheckItemOverlay("Metadata/Items/Currency/CurrencyIncursionCorruptTablet", "Infuseur antique", false);
+            CheckItemOverlay("Metadata/Items/Currency/CurrencyIncursionCorruptTablet", "Ancient Infuser", false);
+            CheckItemOverlay("Metadata/Items/Currency/Tablet", "Tablet", false);
+            CheckItemOverlay("Metadata/Items/TowerAugment/GenericAugment", "Tablette irradiée", true);
             var parentData = new GameOffsets.Objects.UiElement.UiElementBaseOffset
             {
                 Self = parent, Flags = 1u << 11, LocalScaleMultiplier = 1,
@@ -302,6 +330,12 @@ internal static class TabletRankingCheck
         // Closed panels must never enter ImGui or dereference transient game memory.
         // This fixture deliberately has no ImGui context and no attached game process.
         var core = new StashUtilityCore();
+        var tabletIdentity = typeof(StashUtilityCore).GetMethod("IsTabletItem", BindingFlags.Static | BindingFlags.NonPublic);
+        bool IsTablet(string path) => (bool)tabletIdentity.Invoke(null, new object[] { path });
+        foreach (string id in new[] { "BreachAugment", "DeliriumAugment", "RitualAugment", "GenericAugment", "MapBossAugment", "AbyssAugment", "ExpeditionAugment", "IncursionAugment" })
+            Check(IsTablet("Metadata/Items/TowerAugment/" + id), "True tablet remains recognized: " + id);
+        foreach (string path in new[] { null, "", "Metadata/Items/Currency/CurrencyIncursionCorruptTablet", "Metadata/Items/Currency/Tablet", "Metadata/Items/Other/TowerAugment/Fake", "Metadata/Items/TowerAugmentFake/Tablet" })
+            Check(!IsTablet(path), "Non-tablet identifier rejected: " + path);
         var occlusions = (IList)typeof(StashUtilityCore).GetField("tabletOcclusions", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(core);
         var updateOcclusions = typeof(StashUtilityCore).GetMethod("UpdateTabletOcclusions", BindingFlags.Instance | BindingFlags.NonPublic);
         for (int i = 0; i < 1000; i++)

@@ -2091,8 +2091,7 @@ namespace StashUtility
                     item.Path = fresh.Path; item.Kind = GetItemKind(fresh.Path);
                     item.Rarity = fresh.TryGetComponent<Mods>(out var mods) ? mods.Rarity : Rarity.Normal;
                     item.Tier = GetTabPriority(fresh.Path) ?? 0;
-                    item.IsTablet = fresh.Path.Contains("TowerAugment", StringComparison.OrdinalIgnoreCase) ||
-                        fresh.Path.Contains("Tablet", StringComparison.OrdinalIgnoreCase);
+                    item.IsTablet = IsTabletItem(fresh.Path);
                     if (item.IsTablet)
                     {
                         fresh.TryGetComponent<Base>(out var tabletBase);
@@ -5674,7 +5673,7 @@ namespace StashUtility
             var internalNameStr = baseComponent.InternalName;
 
             bool isWaystone = (!string.IsNullOrEmpty(name) && name.Contains("Waystone")) || path.Contains("MapKey", StringComparison.OrdinalIgnoreCase) || path.Contains("Waystone", StringComparison.OrdinalIgnoreCase);
-            bool isTablet = (!string.IsNullOrEmpty(name) && name.Contains("Tablet")) || path.Contains("TowerAugment", StringComparison.OrdinalIgnoreCase) || path.Contains("Tablet", StringComparison.OrdinalIgnoreCase);
+            bool isTablet = IsTabletItem(path);
             bool isJewel = (!string.IsNullOrEmpty(name) && (name.Contains("Jewel") || name == "Sapphire" || name == "Ruby" || name == "Emerald" || name == "Diamond" || name.Contains("Time-Lost"))) || path.Contains("Metadata/Items/Jewels", StringComparison.OrdinalIgnoreCase) || path.Contains("Jewel", StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrEmpty(internalNameStr) && internalNameStr.Contains("Jewel", StringComparison.OrdinalIgnoreCase));
 
             if (!isWaystone && !isTablet && !isJewel) return;
@@ -6944,6 +6943,9 @@ namespace StashUtility
             }
             return ClassifyTabletRanks(ranks);
         }
+
+        private static bool IsTabletItem(string path) =>
+            path?.StartsWith("Metadata/Items/TowerAugment/", StringComparison.OrdinalIgnoreCase) == true;
 
         private static string GetTabletProfileType(string name, string path)
         {
