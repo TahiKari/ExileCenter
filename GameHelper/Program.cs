@@ -90,6 +90,7 @@ namespace GameHelper
         private const string Repository = "TahiKari/Gamehelper2";
         private const string GitHubPackageName = "GameHelper-Personnalise-win-x64.zip";
         private static readonly HttpClient GitHubClient = new() { Timeout = TimeSpan.FromSeconds(8) };
+        private static readonly HttpClient PackageClient = new() { Timeout = TimeSpan.FromMinutes(3) };
         private static readonly string? CurrentReleaseTag = typeof(Program).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(attribute => attribute.Key == "GameHelperReleaseTag")?.Value;
         private sealed record Package(string Id, string PackageFile, string Sha256, string Label)
@@ -110,6 +111,8 @@ namespace GameHelper
         private static string? lastNotified;
         private static string? error;
         private static bool installerStarted;
+        private static long downloadBytes;
+        private static long downloadTotal;
         internal static bool IsLocalInstallation => Directory.Exists(UpdateDirectory) || File.Exists(Path.Combine(InstallDirectory, StateName));
         internal static bool IsAvailable => offer != null;
         internal static string InstalledVersion => DisplayVersion(CurrentReleaseTag) ?? Core.GetVersion();
@@ -131,22 +134,24 @@ namespace GameHelper
                 if (confirm != null)
                 {
                     if (!confirm(question)) return false;
+                    await PrepareInstallerAsync(offer, InstallDirectory, UpdateDirectory, Environment.ProcessId);
+                    installerStarted = true;
                 }
                 else
                 {
-                    using var prompt = new StartupUpdateWindow(question, UpdateTitle(offer));
+                    using var prompt = new StartupUpdateWindow(question, UpdateTitle(offer), async () =>
+                    {
+                        await PrepareInstallerAsync(offer, InstallDirectory, UpdateDirectory, Environment.ProcessId);
+                        installerStarted = true;
+                    });
                     await prompt.Run();
                     if (!prompt.InstallRequested) return false;
                 }
-                var stage = await PreparePackageAsync(offer, InstallDirectory, UpdateDirectory, Environment.ProcessId);
-                StartInstaller(stage);
-                installerStarted = true;
                 return true;
             }
             catch (Exception ex)
             {
-                error = ex.Message;
-                Console.WriteLine("[Local update startup] " + ex);
+                RecordUpdateError(ex);
                 return false;
             }
         }
@@ -155,18 +160,26 @@ namespace GameHelper
         {
             private readonly string question;
             private readonly string title;
+            private readonly Func<Task> install;
+            private Task? installTask;
+            private string? installError;
             private SettingsDisplay? display;
             private volatile bool closeRequested;
             internal bool InstallRequested { get; private set; }
 
-            internal StartupUpdateWindow(string question, string title) : base("GameHelper update", true, 1, 1)
+            internal StartupUpdateWindow(string question, string title, Func<Task> install) : base("GameHelper update", true, 1, 1)
             {
                 this.question = question;
                 this.title = title;
+                this.install = install;
                 this.VSync = true;
             }
 
-            public override void Close() => this.closeRequested = true;
+            public override void Close()
+            {
+                if (this.installTask?.IsCompleted == false) return;
+                this.closeRequested = true;
+            }
 
             protected override Task PostInitialized()
             {
@@ -184,6 +197,21 @@ namespace GameHelper
 
             protected override void Render()
             {
+                if (this.installTask?.IsCompleted == true)
+                {
+                    try
+                    {
+                        this.installTask.GetAwaiter().GetResult();
+                        this.InstallRequested = true;
+                        this.Close();
+                    }
+                    catch (Exception ex)
+                    {
+                        this.installError = ex.Message;
+                        RecordUpdateError(ex);
+                    }
+                    this.installTask = null;
+                }
                 if (!this.closeRequested) this.display?.Render(true);
                 if (!this.closeRequested) return;
                 this.display?.Dispose();
@@ -210,15 +238,27 @@ namespace GameHelper
                     {
                         Ui.ImGuiTheme.SectionHeader(this.title ?? L.T("updates.available", "Update available"));
                         if (ImGui.BeginChild("##UpdateDetails", new Vector2(0, -62), ImGuiChildFlags.Borders))
+                        {
+                            if (this.installError != null)
+                            {
+                                ImGui.TextWrapped(L.F("updates.error", "Update failed: {0}", this.installError));
+                                ImGui.Separator();
+                            }
                             ImGui.TextWrapped(this.question);
+                        }
                         ImGui.EndChild();
                         ImGui.Spacing();
+                        if (this.installTask != null)
+                        {
+                            DrawPreparationProgress();
+                            return;
+                        }
                         var width = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X) / 2f;
                         ImGui.PushStyleColor(ImGuiCol.Button, Ui.ImGuiTheme.AccentMuted);
                         if (ImGui.Button(L.T("updates.startup_install", "Install update"), new Vector2(width, 38)))
                         {
-                            this.InstallRequested = true;
-                            this.Close();
+                            this.installError = null;
+                            this.installTask = this.install();
                         }
                         ImGui.PopStyleColor();
                         ImGui.SameLine();
@@ -290,10 +330,10 @@ namespace GameHelper
         private static async Task<CheckResult> CheckAvailableAsync()
         {
             var local = await Task.Run(() => Check(UpdateDirectory, InstallDirectory));
-            if (local.Offer != null || local.Error != null) return local;
+            if (local.Offer != null) return local;
             if (DateTime.UtcNow >= nextGitHubCheck)
             {
-                nextGitHubCheck = DateTime.UtcNow.AddMinutes(10);
+                nextGitHubCheck = DateTime.UtcNow.AddMinutes(2);
                 try
                 {
                     using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{Repository}/releases/latest");
@@ -310,18 +350,27 @@ namespace GameHelper
                 }
                 catch (Exception ex) { githubResult = new(null, ex.Message); }
             }
-            return githubResult;
+            return new(githubResult.Offer, local.Error ?? githubResult.Error);
+        }
+
+        private static async Task<string> PrepareInstallerAsync(Package package, string installRoot, string updateRoot, int processId)
+        {
+            var stage = await PreparePackageAsync(package, installRoot, updateRoot, processId);
+            await StartInstallerAsync(stage);
+            return stage;
         }
 
         private static async Task<string> PreparePackageAsync(Package package, string installRoot, string updateRoot, int processId)
         {
+            Interlocked.Exchange(ref downloadBytes, 0);
+            Interlocked.Exchange(ref downloadTotal, package.DownloadSize);
             if (package.DownloadUrl == null) return await Task.Run(() => Prepare(package, installRoot, updateRoot, processId));
             var downloadRoot = Path.Combine(Path.GetTempPath(), "GameHelper-Download-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(downloadRoot);
             try
             {
                 using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
-                using (var response = await GitHubClient.GetAsync(package.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, timeout.Token))
+                using (var response = await PackageClient.GetAsync(package.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, timeout.Token))
                 {
                     response.EnsureSuccessStatusCode();
                     if (response.Content.Headers.ContentLength is long length && length != package.DownloadSize)
@@ -335,6 +384,7 @@ namespace GameHelper
                     {
                         if ((total += read) > package.DownloadSize) throw new InvalidDataException("GitHub package too large.");
                         await output.WriteAsync(buffer.AsMemory(0, read), timeout.Token);
+                        Interlocked.Exchange(ref downloadBytes, total);
                     }
                     if (total != package.DownloadSize) throw new InvalidDataException("Incomplete GitHub download.");
                 }
@@ -378,8 +428,11 @@ namespace GameHelper
             {
                 var result = checkTask.GetAwaiter().GetResult();
                 checkTask = null;
-                offer = result.Offer;
-                error = result.Error;
+                if (prepareTask == null)
+                {
+                    offer = result.Offer;
+                    error = result.Error;
+                }
                 if (offer != null && lastNotified != offer.Id)
                 {
                     lastNotified = offer.Id;
@@ -390,14 +443,13 @@ namespace GameHelper
             {
                 try
                 {
-                    var stage = prepareTask.GetAwaiter().GetResult();
+                    prepareTask.GetAwaiter().GetResult();
                     prepareTask = null;
                     Coroutine.CoroutineHandler.RaiseEvent(CoroutineEvents.GameHelperEvents.TimeToSaveAllSettings);
-                    StartInstaller(stage);
                     installerStarted = true;
                     Core.GHSettings.IsOverlayRunning = false;
                 }
-                catch (Exception ex) { prepareTask = null; error = ex.Message; }
+                catch (Exception ex) { prepareTask = null; RecordUpdateError(ex); }
             }
             if (prepareTask == null && checkTask == null && DateTime.UtcNow >= nextCheck)
             {
@@ -422,9 +474,9 @@ namespace GameHelper
             Ui.ImGuiTheme.SectionHeader(L.T("updates.title", "Updates"), L.T("updates.description", "Updates from GitHub or your local folder. Your settings are preserved."));
             ImGui.TextWrapped("https://github.com/" + Repository + "/releases");
             if (Directory.Exists(UpdateDirectory)) ImGui.TextWrapped(UpdateDirectory);
-            ImGui.TextDisabled(L.T("updates.poll", "Checked at startup; GitHub every 10 minutes, local updates every 5 seconds."));
+            ImGui.TextDisabled(L.T("updates.poll", "Checked at startup; GitHub every 2 minutes, local updates every 5 seconds."));
             ImGui.Separator();
-            if (prepareTask != null) ImGui.TextWrapped(L.T("updates.preparing", "Downloading, checking and preparing the update…"));
+            if (prepareTask != null) DrawPreparationProgress();
             else if (offer != null)
             {
                 ImGui.TextColored(Ui.ImGuiTheme.Accent, UpdateTitle(offer));
@@ -438,7 +490,7 @@ namespace GameHelper
                 {
                     error = null;
                     var selected = offer;
-                    prepareTask = PreparePackageAsync(selected, InstallDirectory, UpdateDirectory, Environment.ProcessId);
+                    prepareTask = PrepareInstallerAsync(selected, InstallDirectory, UpdateDirectory, Environment.ProcessId);
                 }
             }
             else ImGui.TextWrapped(L.T("updates.none", "No update available."));
@@ -457,6 +509,23 @@ namespace GameHelper
             ImGui.EndDisabled();
             ImGui.TextWrapped(L.T("updates.restart_hint", "GameHelper briefly closes to replace its files, then restarts. The game stays open."));
             if (error != null) ImGui.TextWrapped(L.F("updates.error", "Update failed: {0}", error));
+        }
+
+        private static void DrawPreparationProgress()
+        {
+            ImGui.TextWrapped(L.T("updates.preparing", "Downloading, checking and preparing the update…"));
+            var total = Interlocked.Read(ref downloadTotal);
+            var received = Interlocked.Read(ref downloadBytes);
+            if (total > 0)
+                ImGui.ProgressBar((float)received / total, new Vector2(-1, 0), $"{received / 1048576d:0.0} / {total / 1048576d:0.0} MB");
+        }
+
+        private static void RecordUpdateError(Exception ex)
+        {
+            error = ex.Message;
+            Console.WriteLine("[Local update] " + ex);
+            try { File.WriteAllText(Path.Combine(InstallDirectory, ErrorName), ex.ToString()); }
+            catch (Exception logError) { Console.WriteLine("[Local update log] " + logError.Message); }
         }
 
         private static bool IsPackageFile(string relative)
@@ -529,16 +598,26 @@ namespace GameHelper
             return stage;
         }
 
-        private static void StartInstaller(string stage)
+        private static async Task StartInstallerAsync(string stage)
         {
             var script = InstallerScript.Replace("__PLAN__", Path.Combine(stage, "plan.json").Replace("'", "''"));
             var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
             var powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
             using var process = Process.Start(new ProcessStartInfo(powershell)
             {
-                UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden,
+                UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden, RedirectStandardError = true,
                 ArgumentList = { "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded },
             }) ?? throw new IOException("Cannot start local installer.");
+            var failure = process.StandardError.ReadToEndAsync();
+            var readyPath = Path.Combine(stage, "ready");
+            for (var attempt = 0; attempt < 100; attempt++)
+            {
+                if (File.Exists(readyPath)) return;
+                if (process.HasExited) throw new IOException("Cannot start local installer: " + await failure);
+                await Task.Delay(100);
+            }
+            if (!process.HasExited) process.Kill();
+            throw new IOException("Local installer did not become ready. GameHelper has not been closed.");
         }
 
         internal static void CompleteShutdown()
@@ -574,6 +653,7 @@ namespace GameHelper
                 }
             }
             try {
+                [IO.File]::WriteAllText((Join-Path $plan.Stage 'ready'),'ready')
                 $owner=$null
                 try {$owner=[Diagnostics.Process]::GetProcessById([int]$plan.ProcessId)} catch [ArgumentException] {}
                 if($owner -and -not $owner.WaitForExit(60000)) {throw 'GameHelper did not close in time'}

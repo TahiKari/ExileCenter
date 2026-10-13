@@ -188,7 +188,7 @@
   "updates.description": "Mises à jour depuis les Releases GitHub de TahiKari ou votre dossier local. Vos réglages sont conservés.",
   "updates.available": "Une mise à jour de GameHelper est disponible",
   "updates.toast": "Ouvrez GameHelper avec {0} pour l’installer.",
-  "updates.poll": "Vérification au démarrage, puis toutes les 10 minutes sur GitHub et toutes les 5 secondes en local.",
+  "updates.poll": "Vérification au démarrage, puis toutes les 2 minutes sur GitHub et toutes les 5 secondes en local.",
   "updates.preparing": "Téléchargement, vérification et préparation de la mise à jour…",
   "updates.apply": "Mettre à jour et redémarrer",
   "updates.none": "Aucune mise à jour disponible.",

@@ -189,7 +189,7 @@
   "updates.description": "Updates from TahiKari's GitHub Releases or your local folder. Your settings are preserved.",
   "updates.available": "A GameHelper update is available",
   "updates.toast": "Open GameHelper with {0} to install it.",
-  "updates.poll": "Checked at startup; GitHub every 10 minutes, local updates every 5 seconds.",
+  "updates.poll": "Checked at startup; GitHub every 2 minutes, local updates every 5 seconds.",
   "updates.preparing": "Downloading, checking and preparing the update…",
   "updates.apply": "Update and restart",
   "updates.none": "No update available.",
