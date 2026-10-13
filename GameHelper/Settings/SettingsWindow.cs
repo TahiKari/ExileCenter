@@ -1230,6 +1230,8 @@ namespace GameHelper.Settings
                 }
                 var expanded = ImGui.Begin($"{L.T("settings.window.compact_title", "GameHelper · Settings")} · {LocalUpdates.InstalledVersion}###GameOverlaySettings",
                     ref isOverlayRunningLocal, flags);
+                // A collapsed title bar must not hide the plugins' game overlays.
+                Core.IsSettingsMenuOpen = !independent && !ImGui.IsWindowCollapsed();
                 try
                 {
                     if (expanded) ImGuiTheme.DrawSettingsBackground(independent);
