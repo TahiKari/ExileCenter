@@ -97,8 +97,15 @@ namespace GameHelper.Ui
 
         internal static string? ActivePluginTheme { get; private set; }
 
-        /// <summary>Returns a dark-fantasy metal, gem or spectral accent, shared by a plugin's sections.</summary>
+        /// <summary>Softens the assigned colour without changing the plugin's hue or section identity.</summary>
         public static Vector4 PluginAccent(string key)
+        {
+            var accent = PluginBaseAccent(key);
+            float peak = Math.Max(accent.X, Math.Max(accent.Y, accent.Z));
+            return Vector4.Lerp(accent, new Vector4(peak, peak, peak, 1), .25f) * new Vector4(.88f, .88f, .88f, 1);
+        }
+
+        private static Vector4 PluginBaseAccent(string key)
         {
             int separator = key.IndexOf('/');
             string plugin = separator < 0 ? key : key[..separator];
@@ -132,7 +139,7 @@ namespace GameHelper.Ui
                 "CameraZoom" => new Vector4(.56f, .56f, .60f, 1), // Steel
                 "Atlas" => new Vector4(.28f, .68f, 1f, 1), // Azure
                 "RitualHelper" => new Vector4(.64f, .72f, .72f, 1), // Silver
-                _ => PluginAccent(PluginThemeNames[(int)(hash % (uint)PluginThemeNames.Length)]),
+                _ => PluginBaseAccent(PluginThemeNames[(int)(hash % (uint)PluginThemeNames.Length)]),
             };
         }
 
@@ -197,7 +204,7 @@ namespace GameHelper.Ui
                 ImGui.PushStyleColor(ImGuiCol.TabHovered, Tint(.40f));
                 ImGui.PushStyleColor(ImGuiCol.TabSelected, Tint(.32f));
                 ImGui.PushStyleColor(ImGuiCol.TabSelectedOverline, accent);
-                ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(accent.X, accent.Y, accent.Z, .65f));
+                ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(accent.X, accent.Y, accent.Z, .45f));
                 ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, Tint(.20f));
                 ImGui.PushStyleColor(ImGuiCol.NavCursor, accent);
             }

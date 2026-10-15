@@ -488,9 +488,9 @@ internal static class TabletRankingCheck
                 for (int j = 0; j < i; j++)
                 {
                     Check(Vector3.Distance(PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[i])),
-                        PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[j]))) >= .11f, "Plugin colours are perceptually separated: " + names[i] + " / " + names[j]);
+                        PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[j]))) >= .075f, "Muted plugin colours remain perceptually separated: " + names[i] + " / " + names[j]);
                     Check(Vector3.Distance(PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[i] + "/appearance")),
-                        PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[j] + "/appearance"))) >= .10f, "Section colours remain separated: " + names[i] + " / " + names[j]);
+                        PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[j] + "/appearance"))) >= .075f, "Muted section colours remain separated: " + names[i] + " / " + names[j]);
                 }
             var backgrounds = new HashSet<Vector4>();
             foreach (string name in names)
@@ -499,6 +499,8 @@ internal static class TabletRankingCheck
                 {
                     var accent = ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark];
                     Check(accent == GameHelper.Ui.ImGuiTheme.PluginAccent(name), "Plugin theme is applied: " + name);
+                    ImGuiNET.ImGui.ColorConvertRGBtoHSV(accent.X, accent.Y, accent.Z, out _, out float saturation, out float brightness);
+                    Check(saturation <= .73f && brightness <= .881f, "Plugin accents stay subdued: " + name);
                     backgrounds.Add(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.WindowBg]);
                     Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.FrameBg] != original[(int)ImGuiNET.ImGuiCol.FrameBg], "Input fields follow the plugin palette: " + name);
                     using (GameHelper.Ui.ImGuiTheme.UsePluginTheme(name + "/appearance"))
