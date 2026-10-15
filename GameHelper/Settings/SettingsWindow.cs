@@ -124,6 +124,8 @@ namespace GameHelper.Settings
             ImGui.EndChild();
             ImGui.SameLine();
 
+            using var contentTheme = ImGuiTheme.UsePluginTheme(enabledPlugins.FirstOrDefault(
+                container => selectedSettingsPage == PluginPageId(container.Name))?.Name);
             if (ImGui.BeginChild("SettingsContent", Vector2.Zero, ImGuiChildFlags.Borders))
             {
                 ImGui.PushItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X * 0.4f, 160f, 300f));

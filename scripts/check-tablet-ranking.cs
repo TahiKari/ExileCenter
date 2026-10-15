@@ -472,17 +472,57 @@ internal static class TabletRankingCheck
             var original = Colors();
             var names = (string[])typeof(GameHelper.Ui.ImGuiTheme).GetField("PluginThemeNames", flags).GetValue(null);
             Check(names.Select(GameHelper.Ui.ImGuiTheme.PluginAccent).Distinct().Count() == names.Length, "Every bundled plugin has a distinct accent");
+            var backgrounds = new HashSet<Vector4>();
             foreach (string name in names)
             {
                 using (GameHelper.Ui.ImGuiTheme.UsePluginTheme(name))
                 {
                     var accent = ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark];
                     Check(accent == GameHelper.Ui.ImGuiTheme.PluginAccent(name), "Plugin theme is applied: " + name);
+                    backgrounds.Add(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.WindowBg]);
+                    Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.FrameBg] != original[(int)ImGuiNET.ImGuiCol.FrameBg], "Input fields follow the plugin palette: " + name);
                     using (GameHelper.Ui.ImGuiTheme.UsePluginTheme(name + "/appearance"))
+                    {
                         Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark] != accent, "Module has its own accent: " + name);
+                        Check(Vector4.Distance(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark], accent) < .08f, "Section retains the parent palette: " + name);
+                    }
                     Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark] == accent, "Nested theme restores plugin accent: " + name);
                 }
                 Check(Colors().SequenceEqual(original), "Theme cannot leak into the next plugin: " + name);
+            }
+            Check(backgrounds.Count == names.Length, "Every plugin has a distinct dark background");
+            ImGuiNET.ImGui.PushStyleColor(ImGuiNET.ImGuiCol.WindowBg, Vector4.Zero);
+            ImGuiNET.ImGui.PushStyleColor(ImGuiNET.ImGuiCol.ChildBg, Vector4.Zero);
+            using (GameHelper.Ui.ImGuiTheme.UsePluginTheme("Radar"))
+            {
+                Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.WindowBg].W == 0, "Transparent gameplay windows remain transparent");
+                Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.ChildBg].W == 0, "Transparent gameplay children remain transparent");
+            }
+            ImGuiNET.ImGui.PopStyleColor(2);
+            if (previewDirectory != null)
+            {
+                Directory.CreateDirectory(previewDirectory);
+                for (int frame = 0; frame < 2; frame++)
+                {
+                    ImGuiNET.ImGui.NewFrame();
+                    for (int index = 0; index < names.Length; index++)
+                    {
+                        using var theme = GameHelper.Ui.ImGuiTheme.UsePluginTheme(names[index]);
+                        ImGuiNET.ImGui.SetNextWindowPos(new Vector2(10 + index % 5 * 254, 10 + index / 5 * 188));
+                        ImGuiNET.ImGui.SetNextWindowSize(new Vector2(244, 180));
+                        ImGuiNET.ImGui.Begin(names[index] + "##ThemePreview", ImGuiNET.ImGuiWindowFlags.NoSavedSettings | ImGuiNET.ImGuiWindowFlags.NoResize | ImGuiNET.ImGuiWindowFlags.NoMove | ImGuiNET.ImGuiWindowFlags.NoCollapse);
+                        ImGuiNET.ImGui.TextColored(GameHelper.Ui.ImGuiTheme.PluginAccent(names[index]), "Relique ancienne");
+                        bool enabled = true; float intensity = .65f;
+                        ImGuiNET.ImGui.Checkbox("Activer", ref enabled);
+                        ImGuiNET.ImGui.SetNextItemWidth(-1);
+                        ImGuiNET.ImGui.SliderFloat("##Intensity", ref intensity, 0, 1);
+                        ImGuiNET.ImGui.Button("Options", new Vector2(-1, 0));
+                        ImGuiNET.ImGui.End();
+                    }
+                    ImGuiNET.ImGui.Render();
+                }
+                SaveUiPreview(Path.Combine(previewDirectory, "plugin-themes.png"), pixels, atlasWidth, atlasHeight);
+                Check(Colors().SequenceEqual(original), "All plugin preview windows restore the shared style");
             }
             var secondary = ImGuiNET.ImGui.CreateContext();
             ImGuiNET.ImGui.SetCurrentContext(secondary);

@@ -92,20 +92,50 @@ namespace GameHelper.Ui
             "LootTracker", "StashUtility", "AutoHotKeyTrigger", "KikiMeter", "CorpseCleaner", "AuraTracker",
             "Radar", "RitualWispAlert", "WorldDrawing", "Atlas2", "PickupHelper", "PreloadAlert", "HealthBars",
             "AutoPot", "SekhemaHelper", "AmanamuVoidAlert", "PlayerBuffBar", "SimpleBars", "Hiveblood",
-            "RunecraftHelper", "LootValue", "StashValueByZx0", "CameraZoom",
+            "RunecraftHelper", "LootValue", "StashValueByZx0", "CameraZoom", "Atlas", "RitualHelper",
         };
 
         internal static string? ActivePluginTheme { get; private set; }
 
-        /// <summary>Returns a stable, muted accent for a plugin or one of its settings sections.</summary>
+        /// <summary>Returns a dark-fantasy metal, gem or spectral accent, shared by a plugin's sections.</summary>
         public static Vector4 PluginAccent(string key)
         {
-            int index = Array.IndexOf(PluginThemeNames, key);
+            int separator = key.IndexOf('/');
+            string plugin = separator < 0 ? key : key[..separator];
             uint hash = 2166136261;
             foreach (char character in key) hash = unchecked((hash ^ character) * 16777619);
-            float hue = index >= 0 ? (0.12f + index * 0.61803399f) % 1f : (hash % 3600) / 3600f;
-            ImGui.ColorConvertHSVtoRGB(hue, 0.38f, 0.84f, out var red, out var green, out var blue);
-            return new Vector4(red, green, blue, 1f);
+            var accent = plugin switch
+            {
+                "LootTracker" => new Vector4(.82f, .66f, .34f, 1), // Ancient gold
+                "StashUtility" => new Vector4(.74f, .48f, .28f, 1), // Vault bronze
+                "AutoHotKeyTrigger" => new Vector4(.73f, .40f, .26f, 1), // Ember
+                "KikiMeter" => new Vector4(.72f, .30f, .33f, 1), // Garnet
+                "CorpseCleaner" => new Vector4(.63f, .68f, .43f, 1), // Tarnished bone
+                "AuraTracker" => new Vector4(.40f, .69f, .51f, 1), // Jade
+                "Radar" => new Vector4(.39f, .66f, .72f, 1), // Spectral cyan
+                "RitualWispAlert" => new Vector4(.51f, .72f, .65f, 1), // Ghostlight
+                "WorldDrawing" => new Vector4(.56f, .65f, .48f, 1), // Weathered moss
+                "Atlas2" => new Vector4(.49f, .58f, .77f, 1), // Celestial sapphire
+                "PickupHelper" => new Vector4(.73f, .62f, .45f, 1), // Aged brass
+                "PreloadAlert" => new Vector4(.77f, .53f, .36f, 1), // Smouldering copper
+                "HealthBars" => new Vector4(.76f, .35f, .28f, 1), // Bloodstone
+                "AutoPot" => new Vector4(.65f, .36f, .49f, 1), // Alchemical ruby
+                "SekhemaHelper" => new Vector4(.79f, .70f, .49f, 1), // Desert gold
+                "AmanamuVoidAlert" => new Vector4(.57f, .43f, .73f, 1), // Abyssal amethyst
+                "PlayerBuffBar" => new Vector4(.38f, .67f, .62f, 1), // Verdigris
+                "SimpleBars" => new Vector4(.60f, .66f, .73f, 1), // Cold steel
+                "Hiveblood" => new Vector4(.71f, .57f, .29f, 1), // Dark amber
+                "RunecraftHelper" => new Vector4(.43f, .58f, .69f, 1), // Runic blue
+                "LootValue" => new Vector4(.66f, .70f, .46f, 1), // Electrum
+                "StashValueByZx0" => new Vector4(.62f, .52f, .73f, 1), // Royal violet
+                "CameraZoom" => new Vector4(.67f, .65f, .59f, 1), // Obsidian silver
+                "Atlas" => new Vector4(.65f, .57f, .43f, 1), // Cartographer's parchment
+                "RitualHelper" => new Vector4(.68f, .43f, .61f, 1), // Ritual incense
+                _ => PluginAccent(PluginThemeNames[(int)(hash % (uint)PluginThemeNames.Length)]),
+            };
+            // Section variants retain the parent palette instead of jumping to another hue.
+            return separator < 0 ? accent : Vector4.Lerp(accent,
+                (hash & 1) == 0 ? new Vector4(.91f, .86f, .73f, 1) : new Vector4(.32f, .29f, .25f, 1), .08f);
         }
 
         /// <summary>Applies a plugin accent only during the current draw, then restores the previous style.</summary>
@@ -113,6 +143,7 @@ namespace GameHelper.Ui
 
         public readonly struct PluginThemeScope : IDisposable
         {
+            private const int ColorCount = 43;
             private readonly IntPtr context;
             private readonly string? previousTheme;
 
@@ -123,7 +154,39 @@ namespace GameHelper.Ui
                 if (this.context == IntPtr.Zero) return;
                 ActivePluginTheme = key;
                 var accent = PluginAccent(key!);
-                Vector4 Tint(float amount) => Vector4.Lerp(new Vector4(.11f, .10f, .085f, 1), accent, amount);
+                Vector4 Tint(float amount) => Vector4.Lerp(new Vector4(.055f, .05f, .045f, 1), accent, amount);
+                var colors = ImGui.GetStyle().Colors;
+                var windowBg = Tint(.085f); windowBg.W = colors[(int)ImGuiCol.WindowBg].W;
+                var childBg = Tint(.13f); childBg.W = colors[(int)ImGuiCol.ChildBg].W;
+                ImGui.PushStyleColor(ImGuiCol.WindowBg, windowBg);
+                ImGui.PushStyleColor(ImGuiCol.ChildBg, childBg);
+                ImGui.PushStyleColor(ImGuiCol.PopupBg, Tint(.11f));
+                ImGui.PushStyleColor(ImGuiCol.FrameBg, Tint(.18f));
+                ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, Tint(.31f));
+                ImGui.PushStyleColor(ImGuiCol.FrameBgActive, Tint(.40f));
+                ImGui.PushStyleColor(ImGuiCol.TitleBg, Tint(.10f));
+                ImGui.PushStyleColor(ImGuiCol.TitleBgActive, Tint(.23f));
+                ImGui.PushStyleColor(ImGuiCol.TitleBgCollapsed, Tint(.08f));
+                ImGui.PushStyleColor(ImGuiCol.MenuBarBg, Tint(.12f));
+                ImGui.PushStyleColor(ImGuiCol.ScrollbarBg, Tint(.07f));
+                ImGui.PushStyleColor(ImGuiCol.ScrollbarGrab, Tint(.29f));
+                ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabHovered, Tint(.44f));
+                ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabActive, Tint(.60f));
+                ImGui.PushStyleColor(ImGuiCol.Separator, Tint(.37f));
+                ImGui.PushStyleColor(ImGuiCol.SeparatorHovered, Tint(.58f));
+                ImGui.PushStyleColor(ImGuiCol.SeparatorActive, accent);
+                ImGui.PushStyleColor(ImGuiCol.Tab, Tint(.14f));
+                ImGui.PushStyleColor(ImGuiCol.TabDimmed, Tint(.10f));
+                ImGui.PushStyleColor(ImGuiCol.TabDimmedSelected, Tint(.22f));
+                ImGui.PushStyleColor(ImGuiCol.TabDimmedSelectedOverline, Tint(.46f));
+                ImGui.PushStyleColor(ImGuiCol.TableBorderStrong, Tint(.34f));
+                ImGui.PushStyleColor(ImGuiCol.TableBorderLight, Tint(.21f));
+                var selection = accent; selection.W = .28f;
+                ImGui.PushStyleColor(ImGuiCol.TextSelectedBg, selection);
+                ImGui.PushStyleColor(ImGuiCol.ResizeGrip, Tint(.26f));
+                ImGui.PushStyleColor(ImGuiCol.ResizeGripHovered, Tint(.48f));
+                ImGui.PushStyleColor(ImGuiCol.ResizeGripActive, accent);
+                ImGui.PushStyleColor(ImGuiCol.DockingPreview, selection);
                 ImGui.PushStyleColor(ImGuiCol.CheckMark, accent);
                 ImGui.PushStyleColor(ImGuiCol.SliderGrab, Tint(.55f));
                 ImGui.PushStyleColor(ImGuiCol.SliderGrabActive, accent);
@@ -145,7 +208,7 @@ namespace GameHelper.Ui
             {
                 if (this.context == IntPtr.Zero) return;
                 var current = ImGui.GetCurrentContext();
-                try { ImGui.SetCurrentContext(this.context); ImGui.PopStyleColor(15); }
+                try { ImGui.SetCurrentContext(this.context); ImGui.PopStyleColor(ColorCount); }
                 finally { ImGui.SetCurrentContext(current); ActivePluginTheme = this.previousTheme; }
             }
         }
@@ -269,7 +332,8 @@ namespace GameHelper.Ui
 
         internal static void BeginPanel(string id)
         {
-            ImGui.PushStyleColor(ImGuiCol.ChildBg, SectionBg);
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, ActivePluginTheme is { } key
+                ? Vector4.Lerp(new Vector4(.055f, .05f, .045f, 1), PluginAccent(key), .16f) : SectionBg);
             ImGui.BeginChild(id, Vector2.Zero, ImGuiChildFlags.Borders);
         }
 
