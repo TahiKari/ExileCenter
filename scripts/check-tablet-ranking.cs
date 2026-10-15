@@ -472,6 +472,26 @@ internal static class TabletRankingCheck
             var original = Colors();
             var names = (string[])typeof(GameHelper.Ui.ImGuiTheme).GetField("PluginThemeNames", flags).GetValue(null);
             Check(names.Select(GameHelper.Ui.ImGuiTheme.PluginAccent).Distinct().Count() == names.Length, "Every bundled plugin has a distinct accent");
+            // OKLab measures perceived differences; unequal RGB values alone do not prevent lookalikes.
+            Vector3 PerceptualColor(Vector4 color)
+            {
+                float Linear(float v) => v <= .04045f ? v / 12.92f : MathF.Pow((v + .055f) / 1.055f, 2.4f);
+                float r = Linear(color.X), g = Linear(color.Y), b = Linear(color.Z);
+                float l = MathF.Cbrt(.4122214708f * r + .5363325363f * g + .0514459929f * b);
+                float m = MathF.Cbrt(.2119034982f * r + .6806995451f * g + .1073969566f * b);
+                float s = MathF.Cbrt(.0883024619f * r + .2817188376f * g + .6299787005f * b);
+                return new Vector3(.2104542553f * l + .793617785f * m - .0040720468f * s,
+                    1.9779984951f * l - 2.428592205f * m + .4505937099f * s,
+                    .0259040371f * l + .7827717662f * m - .808675766f * s);
+            }
+            for (int i = 0; i < names.Length; i++)
+                for (int j = 0; j < i; j++)
+                {
+                    Check(Vector3.Distance(PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[i])),
+                        PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[j]))) >= .11f, "Plugin colours are perceptually separated: " + names[i] + " / " + names[j]);
+                    Check(Vector3.Distance(PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[i] + "/appearance")),
+                        PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[j] + "/appearance"))) >= .10f, "Section colours remain separated: " + names[i] + " / " + names[j]);
+                }
             var backgrounds = new HashSet<Vector4>();
             foreach (string name in names)
             {
@@ -483,8 +503,7 @@ internal static class TabletRankingCheck
                     Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.FrameBg] != original[(int)ImGuiNET.ImGuiCol.FrameBg], "Input fields follow the plugin palette: " + name);
                     using (GameHelper.Ui.ImGuiTheme.UsePluginTheme(name + "/appearance"))
                     {
-                        Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark] != accent, "Module has its own accent: " + name);
-                        Check(Vector4.Distance(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark], accent) < .08f, "Section retains the parent palette: " + name);
+                        Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark] == accent, "Sections retain the exact plugin accent: " + name);
                     }
                     Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark] == accent, "Nested theme restores plugin accent: " + name);
                 }

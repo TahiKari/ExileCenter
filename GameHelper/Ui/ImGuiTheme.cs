@@ -103,39 +103,37 @@ namespace GameHelper.Ui
             int separator = key.IndexOf('/');
             string plugin = separator < 0 ? key : key[..separator];
             uint hash = 2166136261;
-            foreach (char character in key) hash = unchecked((hash ^ character) * 16777619);
-            var accent = plugin switch
+            foreach (char character in plugin) hash = unchecked((hash ^ character) * 16777619);
+            return plugin switch
             {
-                "LootTracker" => new Vector4(.82f, .66f, .34f, 1), // Ancient gold
-                "StashUtility" => new Vector4(.74f, .48f, .28f, 1), // Vault bronze
-                "AutoHotKeyTrigger" => new Vector4(.73f, .40f, .26f, 1), // Ember
-                "KikiMeter" => new Vector4(.72f, .30f, .33f, 1), // Garnet
-                "CorpseCleaner" => new Vector4(.63f, .68f, .43f, 1), // Tarnished bone
-                "AuraTracker" => new Vector4(.40f, .69f, .51f, 1), // Jade
-                "Radar" => new Vector4(.39f, .66f, .72f, 1), // Spectral cyan
-                "RitualWispAlert" => new Vector4(.51f, .72f, .65f, 1), // Ghostlight
-                "WorldDrawing" => new Vector4(.56f, .65f, .48f, 1), // Weathered moss
-                "Atlas2" => new Vector4(.49f, .58f, .77f, 1), // Celestial sapphire
-                "PickupHelper" => new Vector4(.73f, .62f, .45f, 1), // Aged brass
-                "PreloadAlert" => new Vector4(.77f, .53f, .36f, 1), // Smouldering copper
-                "HealthBars" => new Vector4(.76f, .35f, .28f, 1), // Bloodstone
-                "AutoPot" => new Vector4(.65f, .36f, .49f, 1), // Alchemical ruby
-                "SekhemaHelper" => new Vector4(.79f, .70f, .49f, 1), // Desert gold
-                "AmanamuVoidAlert" => new Vector4(.57f, .43f, .73f, 1), // Abyssal amethyst
-                "PlayerBuffBar" => new Vector4(.38f, .67f, .62f, 1), // Verdigris
-                "SimpleBars" => new Vector4(.60f, .66f, .73f, 1), // Cold steel
-                "Hiveblood" => new Vector4(.71f, .57f, .29f, 1), // Dark amber
-                "RunecraftHelper" => new Vector4(.43f, .58f, .69f, 1), // Runic blue
-                "LootValue" => new Vector4(.66f, .70f, .46f, 1), // Electrum
-                "StashValueByZx0" => new Vector4(.62f, .52f, .73f, 1), // Royal violet
-                "CameraZoom" => new Vector4(.67f, .65f, .59f, 1), // Obsidian silver
-                "Atlas" => new Vector4(.65f, .57f, .43f, 1), // Cartographer's parchment
-                "RitualHelper" => new Vector4(.68f, .43f, .61f, 1), // Ritual incense
+                // Spaced in perceptual colour space, rather than several similar metal shades.
+                "LootTracker" => new Vector4(.96f, .78f, .16f, 1), // Gold
+                "StashUtility" => new Vector4(.68f, .52f, .20f, 1), // Ochre bronze
+                "AutoHotKeyTrigger" => new Vector4(1f, .56f, .48f, 1), // Coral
+                "KikiMeter" => new Vector4(1f, .04f, .68f, 1), // Fuchsia
+                "CorpseCleaner" => new Vector4(.40f, .56f, .04f, 1), // Olive
+                "AuraTracker" => new Vector4(.04f, .72f, .04f, 1), // Emerald
+                "Radar" => new Vector4(.04f, .96f, 1f, 1), // Spectral cyan
+                "RitualWispAlert" => new Vector4(.80f, 1f, .56f, 1), // Pale absinthe
+                "WorldDrawing" => new Vector4(.52f, .84f, .48f, 1), // Sage
+                "Atlas2" => new Vector4(.44f, .44f, 1f, 1), // Indigo
+                "PickupHelper" => new Vector4(1f, .68f, 1f, 1), // Pink opal
+                "PreloadAlert" => new Vector4(.72f, .68f, .04f, 1), // Sulphur
+                "HealthBars" => new Vector4(1f, .04f, .12f, 1), // Scarlet
+                "AutoPot" => new Vector4(.96f, .44f, 1f, 1), // Orchid
+                "SekhemaHelper" => new Vector4(.96f, .92f, .88f, 1), // Ivory
+                "AmanamuVoidAlert" => new Vector4(.84f, .04f, 1f, 1), // Abyssal violet
+                "PlayerBuffBar" => new Vector4(.04f, .72f, .60f, 1), // Turquoise
+                "SimpleBars" => new Vector4(.68f, .84f, 1f, 1), // Ice blue
+                "Hiveblood" => new Vector4(.36f, 1f, .04f, 1), // Acid green
+                "RunecraftHelper" => new Vector4(.04f, .56f, .68f, 1), // Deep teal
+                "LootValue" => new Vector4(.76f, .44f, .68f, 1), // Dusty rose
+                "StashValueByZx0" => new Vector4(.72f, .60f, .96f, 1), // Lavender
+                "CameraZoom" => new Vector4(.56f, .56f, .60f, 1), // Steel
+                "Atlas" => new Vector4(.28f, .68f, 1f, 1), // Azure
+                "RitualHelper" => new Vector4(.64f, .72f, .72f, 1), // Silver
                 _ => PluginAccent(PluginThemeNames[(int)(hash % (uint)PluginThemeNames.Length)]),
             };
-            // Section variants retain the parent palette instead of jumping to another hue.
-            return separator < 0 ? accent : Vector4.Lerp(accent,
-                (hash & 1) == 0 ? new Vector4(.91f, .86f, .73f, 1) : new Vector4(.32f, .29f, .25f, 1), .08f);
         }
 
         /// <summary>Applies a plugin accent only during the current draw, then restores the previous style.</summary>
@@ -156,12 +154,12 @@ namespace GameHelper.Ui
                 var accent = PluginAccent(key!);
                 Vector4 Tint(float amount) => Vector4.Lerp(new Vector4(.055f, .05f, .045f, 1), accent, amount);
                 var colors = ImGui.GetStyle().Colors;
-                var windowBg = Tint(.085f); windowBg.W = colors[(int)ImGuiCol.WindowBg].W;
-                var childBg = Tint(.13f); childBg.W = colors[(int)ImGuiCol.ChildBg].W;
+                var windowBg = Tint(.12f); windowBg.W = colors[(int)ImGuiCol.WindowBg].W;
+                var childBg = Tint(.19f); childBg.W = colors[(int)ImGuiCol.ChildBg].W;
                 ImGui.PushStyleColor(ImGuiCol.WindowBg, windowBg);
                 ImGui.PushStyleColor(ImGuiCol.ChildBg, childBg);
                 ImGui.PushStyleColor(ImGuiCol.PopupBg, Tint(.11f));
-                ImGui.PushStyleColor(ImGuiCol.FrameBg, Tint(.18f));
+                ImGui.PushStyleColor(ImGuiCol.FrameBg, Tint(.23f));
                 ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, Tint(.31f));
                 ImGui.PushStyleColor(ImGuiCol.FrameBgActive, Tint(.40f));
                 ImGui.PushStyleColor(ImGuiCol.TitleBg, Tint(.10f));
@@ -190,16 +188,16 @@ namespace GameHelper.Ui
                 ImGui.PushStyleColor(ImGuiCol.CheckMark, accent);
                 ImGui.PushStyleColor(ImGuiCol.SliderGrab, Tint(.55f));
                 ImGui.PushStyleColor(ImGuiCol.SliderGrabActive, accent);
-                ImGui.PushStyleColor(ImGuiCol.Button, Tint(.22f));
+                ImGui.PushStyleColor(ImGuiCol.Button, Tint(.30f));
                 ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Tint(.40f));
                 ImGui.PushStyleColor(ImGuiCol.ButtonActive, Tint(.53f));
-                ImGui.PushStyleColor(ImGuiCol.Header, Tint(.28f));
+                ImGui.PushStyleColor(ImGuiCol.Header, Tint(.33f));
                 ImGui.PushStyleColor(ImGuiCol.HeaderHovered, Tint(.43f));
                 ImGui.PushStyleColor(ImGuiCol.HeaderActive, Tint(.53f));
                 ImGui.PushStyleColor(ImGuiCol.TabHovered, Tint(.40f));
                 ImGui.PushStyleColor(ImGuiCol.TabSelected, Tint(.32f));
                 ImGui.PushStyleColor(ImGuiCol.TabSelectedOverline, accent);
-                ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(accent.X, accent.Y, accent.Z, .40f));
+                ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(accent.X, accent.Y, accent.Z, .65f));
                 ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, Tint(.20f));
                 ImGui.PushStyleColor(ImGuiCol.NavCursor, accent);
             }
