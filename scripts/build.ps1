@@ -164,7 +164,7 @@ function Get-BlockingExileCenterProcesses {
     }
 
     $deployRoot = [System.IO.Path]::GetFullPath($DeployDir).TrimEnd('\')
-    $processNames = @('ExileCenter', 'ExileCenter.App')
+    $processNames = @('ExileCenter', 'ExileCenter.App', 'GameHelper', 'GameHelper.App')
     $blocking = @()
 
     foreach ($proc in Get-Process -ErrorAction SilentlyContinue) {

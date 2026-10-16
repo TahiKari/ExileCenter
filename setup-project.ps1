@@ -68,21 +68,21 @@ foreach ($file in @("Directory.Build.props", "NuGet.config", ".editorconfig")) {
     }
 }
 
-# ExileCenter.App als interner Overlay-Name
+# ExileCenter als interner Overlay-Name
 $ghProj = Join-Path $Root "ExileCenter\ExileCenter.csproj"
 if (Test-Path $ghProj) {
     $xml = Get-Content $ghProj -Raw
-    if ($xml -notmatch '<AssemblyName>ExileCenter.App</AssemblyName>') {
+    if ($xml -notmatch '<AssemblyName>ExileCenter</AssemblyName>') {
         $xml = $xml -replace '<TargetFramework>net10.0-windows</TargetFramework>', @'
 <TargetFramework>net10.0-windows</TargetFramework>
-    <AssemblyName>ExileCenter.App</AssemblyName>
+    <AssemblyName>ExileCenter</AssemblyName>
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
 '@
         $xml = $xml -replace '(?s)<Target Name="CopyDocumentationFiles".*?</Target>\s*', ''
         Set-Content $ghProj $xml -Encoding UTF8
-        Write-Host "ExileCenter.csproj angepasst (ExileCenter.App)" -ForegroundColor Green
+        Write-Host "ExileCenter.csproj angepasst (ExileCenter)" -ForegroundColor Green
     }
 }
 
