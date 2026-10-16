@@ -1,209 +1,128 @@
-# GameHelper P-V1
+# ExileCenter
 
-La version de **TahiKari** pour Path of Exile 2 : **P** pour « personnalisé », **V1** pour « version 1 ».
+**Ton compagnon sur Wraeclast.**
 
-## ⬇️ [Télécharger GameHelper P-V1 pour Windows x64](https://github.com/TahiKari/Gamehelper2/releases/latest/download/GameHelper-Personnalise-win-x64.zip)
+ExileCenter rassemble dans une interface modulaire les outils de suivi et d'assistance pour **Path of Exile 2** : butin, dégâts, cartes, alertes et gestion de l'inventaire. Le projet est maintenu par [TahiKari](https://github.com/TahiKari), avec son propre dépôt, ses Releases et son circuit de mises à jour.
 
-**[Voir la dernière version et ses nouveautés](https://github.com/TahiKari/Gamehelper2/releases/latest)** · [Toutes les versions](https://github.com/TahiKari/Gamehelper2/releases)
+## Télécharger
 
-1. Télécharger le ZIP avec le lien ci-dessus.
-2. Extraire son contenu dans un dossier.
-3. Lancer `GameHelper.exe` (runtime **.NET 10 Desktop x64** requis).
+### [Télécharger ExileCenter — Windows x64 (ZIP)](https://github.com/TahiKari/ExileCenter/releases/latest/download/ExileCenter-win-x64.zip)
 
-Après cette première installation, les nouvelles mises à jour sont proposées au démarrage avec le choix **Oui/Non**, ou signalées dans l'application déjà ouverte.
+[Dernière version et changements](https://github.com/TahiKari/ExileCenter/releases/latest) · [Toutes les versions](https://github.com/TahiKari/ExileCenter/releases) · [Signaler un problème](https://github.com/TahiKari/ExileCenter/issues)
 
-Le ZIP garde le nom `GameHelper-Personnalise-win-x64.zip` pour que les versions déjà installées puissent continuer à recevoir les mises à jour.
-La procédure de publication est décrite dans la section « Releases de GameHelper P-V1 » ci-dessous. Les informations historiques de l'amont sont conservées.
+## Prérequis
 
-GameHelper is a Windows x64 .NET overlay for **Path of Exile 2** with a plugin architecture. The launcher (`GameHelper.exe`) checks for updates, starts the overlay (`GameHelper.App.exe`), reads data from the running game process, and loads plugins from the `Plugins` folder.
+| Élément | Pour utiliser ExileCenter |
+| --- | --- |
+| Système | Windows 10 ou 11 **64 bits**, sur processeur x64 |
+| Jeu | Une installation de Path of Exile 2 ; les outils en jeu nécessitent que le jeu soit lancé |
+| Runtime | **[.NET 10 Desktop Runtime pour Windows x64](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)** : choisir « .NET Desktop Runtime », puis « Windows x64 » |
+| Affichage | Pilote graphique à jour et prise en charge Direct3D 11 pour la superposition |
+| Internet | Téléchargement, recherche de mises à jour et fonctions utilisant des prix en ligne |
 
-**Open-source fork maintained by** [MordWraith](https://github.com/MordWraith) — basis **Lafko / Gordin** ([GameHelper2](https://github.com/MordWraith/Gamehelper)).
+Le Desktop Runtime inclut le runtime .NET de base : il suffit pour utiliser le ZIP. Le SDK .NET, Visual Studio, Git, Node.js et Python ne sont pas nécessaires pour jouer. Choisir la version **x64**, même sur un Windows où un runtime x86 est déjà installé. Voir les [instructions Microsoft](https://learn.microsoft.com/en-us/dotnet/core/install/windows).
 
-## Source + binaries (original upstream project)
+## Installation, étape par étape
 
-Pour **GameHelper P-V1**, utiliser le bouton de téléchargement en haut de cette page. Les liens ci-dessous concernent le projet d'origine.
+1. Installer **.NET 10 Desktop Runtime x64** avec le lien ci-dessus.
+2. Télécharger **ExileCenter-win-x64.zip** depuis la dernière Release de ce dépôt.
+3. Dans les propriétés du ZIP, utiliser « Débloquer » si Windows propose cette option, puis extraire **tout** le contenu dans un dossier dédié, par exemple `C:\Jeux\ExileCenter`.
+4. Lancer **ExileCenter.exe** depuis le dossier extrait et accepter la demande Windows de droits administrateur. Le manifeste actuel de l'application demande ces droits.
+5. Démarrer Path of Exile 2. Le mode fenêtré sans bordure facilite l'affichage de la superposition.
+6. Ouvrir les paramètres avec **F11** par défaut, choisir la langue et activer les plugins souhaités. La touche reste personnalisable.
 
-| Channel | For whom | Link |
-|---------|----------|------|
-| **`main` branch** | Developers, auditors, no-auto-update users | https://github.com/MordWraith/Gamehelper |
-| **Releases** | Players (installer / ZIP) | https://github.com/MordWraith/Gamehelper/releases |
-| **Auto-update** | Optional convenience (signed ZIP from Releases) | Built into `GameHelper.exe` |
+Ne lancer aucun exécutable directement dans le ZIP et conserver les DLL, les ressources et le dossier `Plugins` à côté de l'application.
 
-- **Do not want auto-update?** Use the [full ZIP](https://github.com/MordWraith/Gamehelper/releases/latest) or [build from source](#build-from-source).
-- **Trust / security:** [SECURITY.md](SECURITY.md) — signed manifests, what gets updated, what stays local.
-- **Windows Defender blocked GameHelper?** See [SECURITY.md → false positives](SECURITY.md#windows-defender-and-antivirus-false-positives) — common with auto-update and unsigned DLLs; usually not a real trojan.
-- **Attribution:** [CREDITS.md](CREDITS.md) and in-app **Plugins → Author** column.
+## Ce que propose le programme
 
-## Download (original upstream project)
+Chaque plugin dispose de ses réglages. Les outils utilisant des raccourcis ou des actions automatiques demandent une configuration adaptée à votre jeu ; leur présence dans le paquet ne signifie pas qu'ils sont tous activés.
 
-| What | Link |
-|------|------|
-| **Installer (recommended)** | https://github.com/MordWraith/Gamehelper/releases/latest/download/GameHelperDownloader.exe |
-| Full ZIP (manual install) | https://github.com/MordWraith/Gamehelper/releases/latest/download/GameHelper-*-full.zip |
-| All releases | https://github.com/MordWraith/Gamehelper/releases/latest |
+| Outil | Fonction |
+| --- | --- |
+| **Suivi du butin — LootTracker** | Sessions de farm, gains estimés en devises, profit par heure, historique et temps passé par carte ; activation et pause du suivi |
+| **Kikimeter — KikiMeter** | Estimation des dégâts et du DPS à partir des données observables, pics, comparaison et historique des cartes ; ce n'est pas un relevé serveur exhaustif |
+| **SekhemaHelper** | Aide à la lecture du parcours des épreuves |
+| **Timers de Sekhema** | Tentative séparée à chaque nouveau Barya détecté, pause hors tentative, arrêt après Zarokh observé et quatre sous-timers dans LootTracker et KikiMeter |
+| **Atlas / Atlas2** | Outils et informations pour l'Atlas et les cartes |
+| **Radar / WorldDrawing** | Repères et informations visuelles sur l'environnement |
+| **PreloadAlert** | Alertes fondées sur les ressources chargées par le jeu |
+| **HealthBars / SimpleBars** | Barres de vie et d'énergie personnalisables |
+| **AuraTracker / PlayerBuffBar / Hiveblood** | Suivi d'auras, d'effets et de ressources du personnage |
+| **AmanamuVoidAlert / RitualWispAlert** | Alertes liées à certaines mécaniques et dangers |
+| **RitualHelper** | Informations et assistance pour les récompenses de Rituel |
+| **RunecraftHelper** | Outils liés aux runes et à l'artisanat |
+| **LootValue / StashValueByZx0** | Estimation de la valeur des objets ou du contenu du coffre selon les données de prix disponibles |
+| **PickupHelper / StashUtility** | Assistance au ramassage et au rangement, avec réglages et protections d'objets |
+| **AutoPot / AutoHotKeyTrigger** | Déclenchements configurables de flacons ou de raccourcis |
+| **CameraZoom** | Réglage de caméra proposé par le plugin |
+| **CorpseCleaner** | Masquage réversible des cadavres par modification des fichiers du jeu, à effectuer jeu fermé |
 
-Run `GameHelperDownloader.exe` in an **empty folder**. Requires [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
+L'interface comprend des thèmes sombres distincts par plugin, plusieurs langues et des fenêtres indépendantes pour le suivi du butin et le kikimeter. Les fonctions dépendent des données accessibles et de la version du jeu ; un changement de PoE 2 peut nécessiter une adaptation.
 
-### Release assets
+### Dépendance optionnelle : CorpseCleaner
 
-| Asset | Purpose |
-|-------|---------|
-| `GameHelperDownloader.exe` | One-file fresh install |
-| `GameHelper-*-full.zip` | Full install / auto-update package |
-| `manifest.json` + `manifest.sig` | Signed update metadata (SHA256 per file) |
-| `changelog-history.json` | In-app changelog history |
+Ce plugin demande le dossier de votre installation du jeu et une bibliothèque **Oodle compatible (`oo2core.dll`) fournie par votre propre installation ou outil local**. Elle n'est pas distribuée dans le ZIP. Le plugin peut aussi lire cette bibliothèque depuis un exécutable Exile Forge déjà présent, sans lancer cet exécutable.
 
-User settings (`configs/`, `Plugins/*/config/`) are **not** included in update packages and are **not** overwritten by auto-update.
+Le jeu doit être fermé pour appliquer ou restaurer le patch. Pour le client autonome, prévoir assez d'espace pour une copie de `Content.ggpk`. Les sauvegardes restent dans `.GameHelperCadavres` afin de conserver la compatibilité avec les restaurations existantes. Cette dépendance n'est pas requise pour les autres plugins.
 
-## Build from source
+## Mettre à jour et conserver ses réglages
 
-### Required tools
+Au démarrage, ExileCenter peut proposer une mise à jour avec le choix de l'installer ou de continuer. Pendant l'utilisation, une notification signale les nouvelles versions. Dans la page **Mises à jour**, le bouton d'installation télécharge le paquet, vérifie son SHA256 et redémarre l'application après confirmation. Une connexion indisponible n'empêche pas le démarrage.
 
-- [Visual Studio](https://visualstudio.microsoft.com/downloads/) with **.NET desktop development**
-- [.NET 10 SDK for Windows x64](https://dotnet.microsoft.com/download/dotnet/10.0)
+Les dossiers `configs/`, les configurations de plugins et les fichiers `settings.json` ne sont pas fournis dans les paquets de mise à jour. Sauvegarder votre dossier avant une installation manuelle ; ne pas mélanger les fichiers de plusieurs versions.
 
-```powershell
-git clone https://github.com/MordWraith/Gamehelper
-cd Gamehelper
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1
-```
+### Depuis GameHelper P-V1
 
-Output: `publish\` (run `GameHelper.exe` from there).
+ExileCenter poursuit cette version personnalisée avec un nouveau nom et un dépôt autonome. Les noms internes `GameHelper.dll`, `GameHelper.exe`, `GameHelper.App.exe`, les chemins de configuration et les tags historiques sont conservés pour la migration. **ExileCenter.exe**, **GameHelper.exe** et **GameHelper.App.exe** démarrent la même application dans les nouveaux paquets.
 
-Open [`GameOverlay.sln`](GameOverlay.sln) for IDE development — not a single `.csproj` only.
+Les anciennes installations peuvent recevoir la Release de transition depuis [l'ancien dépôt](https://github.com/TahiKari/Gamehelper2/releases). Une fois cette mise à jour installée, les versions suivantes sont recherchées dans **TahiKari/ExileCenter**. Le ZIP de compatibilité `GameHelper-Personnalise-win-x64.zip` garde les noms autorisés par l'ancien installateur : continuer à lancer son raccourci habituel. Le ZIP complet ExileCenter comprend aussi `ExileCenter.exe` et `SECURITY.md` ; ces deux fichiers supplémentaires arriveront avec une prochaine mise à jour complète, ou peuvent être obtenus par une installation manuelle.
 
-### Maintainer: publish
+Pour l'installation personnelle de TahiKari, le dossier local `Bureau\Gamehelpers\Maj GameHelper` reste prioritaire : il conserve son nom pour rester compatible avec les installations précédentes.
 
-```powershell
-# Release-Binaries hochladen (Quellcode wird NICHT automatisch committed):
-powershell -ExecutionPolicy Bypass -File rebuild-and-publish.ps1
+## Résoudre les problèmes courants
 
-# Optional: alten Auto-Push-Quellcode-Flow (nicht empfohlen):
-powershell -ExecutionPolicy Bypass -File rebuild-and-publish.ps1 -PushSource
+- **« You must install or update .NET »** : installer le **Desktop Runtime .NET 10 x64**, puis relancer. Le runtime ASP.NET seul et l'ancien .NET Framework ne suffisent pas.
+- **Fenêtre absente ou superposition invisible** : vérifier que le jeu est ouvert, essayer le mode fenêtré sans bordure et vérifier la touche d'ouverture des paramètres.
+- **Plugin manquant ou erreur de DLL** : extraire le ZIP complet dans un nouveau dossier, sans réutiliser les DLL d'une autre version.
+- **Valeurs absentes après une mise à jour du jeu** : consulter les notes de la dernière Release et ouvrir un ticket avec les versions du jeu et d'ExileCenter.
+- **Blocage Windows ou antivirus** : consulter l'alerte et vérifier la provenance du téléchargement ainsi que le SHA256. Les binaires ne sont pas signés Authenticode ; ne pas désactiver globalement les protections. Voir [SECURITY.md](SECURITY.md).
 
-# Quellcode manuell committen (bevorzugt): normales git add/commit/push mit Messages wie [Core] ...
-```
+Pour un ticket, joindre la version affichée, la version du jeu, le plugin concerné et les étapes permettant de reproduire le problème. Retirer les informations personnelles des journaux et captures.
 
-Source commits should be descriptive (`[Core] …`, `[Radar] …`), not bulk `Release vX source` snapshots.
+## Sources et compilation
 
-## Project layout
-
-| Path | Role |
-|------|------|
-| `GameHelper/` | Overlay (`GameHelper.App.exe`) |
-| `Launcher/` | Launcher & updater (`GameHelper.exe`) |
-| `Downloader/` | Standalone installer EXE |
-| `GameOffsets/` | Game structure offsets |
-| `Plugins/` | Atlas, Radar, AutoPot, … |
-| `scripts/` | Build & publish automation |
-| `CREDITS.md` | Attribution |
-| `SECURITY.md` | Auto-update & trust |
-
-Target: `net10.0-windows`, `win-x64`. License: [GPLv3](LICENSE).
-
-## Solution projects
-
-- `GameHelper` — main overlay
-- `Launcher` — updater entry point
-- `Downloader` — public installer
-- `GameOffsets` — offsets
-- Plugins: `Atlas`, `AuraTracker`, `AutoPot`, `AutoHotKeyTrigger`, `HealthBars`, `SimpleBars`, `MapKillCounter`, `PreloadAlert`, `Radar`, `RitualHelper`, `RuneforgeHelper`, `SekhemaHelper`, `PlayerBuffBar`, `AmanamuVoidAlert`, …
-
-## Run
-
-1. Open `publish\` or `GameHelper\bin\Release\net10.0-windows\win-x64\`
-2. Start **`GameHelper.exe`** (not `GameHelper.App.exe` directly)
-3. Match admin elevation with the game if needed
-
-## Runtime data (not in git)
-
-```
-configs\core_settings.json
-configs\plugins.json
-Plugins\<Name>\config\
-```
-
-## Troubleshooting
-
-**`net10.0-windows` not supported** — Install .NET 10 SDK and update Visual Studio.
-
-**Plugins missing after build** — Use **Rebuild Solution**, not Build Project.
-
-**Update pulled wrong version** — Install into an **empty** folder; check `VERSION.txt`.
-
-**Overlay does not attach** — Match admin elevation with the game.
-
-**Windows Defender / helper won't start** — Open Protection history, allow blocked `GameHelper` / `GameHelperUpdate` entries, or install from the [full ZIP](https://github.com/MordWraith/Gamehelper/releases/latest) into a new folder. Details: [SECURITY.md](SECURITY.md#windows-defender-and-antivirus-false-positives).
-
-## Personal local updates
-
-The personal build checks `Desktop\Gamehelpers\Maj GameHelper\GameHelper-Maj.json`
-at startup and every five seconds without pausing the game. **Updates** in the
-settings menu installs a verified package and restarts GameHelper. The official
-launcher is bypassed when this local folder or an installed local-update state
-exists. Personal packages also replace `GameHelper.App.exe` with an identical
-copy of the core apphost (`GameHelper.exe`), which loads `GameHelper.dll` directly.
-Existing shortcuts to either executable therefore open the personal build rather
-than the official updater. Keep this alias in every local update and bootstrap
-archive; omitting it leaves old official launchers active in existing folders.
-Configuration folders and plugin `settings.json` files are never packaged.
-Failed file replacement restores the previous files before restarting.
-
-After a requested change, build only the affected projects, check the result, then
-publish it to this folder. Do not publish intermediate or unverified builds:
+Pour développer : Windows x64, **SDK .NET 10**, Git et éventuellement un IDE C#. Le SDK inclut les runtimes. Le dépôt contient le code du cœur, des plugins et la chaîne de publication.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish.ps1 -LocalUpdate -SkipBuild -LocalLabel "Description de la modification"
+git clone https://github.com/TahiKari/ExileCenter.git
+cd ExileCenter
+$targets = Join-Path $PWD '.github/ci/PreserveOffsets.targets'
+$offsets = Join-Path $PWD '.github/ci/GameOffsets.dll'
+$properties = @("-p:DirectoryBuildTargetsPath=$targets", "-p:PinnedGameOffsetsPath=$offsets")
+$plugins = [regex]::Matches((Get-Content GameOverlay.sln -Raw), '"(Plugins\\[^"\r\n]+\.csproj)"') |
+    ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
+foreach ($project in @('GameHelper/GameHelper.csproj') + @($plugins)) {
+    dotnet restore $project @properties
+    if ($LASTEXITCODE -ne 0) { throw "Restauration échouée : $project" }
+    dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false @properties
+    if ($LASTEXITCODE -ne 0) { throw "Compilation échouée : $project" }
+}
 ```
 
-`-LocalSource` can point to a prepared complete runtime directory; the default is
-the Release output of GameHelper. `-LocalDestination` supports an isolated folder
-for checking publication. The ZIP is copied and verified before its manifest is
-atomically published. Updating never overwrites inventory protections, stash
-destinations or other saved settings. The first installation of this updater is
-manual; subsequent packages use the in-app button.
+Les sorties sont dans `GameHelper\bin\Release\net10.0-windows\win-x64`. Pour préparer un ZIP de test isolé :
 
-## Releases de GameHelper P-V1 (GitHub Actions)
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish.ps1 -LocalUpdate -SkipBuild -LocalDestination "$PWD\LocalUpdateRelease\test" -LocalLabel "ExileCenter — test local"
+```
 
-Le workflow `.github/workflows/release.yml` compile le cœur et les plugins sur
-une machine Windows standard gratuite. Il fonctionne uniquement dans le dépôt
-**public** `TahiKari/Gamehelper2` ; il ne démarre pas si le dépôt devient privé.
-Il n'utilise ni machine payante, ni cache Actions, ni stockage d'artefacts Actions.
-Le ZIP et son SHA256 sont joints directement à une GitHub Release.
+Extraire ce ZIP dans un dossier de test puis lancer `ExileCenter.exe`. La copie validée de `GameOffsets.dll` est utilisée telle quelle ; sa reconstruction est bloquée par `PreserveOffsets.targets`. Ne pas utiliser une reconstruction globale de la solution qui contournerait cette protection.
 
-Pour l'activer, envoyer les sources personnalisées et les fichiers `.github`
-dans ce dépôt, puis créer un tag tel que `v1.5.11-personnalise.1` sur le commit
-contenant ces sources. L'envoi du tag déclenche compilation puis préparation d'une
-Release en brouillon, à publier après vérification.
-Pour une préparation manuelle, utiliser **Actions → GameHelper - compilation et
-Release gratuite → Run workflow**, avec un tag existant : l'option brouillon est
-activée par défaut. Une Release existante n'est pas remplacée : utiliser un nouveau
-tag. Une compilation échouée ne publie rien. Le premier passage sur GitHub doit
-être vérifié avant de diffuser le lien aux joueurs.
+Le workflow [release.yml](.github/workflows/release.yml) compile sur un runner Windows du dépôt public ExileCenter. Un tag prépare une Release en brouillon ; le paquet complet, son SHA256 et les contrôles doivent être vérifiés avant sa publication. Les fixtures .NET s'exécutent avec `scripts/run-check.ps1` dans un dossier isolé.
 
-La copie `.github/ci/GameOffsets.dll` est le binaire validé, conservé à l'identique
-(SHA256 `EF67411C6456DE8E92179ED8DB55ADC043D086B072ED37AE52E1109F966F9B93`).
-`PreserveOffsets.targets`, importé uniquement par le workflow, remplace les
-références au projet GameOffsets par ce binaire et interdit sa compilation.
-Les compilations locales habituelles ne sont pas modifiées.
+## Origines, crédits et licence
 
-Le ZIP contient les exécutables, plugins, dépendances, ressources, licence et
-crédits ; il exclut les réglages personnels et diagnostics. Extraire dans un
-dossier et lancer `GameHelper.exe` avec le runtime **.NET 10 Desktop x64** installé.
-Les deux exécutables démarrent directement GameHelper P-V1. Au démarrage,
-l'application propose les mises à jour avec le choix Oui/Non. Pendant son utilisation,
-elle vérifie les Releases publiques toutes les 10 minutes et affiche une notification.
-Le bouton « Mettre à jour et redémarrer » télécharge le ZIP depuis ce dépôt,
-vérifie son SHA256 et conserve les réglages. Le dossier de mises à jour locales
-reste prioritaire. Une connexion indisponible n'empêche pas de démarrer GameHelper.
-GameOffsets.dll est vérifiée et ne fait jamais partie des fichiers remplacés.
-La version installée est enregistrée dans les métadonnées de compilation à partir
-du tag, pour éviter les réinstallations et les retours à une ancienne Release.
-Les utilisateurs des anciens ZIP doivent installer une première fois la version
-qui ajoute cette fonction ; les mises à jour suivantes sont proposées dans l'application.
-Téléchargements : <https://github.com/TahiKari/Gamehelper2/releases>.
+ExileCenter est maintenu indépendamment sur GitHub, mais réutilise du code de la lignée **GameHelper / GameHelper2**, notamment la base maintenue par MordWraith et les contributions de Lafko, Gordin et de la communauté. Le changement de nom ne change pas cette origine. L'historique, les crédits des auteurs et les licences sont conservés dans [CREDITS.md](CREDITS.md) et les sources.
 
-## Links
+Le projet est distribué sous **[GNU GPL v3](LICENSE)**. CorpseCleaner et ses bibliothèques LibGGPK utilisent les conditions précisées dans leur [licence AGPLv3](Plugins/CorpseCleaner/LICENSE). Les autres dépendances conservent leurs licences respectives.
 
-- [Upstream GameHelper2](https://github.com/MordWraith/Gamehelper)
-- [.NET 10 downloads](https://dotnet.microsoft.com/download/dotnet/10.0)
+ExileCenter est un projet communautaire, sans affiliation avec Grinding Gear Games. Path of Exile et les éléments du jeu appartiennent à leurs ayants droit.

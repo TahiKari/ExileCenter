@@ -75,7 +75,7 @@ namespace GameHelper.Settings
             }
 
             ImGui.PushStyleColor(ImGuiCol.Text, ImGuiTheme.TextMuted);
-            ImGui.Text($"GameHelper {LocalUpdates.InstalledVersion}");
+            ImGui.Text($"ExileCenter {LocalUpdates.InstalledVersion}");
             ImGui.PopStyleColor();
             ImGui.SameLine();
             ImGui.TextDisabled("|");
@@ -566,7 +566,9 @@ namespace GameHelper.Settings
                     ImGui.TextColored(color, L.T("settings.about.version", "For PoE2 0.5.5"));
                     ImGui.TextColored(color, L.T("settings.about.zero_day", "Zero Day developer is Kronos"));
                     ImGui.TextColored(color, L.T("settings.about.offset", "Offset updater is Arsenic, Nabeora, Lafko"));
-                    ImGui.TextColored(color, L.T("settings.about.discord", "Official GameHelper2 Discord is https://discord.gg/864GyuM5S"));
+                    ImGui.TextColored(color, "ExileCenter · TahiKari · GPLv3");
+                    ImGui.TextColored(color, "https://github.com/TahiKari/ExileCenter");
+                    ImGui.TextColored(color, "GameHelper2 : CREDITS.md");
                     ImGui.NewLine();
                     ImGui.TextColored(
                         Vector4.One,

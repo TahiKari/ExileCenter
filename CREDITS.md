@@ -1,20 +1,20 @@
-# Credits
+# Crédits — ExileCenter
 
-GameHelper is an **open-source fork** for Path of Exile 2, based on the [GameHelper2](https://github.com/MordWraith/Gamehelper) ecosystem.
+**ExileCenter** est maintenu par [TahiKari](https://github.com/TahiKari) dans un dépôt GitHub autonome. Son code dérive de la lignée [GameHelper / GameHelper2](https://github.com/MordWraith/Gamehelper) : cette origine et les contributions antérieures restent créditées ci-dessous.
 
 | What | Where |
 |------|--------|
-| **Source code** | https://github.com/MordWraith/Gamehelper (`main` branch) |
-| **Pre-built releases** | https://github.com/MordWraith/Gamehelper/releases |
+| **Sources ExileCenter** | https://github.com/TahiKari/ExileCenter |
+| **Releases ExileCenter** | https://github.com/TahiKari/ExileCenter/releases |
 | **Trust / auto-update** | [SECURITY.md](SECURITY.md) |
 
-**Maintainer:** [MordWraith](https://github.com/MordWraith)
+**Mainteneur ExileCenter :** [TahiKari](https://github.com/TahiKari). **Base antérieure :** [MordWraith](https://github.com/MordWraith).
 
 If someone is missing from this list, please open an issue or contact the maintainer.
 
 ## In the application
 
-Open **Plugins** in the GameHelper menu (top bar). The plugin table shows each plugin name and **Author** (original / upstream credit).
+Open **Plugins** in the ExileCenter menu. The plugin table preserves each plugin name and its **Author** (original / upstream credit).
 
 ## Core & launcher
 
@@ -24,7 +24,8 @@ Open **Plugins** in the GameHelper menu (top bar). The plugin table shows each p
 | GameHelper2 base | [Gordin](https://github.com/MordWraith/Gamehelper) and community | Overlay architecture, offsets, plugin host |
 | GameHelper (original) | GameHelper (OwnedCore) | Early PoE helper lineage |
 | Community maintainers | KronosDesign, arsenic2k, abevol, mm3141, others | GameHelper2 contributions |
-| This fork | MordWraith | PoE2 updates, launcher, signed auto-update, plugins, publish pipeline |
+| Upstream fork | MordWraith | PoE2 updates, launcher, signed auto-update, plugins, publish pipeline |
+| ExileCenter / previous GameHelper P-V1 builds | TahiKari | Independent distribution, interface and plugin themes, local and GitHub updates, loot and damage tracking adaptations, Sekhema attempt timers and integrated plugin changes |
 
 ## Bundled plugins
 
@@ -55,4 +56,4 @@ CorpseCleaner uses [LibGGPK3 / LibBundle3 / LibBundledGGPK3](https://github.com/
 
 ## License
 
-Upstream GameHelper2 is GPLv3. This fork is distributed under the same license — see [LICENSE](LICENSE).
+Upstream GameHelper2 is GPLv3. ExileCenter preserves that license — see [LICENSE](LICENSE). Component-specific notices, including CorpseCleaner's AGPLv3 license, remain applicable.

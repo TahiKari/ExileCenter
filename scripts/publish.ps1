@@ -2,7 +2,7 @@
 param(
     [string]$Version,
     [string[]]$Changelog,
-    [string]$Repository = "MordWraith/Gamehelper",
+    [string]$Repository = "TahiKari/ExileCenter",
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
     [switch]$SkipBuild,
@@ -14,6 +14,7 @@ param(
     [string]$MigrationTargetVersion = "1.2.0",
     [string]$MaxAutoUpdateVersion = "1.1.10",
     [switch]$LocalUpdate,
+    [switch]$LegacyPackage,
     [string]$LocalSource,
     [string]$LocalDestination = (Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'Gamehelpers\Maj GameHelper'),
     [string]$LocalLabel
@@ -60,6 +61,11 @@ if ($LocalUpdate) {
     # Both entry points must load GameHelper.dll directly. Retaining an upstream
     # GameHelper.App.exe would let existing shortcuts replace the personal build.
     $files['GameHelper.App.exe'] = Join-Path $source 'GameHelper.exe'
+    if (-not $LegacyPackage) { $files['ExileCenter.exe'] = Join-Path $source 'GameHelper.exe' }
+    foreach ($document in @('LICENSE','CREDITS.md','README.md','SECURITY.md')) {
+        if ($LegacyPackage -and $document -eq 'SECURITY.md') { continue }
+        $files[$document] = Join-Path $Root $document
+    }
     $archive = [IO.Compression.ZipFile]::Open($temporaryPackage,[IO.Compression.ZipArchiveMode]::Create)
     try {
         foreach ($relative in $files.Keys | Sort-Object) {
@@ -78,7 +84,7 @@ if ($LocalUpdate) {
     } finally { $archive.Dispose() }
     [IO.File]::Move($temporaryPackage,$packagePath)
     $packageHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash
-    if ([string]::IsNullOrWhiteSpace($LocalLabel)) { $LocalLabel = 'GameHelper - ' + (Get-Date -Format 'dd/MM/yyyy HH:mm') }
+    if ([string]::IsNullOrWhiteSpace($LocalLabel)) { $LocalLabel = 'ExileCenter - ' + (Get-Date -Format 'dd/MM/yyyy HH:mm') }
     $manifest = @{ Id=$packageHash; PackageFile=$packageName; Sha256=$packageHash; Label=$LocalLabel }
     if ($Version) { $manifest.ReleaseTag = $Version }
     if ($Changelog) { $manifest.Changes = $Changelog -join "`n" }

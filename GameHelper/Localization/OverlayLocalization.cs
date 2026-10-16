@@ -137,11 +137,14 @@ namespace GameHelper.Localization
         // elisions compact at display time while preserving resources and hidden ImGui IDs.
         internal static string NormalizeDisplayText(string text, bool preserveImGuiId = true)
         {
-            if (CurrentLanguage != OverlayLanguage.French ||
-                (!text.Contains('\u2019') && !text.Contains('\u2018'))) return text;
             var id = preserveImGuiId ? text.IndexOf("##", StringComparison.Ordinal) : -1;
             var visible = id < 0 ? text : text[..id];
-            visible = visible.Replace('\u2019', '\'').Replace('\u2018', '\'');
+            // Rebrand visible labels, preserving historical names, paths and ImGui IDs.
+            if (visible.Contains("GameHelper", StringComparison.Ordinal))
+                visible = System.Text.RegularExpressions.Regex.Replace(visible,
+                    @"(?<![A-Za-z0-9_./\\])GameHelper(?![A-Za-z0-9_./\\])", "ExileCenter");
+            if (CurrentLanguage == OverlayLanguage.French)
+                visible = visible.Replace('\u2019', '\'').Replace('\u2018', '\'');
             return id < 0 ? visible : visible + text[id..];
         }
 

@@ -1,4 +1,4 @@
-﻿// <copyright file="Program.cs" company="None">
+// <copyright file="Program.cs" company="None">
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
@@ -88,8 +88,8 @@ namespace GameHelper
         private static readonly string InstallDirectory = Path.GetFullPath(AppContext.BaseDirectory);
         private const string StateName = "local-update-state.json";
         private const string ErrorName = "local-update-error.txt";
-        private const string Repository = "TahiKari/Gamehelper2";
-        private const string GitHubPackageName = "GameHelper-Personnalise-win-x64.zip";
+        private const string Repository = "TahiKari/ExileCenter";
+        private const string GitHubPackageName = "ExileCenter-win-x64.zip";
         private static readonly HttpClient GitHubClient = new() { Timeout = TimeSpan.FromSeconds(8) };
         private static readonly HttpClient PackageClient = new() { Timeout = TimeSpan.FromMinutes(3) };
         private static readonly string? CurrentReleaseTag = typeof(Program).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
@@ -168,7 +168,7 @@ namespace GameHelper
             private volatile bool closeRequested;
             internal bool InstallRequested { get; private set; }
 
-            internal StartupUpdateWindow(string question, string title, Func<Task> install) : base("GameHelper update", true, 1, 1)
+            internal StartupUpdateWindow(string question, string title, Func<Task> install) : base("ExileCenter update", true, 1, 1)
             {
                 this.question = question;
                 this.title = title;
@@ -299,7 +299,7 @@ namespace GameHelper
                 if (match.Success) version = match.Value;
             }
             return version == null ? L.T("updates.available", "Update available")
-                : "GameHelper " + version + " · " + L.T("updates.title", "Updates");
+                : "ExileCenter " + version + " · " + L.T("updates.title", "Updates");
         }
 
         private static Package? ParseGitHubRelease(JsonElement release, string? installedTag)
@@ -338,7 +338,7 @@ namespace GameHelper
                 try
                 {
                     using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{Repository}/releases/latest");
-                    request.Headers.UserAgent.ParseAdd("GameHelper-Personal/1.0");
+                    request.Headers.UserAgent.ParseAdd("ExileCenter/1.0");
                     request.Headers.Accept.ParseAdd("application/vnd.github+json");
                     using var response = await GitHubClient.SendAsync(request);
                     if (response.StatusCode == System.Net.HttpStatusCode.NotFound) githubResult = new(null, null);
@@ -537,8 +537,8 @@ namespace GameHelper
             if (segments.Any(segment => segment.Equals("config", StringComparison.OrdinalIgnoreCase) || segment.Equals("configs", StringComparison.OrdinalIgnoreCase)) ||
                 Path.GetFileName(relative).Equals("settings.json", StringComparison.OrdinalIgnoreCase)) return false;
             if (segments.Length == 1)
-                return relative.Equals("GameHelper.exe", StringComparison.OrdinalIgnoreCase) || relative.Equals("GameHelper.App.exe", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
-                    relative is "GameHelper.deps.json" or "GameHelper.runtimeconfig.json" or "LICENSE" or "CREDITS.md" or "README.md";
+                return relative.Equals("ExileCenter.exe", StringComparison.OrdinalIgnoreCase) || relative.Equals("GameHelper.exe", StringComparison.OrdinalIgnoreCase) || relative.Equals("GameHelper.App.exe", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+                    relative is "GameHelper.deps.json" or "GameHelper.runtimeconfig.json" or "LICENSE" or "CREDITS.md" or "README.md" or "SECURITY.md";
             return segments[0] is "Plugins" or "Localization" or "fonts" && !relative.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
         }
 

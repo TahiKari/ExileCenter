@@ -1,79 +1,40 @@
-# Security & trust
+# Sécurité et distribution — ExileCenter
 
-This document explains how installs and updates work, so you can decide whether to use the pre-built releases or build from source.
+## Sources et téléchargements
 
-## Distribution model
+Les sources sont publiées dans [TahiKari/ExileCenter](https://github.com/TahiKari/ExileCenter) et les paquets dans ses [Releases](https://github.com/TahiKari/ExileCenter/releases). La documentation d'installation est dans le [README](README.md). Les anciens noms de fichiers sont conservés pour les installations issues de GameHelper P-V1.
 
-| Channel | What you get |
-|---------|----------------|
-| [GitHub `main`](https://github.com/MordWraith/Gamehelper/tree/main) | Full source (clone or download ZIP) |
-| [GitHub Releases](https://github.com/MordWraith/Gamehelper/releases) | Pre-built binaries (`GameHelperDownloader.exe`, full ZIP) |
-| In-app auto-update | Same signed release ZIP as on GitHub Releases |
+## Mises à jour effectivement distribuées
 
-You do **not** have to use auto-update. Manual install from the full ZIP or a self-built `publish\` folder works the same.
+Les exécutables du ZIP démarrent directement le cœur ExileCenter. Ce circuit n'utilise pas l'ancien lanceur à manifeste RSA. Le code de ce lanceur reste présent pour l'historique ; il ne faut pas confondre sa signature de manifeste avec une signature des paquets ExileCenter.
 
-## Auto-update (what it does)
+1. L'application consulte la dernière Release publique de **TahiKari/ExileCenter** ; les brouillons et préversions sont exclus.
+2. Le nom, l'URL et la taille du ZIP sont contrôlés. Le téléchargement doit correspondre au SHA256 fourni par GitHub pour l'asset.
+3. Un dossier local de mise à jour compatible peut être prioritaire ; son manifeste fournit également un SHA256 à vérifier.
+4. Les chemins du ZIP sont validés avant l'extraction. Les réglages personnels sont exclus des remplacements.
+5. Le programme prépare un installateur temporaire, attend sa confirmation de démarrage, puis se ferme. L'installateur remplace les fichiers et redémarre l'application. En cas d'échec de remplacement, il tente de restaurer les fichiers précédents.
+6. Le binaire validé `GameOffsets.dll` est vérifié et n'est pas remplacé par ce mécanisme.
 
-1. The launcher downloads **`manifest.json`** and **`manifest.sig`** from GitHub Releases.
-2. The manifest signature is checked with an **RSA public key embedded in the launcher** (`UpdateManifestVerifier`).
-3. Each file in the manifest has a **SHA256** hash; mismatches abort the update.
-4. The update is delivered as **one ZIP** (not arbitrary DLL URLs).
-5. User data is **not** shipped in the update package:
-   - `configs/` (core settings, `plugins.json`)
-   - `Plugins/*/config/` (per-plugin settings)
+Le SHA256 contrôle l'intégrité du paquet ; il ne constitue ni un audit du code ni une signature d'auteur indépendante de GitHub. Les binaires ne disposent pas de signature Authenticode. Le compte mainteneur, le dépôt et la machine locale restent des éléments de confiance.
 
-You still trust the **maintainer** who signs releases — the same trust model as any overlay or game tool that is not independently audited.
-
-## Build from source (maximum control)
+Vous pouvez refuser une mise à jour au démarrage et télécharger manuellement le ZIP. Pour vérifier une archive :
 
 ```powershell
-git clone https://github.com/MordWraith/Gamehelper.git
-cd Gamehelper
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1
+Get-FileHash .\ExileCenter-win-x64.zip -Algorithm SHA256
 ```
 
-Run `publish\GameHelper.exe`. No downloader or auto-update required.
+Comparer le résultat au fichier `ExileCenter-win-x64.zip.sha256` de la même Release.
 
-## Windows Defender and antivirus (false positives)
+## Accès au jeu et données locales
 
-Unsigned game overlays that **download**, **extract**, and **load DLLs** are commonly flagged by Windows Defender and other AV. That is **expected** for tools like GameHelper — it does not necessarily mean malware.
+L'application et ses plugins accèdent aux informations du processus du jeu. Certaines fonctions peuvent simuler des entrées, ajuster la caméra ou modifier des fichiers du jeu ; consulter les réglages du plugin concerné avant de l'activer. CorpseCleaner applique un patch réversible uniquement jeu fermé et conserve une sauvegarde locale.
 
-### Common detection names
+Les réglages et historiques restent dans le dossier de l'application et ceux des plugins. Certaines fonctions de prix et le mécanisme de mise à jour utilisent Internet. Ne pas publier des configurations, journaux ou captures contenant des informations personnelles.
 
-| Name | Typical trigger |
-|------|-----------------|
-| `Trojan:Win32/Wacatac.C!ml` | `GameHelper.App.dll` — overlay DLL load + memory reads |
-| `Trojan:Win32/PowhidSubExec.B` | Auto-update installer — background script copies from `%TEMP%\GameHelperUpdate\` into your install folder |
+## Alerte Windows ou antivirus
 
-Other vendors may use different names for the same behavior.
+En cas de blocage, relever le message, contrôler l'adresse de téléchargement, la version et le SHA256. Une alerte ne doit pas être considérée automatiquement comme un faux positif. Ne pas désactiver globalement l'antivirus ; en cas de doute, suspendre l'installation et signaler le problème.
 
-### Why GameHelper may not start
+## Signaler un problème
 
-1. Defender **blocked** `GameHelper.exe`, `GameHelper.App.dll`, `cmd.exe`, or a `GameHelperUpdate` entry.
-2. Open **Windows Security → Protection history**, find the block, then **Allow** / **Restore**, or add a **folder exclusion** for your GameHelper install path.
-3. Do **not** mix files from different versions (e.g. old `GameHelper.App.dll` with a new launcher).
-4. **Clean install:** download the [full ZIP](https://github.com/MordWraith/Gamehelper/releases/latest), extract to a **new empty folder**, run `GameHelper.exe`.
-
-You do **not** need to read source code to fix a block — use Protection history or a manual ZIP install.
-
-### What auto-update does (why AV complains)
-
-When you approve an update, the launcher:
-
-1. Downloads a signed ZIP to `%TEMP%\GameHelperUpdate\<version>\`
-2. Starts a small **background installer** (`cmd` + batch + `robocopy`) that waits for the launcher to exit, copies files into your install folder, and restarts GameHelper
-
-That matches generic “dropper” heuristics. The same files are on GitHub Releases with SHA256 checks in the signed `manifest.json`.
-
-### Release integrity
-
-- `manifest.json` is **signed**; the launcher rejects tampered manifests.
-- Each file must match the **SHA256** hash in the manifest.
-
-You still trust whoever holds the signing key — the same model as any pre-built overlay.
-
-## Reporting issues
-
-Security or trust concerns: [GitHub Issues](https://github.com/MordWraith/Gamehelper/issues) (no DMs required).
-
-Please include version (`VERSION.txt`), install method (downloader / ZIP / self-built), and whether auto-update was used.
+Utiliser les [tickets ExileCenter](https://github.com/TahiKari/ExileCenter/issues) pour un problème reproductible sans information sensible. Indiquer la version affichée, la version du jeu et le plugin concerné. Pour une vulnérabilité sensible, utiliser le signalement privé GitHub lorsqu'il est disponible et éviter de publier des secrets ou des détails permettant une exploitation immédiate.

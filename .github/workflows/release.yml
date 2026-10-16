@@ -1,4 +1,4 @@
-name: GameHelper - compilation et Release gratuite
+name: ExileCenter - compilation et Release
 
 on:
   push:
@@ -23,8 +23,8 @@ concurrency:
 
 jobs:
   release:
-    # Evaluated before allocating a runner: private repos and other forks skip.
-    if: github.repository == 'TahiKari/Gamehelper2' && github.event.repository.private == false
+    # Evaluated before allocating a runner: only the public ExileCenter repository builds.
+    if: github.repository == 'TahiKari/ExileCenter' && github.event.repository.private == false
     runs-on: windows-2022
     timeout-minutes: 45
     permissions:
@@ -96,21 +96,15 @@ jobs:
           $output = Join-Path $env:RUNNER_TEMP 'gamehelper-release'
           $version = $env:RELEASE_TAG.TrimStart('v')
           if ($env:RELEASE_TAG -match '-personnalise\.(\d+)$') { $version = '1.' + [Math]::Max(0, [int]$Matches[1] - 5) }
-          $releaseName = "GameHelper P-V$version"
+          $releaseName = "ExileCenter P-V$version"
           "RELEASE_NAME=$releaseName" >> $env:GITHUB_ENV
-          & ./scripts/publish.ps1 -LocalUpdate -SkipBuild -LocalSource $runtime -LocalDestination $output -LocalLabel $releaseName
+          & ./scripts/publish.ps1 -LocalUpdate -SkipBuild -LocalSource $runtime -LocalDestination $output -LocalLabel $releaseName -Version $env:RELEASE_TAG -Changelog 'ExileCenter : consulter les notes de cette Release.'
           $manifest = Get-Content "$output/GameHelper-Maj.json" -Raw | ConvertFrom-Json
           $archive = Join-Path $output $manifest.PackageFile
           Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $zip = [IO.Compression.ZipFile]::Open($archive, [IO.Compression.ZipArchiveMode]::Update)
-          try {
-            foreach ($name in @('LICENSE', 'CREDITS.md', 'README.md')) {
-              [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, (Join-Path $PWD $name), $name)
-            }
-          } finally { $zip.Dispose() }
           $zip = [IO.Compression.ZipFile]::OpenRead($archive)
           try {
-            foreach ($name in @('GameHelper.exe', 'GameHelper.App.exe', 'GameHelper.dll', 'GameHelper.deps.json', 'GameHelper.runtimeconfig.json', 'GameOffsets.dll', 'cimgui.dll', 'LICENSE')) {
+            foreach ($name in @('ExileCenter.exe', 'GameHelper.exe', 'GameHelper.App.exe', 'GameHelper.dll', 'GameHelper.deps.json', 'GameHelper.runtimeconfig.json', 'GameOffsets.dll', 'cimgui.dll', 'LICENSE', 'CREDITS.md', 'README.md', 'SECURITY.md')) {
               if (!$zip.GetEntry($name)) { throw "Fichier indispensable absent : $name" }
             }
             foreach ($path in @(git ls-files -- 'Plugins/*/Localization/*.json')) {
@@ -118,15 +112,22 @@ jobs:
             }
             if ($zip.Entries.FullName -match '(?i)(^|/)(configs?|settings\.json)(/|$)|(?i)(dump|\.pdb$|\.log$)') { throw 'Données locales ou de diagnostic présentes dans le ZIP.' }
           } finally { $zip.Dispose() }
-          $download = Join-Path $output 'GameHelper-Personnalise-win-x64.zip'
+          $download = Join-Path $output 'ExileCenter-win-x64.zip'
           Move-Item -LiteralPath $archive -Destination $download
           if ((Get-Item $download).Length -ge 2GB) { throw 'ZIP trop volumineux pour GitHub Releases.' }
           $hash = (Get-FileHash $download -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  GameHelper-Personnalise-win-x64.zip" | Set-Content "$download.sha256" -Encoding utf8NoBOM
+          "$hash  ExileCenter-win-x64.zip" | Set-Content "$download.sha256" -Encoding utf8NoBOM
+          # Old installers only accept their historical executable/document names.
+          & ./scripts/publish.ps1 -LocalUpdate -SkipBuild -LegacyPackage -LocalSource $runtime -LocalDestination $output -LocalLabel $releaseName -Version $env:RELEASE_TAG -Changelog 'Migration vers ExileCenter et son dépôt autonome.'
+          $legacyManifest = Get-Content "$output/GameHelper-Maj.json" -Raw | ConvertFrom-Json
+          $legacy = Join-Path $output 'GameHelper-Personnalise-win-x64.zip'
+          Move-Item -LiteralPath (Join-Path $output $legacyManifest.PackageFile) -Destination $legacy
+          $legacyHash = (Get-FileHash $legacy -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$legacyHash  GameHelper-Personnalise-win-x64.zip" | Set-Content "$legacy.sha256" -Encoding utf8NoBOM
           @"
-          $releaseName — la version de TahiKari pour Windows x64 (P : personnalisé, V : version).
-          Télécharger : https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/GameHelper-Personnalise-win-x64.zip
-          Installation : extraire le ZIP dans un dossier puis lancer GameHelper.exe.
+          $releaseName — le compagnon de TahiKari pour Path of Exile 2 sur Windows x64.
+          Télécharger : https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/ExileCenter-win-x64.zip
+          Installation : extraire le ZIP dans un dossier puis lancer ExileCenter.exe.
           Nécessite le runtime .NET 10 Desktop x64. GameOffsets.dll est conservée sans recompilation.
           Les nouvelles installations utilisent le profil de base de TahiKari ; les mises à jour conservent les réglages existants. Le code correspondant est disponible au tag $env:RELEASE_TAG.
           Après cette première installation, les nouvelles Releases sont proposées au démarrage (Oui/Non) ou signalées dans l'application.
@@ -140,6 +141,6 @@ jobs:
           $output = $env:RELEASE_OUTPUT
           $options = @('--repo', $env:GITHUB_REPOSITORY, '--verify-tag', '--title', $env:RELEASE_NAME, '--notes-file', "$output/notes.txt")
           if ($env:RELEASE_DRAFT -eq 'true') { $options += '--draft' }
-          & gh release create $env:RELEASE_TAG "$output/GameHelper-Personnalise-win-x64.zip#Télécharger $env:RELEASE_NAME — Windows x64 (ZIP)" "$output/GameHelper-Personnalise-win-x64.zip.sha256" @options
+          & gh release create $env:RELEASE_TAG "$output/ExileCenter-win-x64.zip#Télécharger $env:RELEASE_NAME — Windows x64 (ZIP)" "$output/ExileCenter-win-x64.zip.sha256" "$output/GameHelper-Personnalise-win-x64.zip#Compatibilité avec les anciennes installations" "$output/GameHelper-Personnalise-win-x64.zip.sha256" @options
           if ($LASTEXITCODE -ne 0) { throw 'Échec de publication de la Release.' }
           "Release : https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$env:RELEASE_TAG" >> $env:GITHUB_STEP_SUMMARY

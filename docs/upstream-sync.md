@@ -1,4 +1,6 @@
-# Upstream sync (Gordin GameHelper2)
+# Historical upstream sync (Gordin GameHelper2)
+
+> Archive provenant de la base GameHelper. ExileCenter est développé dans `TahiKari/ExileCenter` ; ce document décrit une synchronisation antérieure et ne prescrit pas de synchronisation automatique. Pour compiler la version actuelle sans reconstruire GameOffsets, suivre le README ExileCenter.
 
 Stable keeps **Radar**, **AutoHotKeyTrigger**, and **HealthBars** aligned with [Gordin/GameHelper2](https://github.com/Gordin/GameHelper2) `main`. Launcher, updater, Atlas fork, optional plugins, and localization stay MordWraith-specific.
 
@@ -35,20 +37,9 @@ Stable keeps **Radar**, **AutoHotKeyTrigger**, and **HealthBars** aligned with [
 | Plugin store / launcher / publish scripts | Stable-only |
 | `AhkKeySender`, `TemplateUi`, Radar `L()` UI, boss-arena default restore | Removed to match upstream; AHK uses upstream `MiscHelper.KeyUp` (WM_KEYUP) |
 
-## Quick re-sync
+## Évolution actuelle
 
-```powershell
-cd D:\ZusatzProgramme\Gamehelper
-git fetch gordin main
-git checkout gordin/main -- Plugins/Radar Plugins/AutoHotKeyTrigger Plugins/HealthBars
-git checkout gordin/main -- GameHelper/RemoteObjects/Components/StateMachine.cs
-git checkout gordin/main -- GameHelper/RemoteObjects/States/InGameStateObjects/AreaInstance.cs
-git checkout gordin/main -- GameHelper/RemoteObjects/UiElement/ChatParentUiElement.cs GameHelper/RemoteObjects/UiElement/UiElementBase.cs
-# Remove fork-only files if they reappear:
-git rm -f Plugins/AutoHotKeyTrigger/AhkKeySender.cs Plugins/AutoHotKeyTrigger/AutoHotKeyTriggerJson.cs Plugins/AutoHotKeyTrigger/ProfileManager/Templates/TemplateUi.cs 2>$null
-git rm -f Plugins/Radar/boss_arena_tgt_files.default.txt 2>$null
-dotnet build GameOverlay.sln -c Release
-```
+Les adaptations ExileCenter ne sont pas remplacées par une copie globale de fichiers amont. Toute reprise de correction doit faire l'objet d'un patch ciblé et d'une validation isolée. Le binaire validé GameOffsets reste inchangé.
 
 ## Test checklist
 
