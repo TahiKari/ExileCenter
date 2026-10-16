@@ -1713,5 +1713,14 @@
   "stashutility.meta.preset": "Preset",
   "stashutility.meta.preset_empty": "Empty",
   "stashutility.meta.preset_loaded": "Loaded",
-  "stashutility.meta.preset_load": "Load this slot and apply its saved tablet choices. Empty slots cannot be loaded."
+  "stashutility.meta.preset_load": "Load this slot and apply its saved tablet choices. Empty slots cannot be loaded.",
+  "stashutility.meta.match_all": "AND",
+  "stashutility.meta.match_any": "OR",
+  "stashutility.meta.match_all_help": "All checked modifiers must be present and meet their minimums.",
+  "stashutility.meta.match_any_help": "At least one checked modifier must be present and meet its minimum.",
+  "stashutility.meta.selected_mods": "checked modifiers for this tablet type.",
+  "stashutility.meta.match_too_many": "A tablet has at most 4 modifiers. Uncheck some modifiers to obtain a match with AND.",
+  "stashutility.meta.advanced_rules": "Advanced filters (optional)",
+  "stashutility.meta.advanced_enable": "Also require the advanced profile",
+  "stashutility.meta.advanced_help": "Advanced rules add conditions to the AND / OR choice above. They are optional; analysis never enables filtering."
 }

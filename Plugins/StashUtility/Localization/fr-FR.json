@@ -1713,5 +1713,14 @@
   "stashutility.meta.preset": "Preset",
   "stashutility.meta.preset_empty": "Vide",
   "stashutility.meta.preset_loaded": "Chargé",
-  "stashutility.meta.preset_load": "Charger les choix sauvegardés de cet emplacement. Un emplacement vide ne peut pas être chargé."
+  "stashutility.meta.preset_load": "Charger les choix sauvegardés de cet emplacement. Un emplacement vide ne peut pas être chargé.",
+  "stashutility.meta.match_all": "ET",
+  "stashutility.meta.match_any": "OU",
+  "stashutility.meta.match_all_help": "Tous les mods cochés doivent être présents et respecter leur minimum.",
+  "stashutility.meta.match_any_help": "Au moins un mod coché doit être présent et respecter son minimum.",
+  "stashutility.meta.selected_mods": "mods cochés pour ce type de tablette.",
+  "stashutility.meta.match_too_many": "Une tablette possède au plus 4 mods. Décoche des mods pour permettre une correspondance en mode ET.",
+  "stashutility.meta.advanced_rules": "Filtres avancés (facultatif)",
+  "stashutility.meta.advanced_enable": "Exiger aussi le profil avancé",
+  "stashutility.meta.advanced_help": "Ces règles ajoutent des conditions au choix ET / OU ci-dessus. Elles sont facultatives. L’analyse n’active aucun filtre."
 }

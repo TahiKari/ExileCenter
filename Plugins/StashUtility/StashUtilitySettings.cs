@@ -196,6 +196,7 @@ namespace StashUtility
 
     public class TabletProfile
     {        public Dictionary<string, string> ModRanks = new();
+        public bool RequireAllRankedMods;
 
         public bool UseMetaFilters;
         public string ActiveMetaProfileId = "";

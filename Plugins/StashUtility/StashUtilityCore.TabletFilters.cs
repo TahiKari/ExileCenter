@@ -137,46 +137,60 @@ namespace StashUtility
             ImGuiHelper.ToolTip(text);
         }
 
+        private void DrawTabletMatchMode(string type, TabletProfile settings)
+        {
+            bool all = settings.RequireAllRankedMods, any = !all;
+            if (ImGui.Checkbox(MT("match_all", "AND") + "##TabletMatchAll", ref all) && all)
+            { settings.RequireAllRankedMods = true; SaveSettings(); }
+            ImGui.SameLine();
+            if (ImGui.Checkbox(MT("match_any", "OR") + "##TabletMatchAny", ref any) && any)
+            { settings.RequireAllRankedMods = false; SaveSettings(); }
+            int count = SelectedTabletMods(settings, type).Select(mod => mod.Id).Distinct().Count();
+            MetaText(MT(settings.RequireAllRankedMods ? "match_all_help" : "match_any_help",
+                settings.RequireAllRankedMods ? "All checked modifiers must be present and meet their minimums." : "At least one checked modifier must be present and meet its minimum.") +
+                " " + count + " " + MT("selected_mods", "checked modifiers"));
+            if (settings.RequireAllRankedMods && count > 4)
+                MetaText(MT("match_too_many", "A tablet has at most 4 modifiers. Uncheck some modifiers to obtain a match with AND."));
+        }
+
         private void DrawTabletMetaFilters(string type, TabletProfile settings)
         {
             settings.MetaProfiles ??= new(); settings.ManualMetaModifiers ??= new(); settings.MetaSearch ??= "";
-            ImGui.TextDisabled(TabletTypeLabel(type));
-            bool changedMode = ImGui.Checkbox(MT("enable", "Use workbook AND / OR filters for this type"), ref settings.UseMetaFilters);
-            if (changedMode) SaveSettings();
-            TabletHelp(MT("rank_and_rules", "The best matching rank sets the color. AND / OR rules choose accepted combinations; their status remains visible beside the subrank."));
-            if (settings.UseMetaFilters)
-                ImGui.TextDisabled(MT("active_profile", "Active profile") + " : " + (ActiveMetaProfile(settings)?.Name ?? MT("none", "None")));
-            if (changedMode && settings.UseMetaFilters) ImGui.SetNextItemOpen(true);
-            if (ImGui.CollapsingHeader(MT("rules_editor", "AND / OR rules and analysis") + "###TabletRulesEditor") && ImGui.BeginTabBar("TabletMetaTabs"))
+            if (ImGui.CollapsingHeader(MT("advanced_rules", "Advanced filters (optional)") + "###TabletRulesEditor"))
             {
-                if (ImGui.BeginTabItem(MT("rules", "Rules")))
+                if (ImGui.Checkbox(MT("advanced_enable", "Also require the advanced profile"), ref settings.UseMetaFilters)) SaveSettings();
+                TabletHelp(MT("advanced_help", "Advanced rules add conditions to the AND / OR choice above. They are optional; analysis never enables filtering."));
+                if (ImGui.BeginTabBar("TabletMetaTabs"))
                 {
-                    DrawMetaProfiles(type, settings);
-                    TabletHelp(MT("rules_help", "Choose a profile and add AND / OR conditions or nested groups. Incomplete groups cannot accept a tablet."));
-                    var active = ActiveMetaProfile(settings);
-                    if (active != null)
+                    if (ImGui.BeginTabItem(MT("rules", "Rules")))
                     {
-                        bool changed = ImGui.InputText(MT("profile_name", "Profile name"), ref active.Name, 120);
-                        changed |= DrawMetaAction(MT("on_match", "When matched"), ref active.OnMatch);
-                        changed |= DrawMetaAction(MT("on_miss", "When not matched"), ref active.OnMiss);
-                        TabletHelp(MT("actions_help", "Keep displays the result. Signal adds an amber alert. Ignore hides the indication."));
-                        ImGui.Separator();
-                        if (ImGui.BeginChild("MetaRuleTree", Vector2.Zero,
-                            ImGuiChildFlags.Borders | ImGuiChildFlags.AutoResizeY | ImGuiChildFlags.AlwaysAutoResize,
-                            ImGuiWindowFlags.HorizontalScrollbar)) changed |= DrawMetaNode(active.Rule, type, 0);
-                        ImGui.EndChild();
-                        MetaText(MT("summary", "Rule") + " : " + MetaSummary(active.Rule, type));
-                        string error = TabletFilterEngine.Validate(active, MetaCatalog);
-                        if (error.Length > 0) ImGui.TextColored(new Vector4(1, .7f, .3f, 1), MT("invalid", "Incomplete or invalid rule") + " : " + MetaError(error));
-                        if (changed) SaveSettings();
+                        DrawMetaProfiles(type, settings);
+                        TabletHelp(MT("rules_help", "Choose a profile and add AND / OR conditions or nested groups. Incomplete groups cannot accept a tablet."));
+                        var active = ActiveMetaProfile(settings);
+                        if (active != null)
+                        {
+                            bool changed = ImGui.InputText(MT("profile_name", "Profile name"), ref active.Name, 120);
+                            changed |= DrawMetaAction(MT("on_match", "When matched"), ref active.OnMatch);
+                            changed |= DrawMetaAction(MT("on_miss", "When not matched"), ref active.OnMiss);
+                            TabletHelp(MT("actions_help", "Keep displays the result. Signal adds an amber alert. Ignore hides the indication."));
+                            ImGui.Separator();
+                            if (ImGui.BeginChild("MetaRuleTree", Vector2.Zero,
+                                ImGuiChildFlags.Borders | ImGuiChildFlags.AutoResizeY | ImGuiChildFlags.AlwaysAutoResize,
+                                ImGuiWindowFlags.HorizontalScrollbar)) changed |= DrawMetaNode(active.Rule, type, 0);
+                            ImGui.EndChild();
+                            MetaText(MT("summary", "Rule") + " : " + MetaSummary(active.Rule, type));
+                            string error = TabletFilterEngine.Validate(active, MetaCatalog);
+                            if (error.Length > 0) ImGui.TextColored(new Vector4(1, .7f, .3f, 1), MT("invalid", "Incomplete or invalid rule") + " : " + MetaError(error));
+                            if (changed) SaveSettings();
+                        }
+                        else MetaText(MT("create_hint", "Create a profile and add conditions or groups. Empty groups never accept a tablet."));
+                        ImGui.EndTabItem();
                     }
-                    else MetaText(MT("create_hint", "Create a profile and add conditions or groups. Empty groups never accept a tablet."));
-                    ImGui.EndTabItem();
+                    if (ImGui.BeginTabItem(MT("exchange", "Import / export"))) { DrawMetaExchange(type, settings); ImGui.EndTabItem(); }
+                    ImGui.EndTabBar();
                 }
-                if (ImGui.BeginTabItem(MT("analysis", "Analysis"))) { DrawMetaAnalysis(type, settings); ImGui.EndTabItem(); }
-                if (ImGui.BeginTabItem(MT("exchange", "Import / export"))) { DrawMetaExchange(type, settings); ImGui.EndTabItem(); }
-                ImGui.EndTabBar();
             }
+            if (ImGui.CollapsingHeader(MT("analysis", "Analysis") + "###TabletAnalysis")) DrawMetaAnalysis(type, settings);
             if (ImGui.CollapsingHeader(MT("reference_catalog", "Reference catalogue (show / hide)") + "###TabletReferenceCatalogue"))
             {
                 ImGui.TextDisabled(MetaCatalog.Version + " · " + MetaCatalog.ForType(type).Count() + " " + MT("mods", "modifiers"));
@@ -532,6 +546,12 @@ namespace StashUtility
             if (result.Action == TabletFilterAction.Ignore || (result.State == TabletFilterState.Rejected && Settings.DisableBadTabletHighlight)) return;
             Settings.TabletProfiles.TryGetValue(type, out var settings);
             var classification = ClassifyTabletMods(mods, settings, type);
+            if (!MatchesTabletSelection(mods, settings, type))
+            {
+                if (!Settings.DisableBadTabletHighlight)
+                    DrawTabletRankBadge(pos, size, (classification.IsRanked ? classification.RankLabel : "N/C") + " · NON", size.X / 52f, Math.Max(2, Settings.BorderMargin * size.X / 52f));
+                return;
+            }
             var color = classification.IsRanked ? classification.RankColor : MetaResultColor(result);
             float scale = size.X / 52f;
             if (Settings.ShowTabletModBorder) ImGui.GetBackgroundDrawList().AddRect(pos + Vector2.One, pos + size - Vector2.One, ImGuiHelper.Color(color), 3, ImDrawFlags.RoundCornersAll, Math.Clamp(scale, 1, 2));

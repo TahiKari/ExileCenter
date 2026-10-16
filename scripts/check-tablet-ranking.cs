@@ -72,6 +72,7 @@ internal static class TabletRankingCheck
                 {
                     ModRanks = new() { [id] = grades[slot] }, GoodModPatterns = new() { id },
                     ModRequiredMinRolls = new() { [id] = slot + 12 }, UseMetaFilters = slot % 2 == 0,
+                    RequireAllRankedMods = slot % 2 == 1,
                     ActiveMetaProfileId = "custom-" + slot,
                     MetaProfiles = new() { new() { Id = "custom-" + slot, Name = "Custom " + slot, TabletType = type,
                         Rule = new() { Kind = TabletRuleKind.All, Children = new() {
@@ -90,6 +91,7 @@ internal static class TabletRankingCheck
         {
             Check((bool)load.Invoke(plugin, new object[] { slot }) && JsonConvert.SerializeObject(plugin.Settings.TabletProfiles) == expected[slot], "Restore all eight tablet types, ranks, minimums and nested rules from slot " + (slot + 1));
             Check(plugin.Settings.MinTabletGoodMods == slot % 4 + 1 && plugin.Settings.FilterTabletGreat == (slot % 2 == 0), "Restore tablet highlight thresholds from slot " + (slot + 1));
+            Check(plugin.Settings.TabletProfiles.Values.All(p => p.RequireAllRankedMods == (slot % 2 == 1)), "Restore ET / OU independently for all tablet types in preset " + (slot + 1));
             plugin.Settings.TabletProfiles.Values.First().ModRanks.Clear();
             load.Invoke(plugin, new object[] { slot });
             Check(JsonConvert.SerializeObject(plugin.Settings.TabletProfiles) == expected[slot], "Editing active rules never mutates the saved preset " + (slot + 1));
@@ -442,6 +444,20 @@ internal static class TabletRankingCheck
             uint gold = GameHelper.Utils.ImGuiHelper.Color(new Vector4(.92f, .76f, .32f, 1));
             Check(Enumerable.Range(0, vertices.Size).Any(i => vertices[i].col == gold), "AND / OR border uses the best user rank rather than a yellow status override");
             ImGuiNET.ImGui.EndFrame();
+            string absent = ModDatabase.AllTabletMods.First(m => m.TabletTypes.Contains("Irradiated Tablet") &&
+                !uiProfile.ModRanks.ContainsKey(m.Id)).Id;
+            uiProfile.ModRanks[absent] = "A";
+            uiProfile.RequireAllRankedMods = true;
+            uiPlugin.Settings.DisableBadTabletHighlight = true;
+            ImGuiNET.ImGui.NewFrame();
+            typeof(StashUtilityCore).GetMethod("DrawMetaTabletHighlight", flags).Invoke(uiPlugin, new object[] { "Fixture", "Irradiated Tablet", new Vector2(200,40), new Vector2(52), badgeMods });
+            Check(ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer.Size == 0, "ET suppresses a nonmatching tablet even when its advanced profile accepts it");
+            ImGuiNET.ImGui.EndFrame();
+            uiProfile.RequireAllRankedMods = false;
+            ImGuiNET.ImGui.NewFrame();
+            typeof(StashUtilityCore).GetMethod("DrawMetaTabletHighlight", flags).Invoke(uiPlugin, new object[] { "Fixture", "Irradiated Tablet", new Vector2(200,40), new Vector2(52), badgeMods });
+            Check(ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer.Size > 0, "OU restores the highlight for the same tablet with only some selected mods");
+            ImGuiNET.ImGui.EndFrame();
             var parentData = new GameOffsets.Objects.UiElement.UiElementBaseOffset
             {
                 Self = parent, Flags = 1u << 11, LocalScaleMultiplier = 1,
@@ -653,6 +669,34 @@ internal static class TabletRankingCheck
             Check(opened.referenceOpen && opened.height > closed.height + 250, "Reference catalogue opens with one click");
             MetaFrame(closed.center, true); var hidden = MetaFrame(closed.center, false);
             Check(!hidden.referenceOpen && hidden.height == closed.height, "Reference catalogue hides again with one click");
+            var mode = typeof(StashUtilityCore).GetMethod("DrawTabletMatchMode", flags);
+            (Vector2 all, Vector2 any) ModeFrame(Vector2 mouse, bool down)
+            {
+                io.AddMousePosEvent(mouse.X, mouse.Y); io.AddMouseButtonEvent(0, down);
+                ImGuiNET.ImGui.NewFrame();
+                ImGuiNET.ImGui.SetNextWindowPos(new Vector2(30)); ImGuiNET.ImGui.SetNextWindowSize(new Vector2(650, 180));
+                ImGuiNET.ImGui.Begin("ET OU fixture");
+                var start = ImGuiNET.ImGui.GetCursorScreenPos();
+                float box = ImGuiNET.ImGui.GetFrameHeight();
+                var all = start + new Vector2(box / 2);
+                var any = all + new Vector2(box + ImGuiNET.ImGui.GetStyle().ItemInnerSpacing.X +
+                    ImGuiNET.ImGui.CalcTextSize("ET").X + ImGuiNET.ImGui.GetStyle().ItemSpacing.X, 0);
+                mode.Invoke(plugin, new object[] { "Breach Tablet", profile });
+                ImGuiNET.ImGui.End(); ImGuiNET.ImGui.Render();
+                return (all, any);
+            }
+            var modeBoxes = ModeFrame(new Vector2(-100), false);
+            Check(!profile.RequireAllRankedMods, "OU is selected initially without activating analysis or advanced rules");
+            ModeFrame(modeBoxes.all, false); ModeFrame(modeBoxes.all, true); ModeFrame(modeBoxes.all, false);
+            Check(profile.RequireAllRankedMods && !profile.UseMetaFilters, "Clicking ET selects only ET and keeps advanced filtering off");
+            ModeFrame(modeBoxes.all, true); ModeFrame(modeBoxes.all, false);
+            Check(profile.RequireAllRankedMods, "Clicking active ET cannot leave neither choice selected");
+            Check(JsonConvert.DeserializeObject<StashUtilitySettings>(File.ReadAllText(Path.Combine(isolated, "config", "settings.txt"))).TabletProfiles["Breach Tablet"].RequireAllRankedMods,
+                "ET persists independently of analysis");
+            ModeFrame(modeBoxes.any, false); ModeFrame(modeBoxes.any, true); ModeFrame(modeBoxes.any, false);
+            Check(!profile.RequireAllRankedMods && !profile.UseMetaFilters, "Clicking OU replaces ET without enabling advanced rules");
+            ModeFrame(modeBoxes.any, true); ModeFrame(modeBoxes.any, false);
+            Check(!profile.RequireAllRankedMods, "Clicking active OU cannot leave neither choice selected");
             float previousPaneWidth = 0;
             Vector2 Pane(float width, string filename, Vector2? mouse = null, bool down = false)
             {
@@ -848,6 +892,8 @@ internal static class TabletRankingCheck
         Check(results.Values.Single(v => v.RankLabel == "B2").SortScore < results.Values.Single(v => v.RankLabel == "B10").SortScore, "B2 before B10");
 
         var analyze = typeof(StashUtilityCore).GetMethod("ClassifyTabletMods", BindingFlags.Static | BindingFlags.NonPublic);
+        var match = typeof(StashUtilityCore).GetMethod("MatchesTabletSelection", BindingFlags.Static | BindingFlags.NonPublic);
+        bool Matches(Mods mods, TabletProfile profile, string type) => (bool)match.Invoke(null, new object[] { mods, profile, type });
         TabletClassification Analyze(Mods mods, TabletProfile profile, string type) =>
             (TabletClassification)analyze.Invoke(null, new object[] { mods, profile, type });
         foreach (string tabletType in StashUtilitySettings.TabletTypes)
@@ -867,6 +913,18 @@ internal static class TabletRankingCheck
             string expectedCode = expected[Canonical(grades.Skip(1).Take(4).ToArray())];
             var result = Analyze(mods, profile, tabletType);
             Check(result.RankLabel == expectedCode, "Actual mod IDs and category " + tabletType);
+            Check(!profile.RequireAllRankedMods && Matches(mods, profile, tabletType), "Existing choices default to OU " + tabletType);
+            profile.RequireAllRankedMods = true;
+            Check(Matches(mods, profile, tabletType), "ET accepts all four selected modifiers " + tabletType);
+            var missing = new Mods(IntPtr.Zero);
+            missing.ExplicitMods.AddRange(mods.ExplicitMods.Take(3));
+            Check(!Matches(missing, profile, tabletType), "ET rejects a missing selected modifier " + tabletType);
+            Check(Analyze(missing, profile, tabletType).Rank == "A", "ET rejection preserves the best rank and numbered code " + tabletType);
+            profile.RequireAllRankedMods = false;
+            Check(Matches(missing, profile, tabletType), "OU accepts a partial selection " + tabletType);
+            foreach (bool all in new[] { false, true })
+                Check(!Matches(mods, new TabletProfile { RequireAllRankedMods = all }, tabletType), "An empty selection never accepts a tablet " + all + tabletType);
+            Check(!Matches(null, profile, tabletType), "Unreadable modifiers cannot pass " + tabletType);
             string saved = JsonConvert.SerializeObject(profile);
             mods.ExplicitMods.Reverse();
             Check(Analyze(mods, profile, tabletType) == result, "Raw modifier order " + tabletType);
@@ -895,6 +953,20 @@ internal static class TabletRankingCheck
                 var choice = new TabletProfile(); choice.ModRanks[variable.Id] = "S";
                 choice.ModRequiredMinRolls[variable.Id] = variable.MaxRoll;
                 Check(!Analyze(partial, choice, tabletType).IsRanked, "Below-minimum S does not color a tablet " + tabletType);
+                Check(!Matches(partial, choice, tabletType), "OU rejects a below-minimum match " + tabletType);
+                choice.RequireAllRankedMods = true;
+                Check(!Matches(partial, choice, tabletType), "ET rejects a below-minimum match " + tabletType);
+                choice.ModRequiredMinRolls[variable.Id] = variable.MinRoll;
+                Check(Matches(partial, choice, tabletType), "ET accepts a single selected modifier at its minimum " + tabletType);
+                var second = definitions.First(d => d.Id != variable.Id);
+                choice.ModRanks[second.Id] = "A";
+                partial.ExplicitMods.Add((second.Id, (10000f, 10000f)));
+                choice.ModRequiredMinRolls[variable.Id] = variable.MaxRoll;
+                Check(!Matches(partial, choice, tabletType), "ET checks each minimum even if another selected mod qualifies " + tabletType);
+                choice.RequireAllRankedMods = false;
+                Check(Matches(partial, choice, tabletType), "OU accepts another qualifying mod when one selected minimum fails " + tabletType);
+                partial.ExplicitMods.RemoveAt(partial.ExplicitMods.Count - 1);
+                choice.ModRanks.Remove(second.Id);
                 choice.ModRequiredMinRolls[variable.Id] = variable.MinRoll;
                 Check(Analyze(partial, choice, tabletType).Rank == "S", "One qualifying S wins despite unrelated unknown modifiers " + tabletType);
                 choice.ModRanks.Remove(variable.Id);

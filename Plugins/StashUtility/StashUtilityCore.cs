@@ -870,16 +870,12 @@ namespace StashUtility
             using var help = ImGuiHelper.UseHelpTooltips(Settings.TabletHelpTooltips);
             if (!Settings.EnableTabletManager) return;
             DrawTabletVisibilityButton(false);
-            DrawTabletPresets();
             TabletProfile SelectedProfile(string selectedType)
             {
                 if (!Settings.TabletProfiles.TryGetValue(selectedType, out var selected) || selected == null)
                     Settings.TabletProfiles[selectedType] = selected = new TabletProfile();
                 return selected;
             }
-            string type = StashUtilitySettings.TabletTypes[tabletFilterType];
-            var profile = SelectedProfile(type);
-            DrawTabletMetaFilters(type, profile);
             if (ImGui.CollapsingHeader(MT("display_options", "Display options")))
             {
                 if (ImGui.Checkbox(PluginText.T("stashutility.tablet.auto_hide", "Hide tablet indications when hovering an item"), ref Settings.HideTabletHighlightsOnItemHover)) SaveSettings();
@@ -902,11 +898,14 @@ namespace StashUtility
             ImGui.TextColored(ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark], MT("rank_settings", "Modifier ranks S to F"));
             TabletHelp(PluginText.T("stashutility.filters.rank_help", "Choose S to F for each modifier. Unchecked modifiers and rolls below their minimum do not contribute to the classification."));
             DrawTabletTypeSelector();
-            type = StashUtilitySettings.TabletTypes[tabletFilterType];
-            profile = SelectedProfile(type);
+            DrawTabletPresets();
+            string type = StashUtilitySettings.TabletTypes[tabletFilterType];
+            var profile = SelectedProfile(type);
             var catalog = Data.ModDatabase.AllTabletMods.Where(m => m.TabletTypes.Contains(type)).ToList();
             profile.ModRanks ??= new Dictionary<string, string>();
             if (MigrateTabletModRanks(profile)) SaveSettings();
+            DrawTabletMatchMode(type, profile);
+            DrawTabletMetaFilters(type, profile);
             DrawModCatalog("tablet", catalog, profile.GoodModPatterns, profile.BadModPatterns, profile.GodModPatterns, profile.ModRequiredMinRolls, ref tabletSearchTerm, ref tabletConfiguredOnly, ref tabletAffixFilter, profile.ModRanks);
         }
 
@@ -5779,6 +5778,13 @@ namespace StashUtility
                 tabletClassification = ClassifyTabletMods(modsComponent, tabletProfile, tabletType);
             string tabletLabel = tabletClassification.IsRanked ? tabletClassification.RankLabel :
                 PluginText.T("stashutility.filters.tablet_unclassified", "N/C");
+            if (isTablet && (tabletType == null || Settings.TabletProfiles?.TryGetValue(tabletType, out var selection) != true ||
+                !MatchesTabletSelection(modsComponent, selection, tabletType)))
+            {
+                if (!Settings.DisableBadTabletHighlight)
+                    DrawTabletRankBadge(pos, size, tabletLabel + " · NON", size.X / 52f, Math.Max(2f, Settings.BorderMargin * size.X / 52f));
+                return;
+            }
             int jewelGoodCount = 0;
 
             if (modsComponent != null)
@@ -5941,7 +5947,7 @@ namespace StashUtility
                         isGood = false;
                     }
 
-                    // A single wanted mod is enough to illuminate a ranked tablet.
+                    // The ET / OU selection has already passed, independently of highlight thresholds.
                     if (tabletMatchCount > 0)
                     {
                         isGood = true;
@@ -6961,9 +6967,24 @@ namespace StashUtility
         }
 
         private static Models.TabletClassification ClassifyTabletMods(Mods mods, TabletProfile profile, string type)
+            => ClassifyTabletRanks(MatchingTabletRanks(mods, profile, type).Values.ToArray());
+
+        private static IEnumerable<Models.TabletMod> SelectedTabletMods(TabletProfile profile, string type) =>
+            TabletRankingDefinitions.Where(mod => mod.TabletTypes.Contains(type) &&
+                GetTabletModRank(mod.Id, profile.ModRanks, profile.GoodModPatterns, profile.BadModPatterns, profile.GodModPatterns).Length > 0);
+
+        private static bool MatchesTabletSelection(Mods mods, TabletProfile profile, string type)
         {
-            if (mods?.ExplicitMods?.Count is not (>= 1 and <= 4) || profile == null || type == null) return UnclassifiedTablet;
-            var ranks = new List<string>(4);
+            if (profile == null || type == null) return false;
+            var matched = MatchingTabletRanks(mods, profile, type);
+            return matched.Count > 0 && (!profile.RequireAllRankedMods ||
+                SelectedTabletMods(profile, type).All(mod => matched.ContainsKey(mod.Id)));
+        }
+
+        private static Dictionary<string, string> MatchingTabletRanks(Mods mods, TabletProfile profile, string type)
+        {
+            var ranks = new Dictionary<string, string>();
+            if (mods?.ExplicitMods?.Count is not (>= 1 and <= 4) || profile == null || type == null) return ranks;
             foreach (var raw in mods.ExplicitMods)
             {
                 if (string.IsNullOrEmpty(raw.name)) continue;
@@ -6975,9 +6996,9 @@ namespace StashUtility
                 float minimum = profile.ModRequiredMinRolls?.TryGetValue(definition.Id, out float saved) == true ? saved : definition.MinRoll;
                 if (definition.MinRoll != definition.MaxRoll &&
                     !PassesModRoll(raw.values.value0, raw.values.value1, definition.RollValueIndex, minimum, definition.RollDivisor)) continue;
-                ranks.Add(rank);
+                ranks[definition.Id] = rank;
             }
-            return ClassifyTabletRanks(ranks);
+            return ranks;
         }
 
         private static bool IsTabletItem(string path) =>
