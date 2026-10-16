@@ -280,7 +280,8 @@ internal static partial class UpdateChecks
         var start = new System.Diagnostics.ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true, WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden, RedirectStandardError = true };
         start.ArgumentList.Add("-NoProfile"); start.ArgumentList.Add("-ExecutionPolicy"); start.ArgumentList.Add("Bypass"); start.ArgumentList.Add("-EncodedCommand"); start.ArgumentList.Add(Convert.ToBase64String(Encoding.Unicode.GetBytes(script)));
         using (var worker = System.Diagnostics.Process.Start(start)!) { var errorTask = worker.StandardError.ReadToEndAsync(); await worker.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30)); string errors = await errorTask.WaitAsync(TimeSpan.FromSeconds(10)); Check(worker.ExitCode == 0, "historical installer exits successfully: " + errors); }
-        for (int attempt = 0; attempt < 200 && File.Exists(Path.Combine(root, "GameHelper.exe")); attempt++) await Task.Delay(100);
+        string[] obsolete = { "GameHelper.exe", "GameHelper.dll", "GameHelper.App.dll", "GameHelper.App.exe", "GameHelper.deps.json", "GameHelper.runtimeconfig.json" };
+        for (int attempt = 0; attempt < 300 && obsolete.Any(file => File.Exists(Path.Combine(root, file))); attempt++) await Task.Delay(100);
         Check(!File.Exists(Path.Combine(root, "GameHelper.exe")) && !File.Exists(Path.Combine(root, "GameHelper.dll")) && !File.Exists(Path.Combine(root, "GameHelper.App.dll")), "real migration removes obsolete executables and DLLs after the bridge exits");
         foreach (string file in new[] { "ExileCenter.exe", "ExileCenter.dll", "ExileCenter.deps.json", "ExileCenter.runtimeconfig.json" })
             Check(File.ReadAllBytes(Path.Combine(root, file)).SequenceEqual(File.ReadAllBytes(Path.Combine(native, file))), "migration installs the exact native " + file);
