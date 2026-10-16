@@ -34,6 +34,7 @@ internal sealed class DamageTracker
     private bool inHub = true;
     public KikiMeterSettings.DamageMeterMap? CurrentMap { get; private set; }
     public string CurrentAreaHash => currentAreaHash;
+    public string CurrentSubAreaHash => currentSubArea?.Hash ?? "";
     public bool MapActive => mapTime.HasValue && CurrentMap is { Finished: false };
     public bool MapDirty { get; private set; }
 
@@ -46,9 +47,9 @@ internal sealed class DamageTracker
         inHub = true;
         mapTime = null;
         MapDirty = false;
-        // Only the newest report can remain paused between map visits.
+        // Ordinary maps keep the existing lifecycle; an open Sekhema can also be resumed later.
         foreach (var map in maps.Take(Math.Max(0, maps.Count - 1)))
-            if (!map.Finished) { map.Finished = true; MapDirty = true; }
+            if (!map.Finished && !map.Hash.StartsWith("sekhema:", StringComparison.Ordinal)) { map.Finished = true; MapDirty = true; }
         mapEnemyIndices.Clear();
     }
 
@@ -68,9 +69,10 @@ internal sealed class DamageTracker
             var existing = maps.FindLast(m => m.ProcessId == processId &&
                 (m.Hash == hash || m.SubAreas.Any(a => a.Hash == hash)));
             if (existing != null) CurrentMap = existing;
-            else if (inHub || CurrentMap == null || CurrentMap.Finished || CurrentMap.ProcessId != processId)
+            else if (inHub || CurrentMap == null || CurrentMap.Finished || CurrentMap.ProcessId != processId ||
+                CurrentMap.Hash.StartsWith("sekhema:", StringComparison.Ordinal))
             {
-                foreach (var map in maps) map.Finished = true;
+                foreach (var map in maps.Where(m => !m.Hash.StartsWith("sekhema:", StringComparison.Ordinal))) map.Finished = true;
                 CurrentMap = new KikiMeterSettings.DamageMeterMap
                     { Hash = hash, Name = name, AreaLevel = level, ProcessId = processId, Label = label, EnemySampleVersion = 1 };
                 maps.Add(CurrentMap);
@@ -92,8 +94,52 @@ internal sealed class DamageTracker
             MapDirty = true;
         }
         inHub = false;
+        AccumulateMapTime(now);
+    }
+
+    public void VisitSekhema(GameHelper.RemoteObjects.States.InGameStateObjects.SekhemaRunTracker state,
+        string hash, string name, int level, uint processId, double now, string label)
+    {
+        if (string.IsNullOrWhiteSpace(hash) || string.IsNullOrWhiteSpace(name) || !double.IsFinite(now)) { PauseMap(); return; }
+        if (state.CanRestore)
+        {
+            var saved = maps.FindLast(m => m.ProcessId == processId && m.Hash.StartsWith("sekhema:", StringComparison.Ordinal) &&
+                (m.SekhemaAreaHashes.Contains(hash) || m.SubAreas.Any(a => a.SekhemaAreaHashes.Contains(hash))));
+            if (saved != null) state.Restore(saved.Hash, saved.Finished);
+        }
+        if (state.RunKey.Length == 0 || (state.Floor == 0 && !state.Active)) { VisitHub(); return; }
+        if (CurrentMap?.Hash != state.RunKey || CurrentMap.ProcessId != processId || currentAreaHash != hash ||
+            (currentSubArea?.SekhemaFloor ?? 0) != state.Floor)
+        {
+            PauseMap(); EndArea(); mapEnemyIndices.Clear();
+            var existing = maps.FindLast(m => m.Hash == state.RunKey && m.ProcessId == processId);
+            if (existing == null)
+            {
+                foreach (var map in maps) map.Finished = true;
+                existing = new KikiMeterSettings.DamageMeterMap
+                    { Hash = state.RunKey, Name = name, AreaLevel = level, ProcessId = processId, Label = label, EnemySampleVersion = 1 };
+                for (int floor = 1; floor <= 4; floor++)
+                    existing.SubAreas.Add(new KikiMeterSettings.DamageMeterMap { Hash = state.RunKey + "/" + floor,
+                        Name = floor + "/4", SekhemaFloor = floor, AreaLevel = level,
+                        ProcessId = processId, Label = label, EnemySampleVersion = 1 });
+                maps.Add(existing);
+            }
+            CurrentMap = existing;
+            currentSubArea = state.Floor == 0 ? null : existing.SubAreas.Single(a => a.SekhemaFloor == state.Floor);
+            var current = currentSubArea ?? existing;
+            if (state.Floor > 0) { existing.AreaLevel = level; current.AreaLevel = level; }
+            if (!current.SekhemaAreaHashes.Contains(hash)) current.SekhemaAreaHashes.Add(hash);
+            currentAreaHash = hash;
+            MapDirty = true;
+        }
+        inHub = false;
+        AccumulateMapTime(now);
+    }
+
+    private void AccumulateMapTime(double now)
+    {
         mapFrameSeconds = 0;
-        if (CurrentMap.Finished) { mapTime = null; return; }
+        if (CurrentMap == null || CurrentMap.Finished) { mapTime = null; return; }
         if (mapTime is { } previous && now >= previous)
         {
             double elapsed = now - previous;

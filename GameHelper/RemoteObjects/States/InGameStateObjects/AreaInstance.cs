@@ -42,6 +42,9 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
         /// <summary>Gets the observed replacement generation of map-device portals.</summary>
         public long MapPortalGeneration => this.mapPortals.Generation;
 
+        /// <summary>Shared, read-only lifecycle of the current Trial of the Sekhemas.</summary>
+        public SekhemaRunTracker SekhemaRun { get; } = new();
+
         private static readonly EntityBackedBuffDefinition[] EntityBackedPlayerBuffs =
         {
             new(
@@ -294,6 +297,33 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
             this.UpdateEntities(data.Entities.AwakeEntities, this.AwakeEntities, true);
             this.AddEntityBackedPlayerBuffs();
             this.UpdateMapPortals();
+        }
+
+        internal void UpdateSekhemaRun()
+        {
+            var details = Core.States.InGameStateObject.CurrentWorldInstance.AreaDetails;
+            this.SekhemaRun.ObserveArea(Core.Process.Pid, this.AreaHash, details.Id);
+            if (details.Id == "G2_13")
+            {
+                foreach (var entity in this.AwakeEntities.Values)
+                {
+                    if (!entity.IsValid || entity.Path != SekhemaRunTracker.EntranceDoorPath ||
+                        !entity.TryGetComponent<GameHelper.RemoteObjects.Components.StateMachine>(out var machine)) continue;
+                    foreach (var state in machine.States)
+                        if (state.Name == "open" && state.Value is 0 or 1)
+                            this.SekhemaRun.ObserveGate(this.AreaHash, state.Value == 1, Environment.TickCount64);
+                }
+                return;
+            }
+            if (this.SekhemaRun.Floor != 4 || this.SekhemaRun.Completed) return;
+            foreach (var entity in this.AwakeEntities.Values)
+            {
+                if (!entity.IsValid || entity.Path != SekhemaRunTracker.ZarokhPath ||
+                    !entity.TryGetComponent<Life>(out var life) || !life.IsParentValid(entity.Address)) continue;
+                // Dormant corpses need a final read; disappearance alone never proves a kill.
+                if (entity.EntityState == EntityStates.Useless) life.Address = life.Address;
+                this.SekhemaRun.ObserveZarokh(entity.Id, entity.Address, life.IsAlive);
+            }
         }
 
         private void UpdateMapPortals()
@@ -1214,6 +1244,86 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
             string EntityPathFragment,
             string BuffNameFragment,
             Func<uint, int> StageToStacks);
+    }
+
+    /// <summary>Separates Sekhema attempts and their four floors, independently of plugin visibility.</summary>
+    public sealed class SekhemaRunTracker
+    {
+        public const string ZarokhPath = "Metadata/Monsters/ApparitionBoss/SilentSpiresApparition";
+        public const string EntranceDoorPath = "Metadata/Terrain/Gallows/Act2/2_13/Objects/EntranceDoor";
+        private uint processId;
+        private readonly HashSet<string> firstFloorHashes = new(StringComparer.Ordinal);
+        private string gateArea = "";
+        private bool? gateOpen;
+        private bool? gateCandidate;
+        private long gateCandidateSince;
+        private bool awaitingEntry;
+        private (uint Id, IntPtr Address)? livingZarokh;
+        public string RunKey { get; private set; } = "";
+        public int Floor { get; private set; }
+        public bool Completed { get; private set; }
+        public bool Active { get; private set; }
+        public bool CanRestore { get; private set; }
+
+        public static int FloorNumber(string id)
+            => id.Length >= 9 && id.StartsWith("Sanctum_", StringComparison.Ordinal) &&
+                id[8] is >= '1' and <= '4' && (id.Length == 9 || id[9..].StartsWith("_Foyer_", StringComparison.Ordinal)) ? id[8] - '0' : 0;
+
+        public void ObserveArea(uint pid, string hash, string id)
+        {
+            if (pid != this.processId)
+            {
+                this.processId = pid; this.RunKey = ""; this.firstFloorHashes.Clear();
+                this.gateArea = ""; this.gateOpen = null; this.Completed = false;
+                this.awaitingEntry = false; this.livingZarokh = null;
+            }
+            int previousFloor = this.Floor;
+            this.Floor = FloorNumber(id);
+            if (id != "G2_13") { this.gateArea = ""; this.gateOpen = null; }
+            if (hash.Length == 0) { this.Active = false; return; }
+            if (this.Floor > 0)
+            {
+                if (this.RunKey.Length == 0) this.Start(false);
+                else if (this.Floor == 1 && previousFloor != 1 && this.firstFloorHashes.Count > 0 && !this.firstFloorHashes.Contains(hash)) this.Start(true);
+                if (this.Floor == 1) this.firstFloorHashes.Add(hash);
+                this.awaitingEntry = false;
+                this.Active = !this.Completed;
+            }
+            else this.Active = id == "G2_13" && this.awaitingEntry && !this.Completed;
+        }
+
+        public void ObserveGate(string hash, bool open, long now)
+        {
+            if (this.gateArea != hash)
+            {
+                this.gateArea = hash; this.gateOpen = null; this.gateCandidate = open; this.gateCandidateSince = now; return;
+            }
+            if (this.gateCandidate != open) { this.gateCandidate = open; this.gateCandidateSince = now; return; }
+            if (now - this.gateCandidateSince < 250) return;
+            if (this.gateOpen == false && open) this.Start(true);
+            this.gateOpen = open;
+        }
+
+        private void Start(bool confirmed)
+        {
+            this.RunKey = "sekhema:" + Guid.NewGuid().ToString("N");
+            this.firstFloorHashes.Clear(); this.Completed = false; this.Active = true;
+            this.awaitingEntry = true; this.CanRestore = !confirmed; this.livingZarokh = null;
+        }
+
+        public void Restore(string key, bool completed)
+        {
+            if (!this.CanRestore) return;
+            this.RunKey = key; this.Completed |= completed; this.Active &= !this.Completed;
+            this.CanRestore = false;
+        }
+
+        public void ObserveZarokh(uint id, IntPtr address, bool alive)
+        {
+            if (this.Floor != 4 || this.Completed || this.RunKey.Length == 0) return;
+            if (alive) this.livingZarokh = (id, address);
+            else if (this.livingZarokh == (id, address)) { this.Completed = true; this.Active = false; }
+        }
     }
 
     /// <summary>Detects replacement portal sets; consuming a portal never finishes a map.</summary>

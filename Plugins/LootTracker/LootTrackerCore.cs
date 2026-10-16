@@ -17,10 +17,12 @@ namespace LootTracker
     public sealed class MapRun
     {
         public string Name = string.Empty;   // localized area name (display only)
-        public string Hash = string.Empty;    // AreaHash — the unique instance id (dedup key)
+        public string Hash = string.Empty;    // instance id, or a Sekhema attempt/floor key
         public int AreaLevel;
         public string ParentHash = string.Empty;
         public uint ProcessId;
+        public int SekhemaFloor;
+        public List<string> SekhemaAreaHashes = new();
         public bool IsFinished;               // another map replaced this map's portals/instance
         public TimeSpan ActiveTime;            // wall time spent inside the map (paused in hideout/town)
         // Accumulated net inventory delta for this run: itemPath -> Δcount (across all hideout exits,
@@ -92,6 +94,7 @@ namespace LootTracker
         private MapRun? current;                 // the map currently being tracked (provisional until a new map starts)
         private DateTime? runStartUtc;           // when the running timer started; null = paused (in hideout/town)
         private string lastProcessedZoneHash = string.Empty; // last zone we reacted to (transition edge detector)
+        private string lastSekhemaRunKey = string.Empty;
         private Dictionary<string, long>? baseline; // inventory snapshot taken on map entry; delta is measured against it
         private bool baselinePending;            // set on map entry; the baseline is captured on the first readable frame
         private Dictionary<string, long>? prevSnapshot; // previous live snapshot; pickup toasts diff against it (null = re-establish)
@@ -615,7 +618,8 @@ namespace LootTracker
             this.MaybeAutoRefreshPrices();
             if (this.mapPortalGeneration != Core.States.InGameStateObject.CurrentAreaInstance.MapPortalGeneration)
             {
-                this.FinishCurrentMap(DateTime.UtcNow);
+                if (this.current == null || !this.RootRun(this.current).Hash.StartsWith("sekhema:", StringComparison.Ordinal))
+                    this.FinishCurrentMap(DateTime.UtcNow);
                 this.mapPortalGeneration = Core.States.InGameStateObject.CurrentAreaInstance.MapPortalGeneration;
             }
             this.UpdateAreaState();
@@ -842,13 +846,35 @@ namespace LootTracker
                 return;
             }
 
-            if (inst != this.lastProcessedZoneHash)
+            var sekhema = area.SekhemaRun;
+            bool isSekhema = GameHelper.RemoteObjects.States.InGameStateObjects.SekhemaRunTracker.FloorNumber(details.Id) > 0 || details.Id == "G2_13";
+            if (isSekhema)
+            {
+                if (sekhema.CanRestore)
+                {
+                    var saved = this.completed.FindLast(r => r.Hash.StartsWith("sekhema:", StringComparison.Ordinal) &&
+                        r.ParentHash.Length == 0 && r.ProcessId == Core.Process.Pid &&
+                        this.RunFamily(r).Any(member => member.SekhemaAreaHashes.Contains(inst)));
+                    if (saved != null) sekhema.Restore(saved.Hash, saved.IsFinished);
+                }
+                if (inst != this.lastProcessedZoneHash || this.lastSekhemaRunKey != sekhema.RunKey ||
+                    (sekhema.Floor > 0 && this.current?.SekhemaFloor != sekhema.Floor) ||
+                    this.onMapArea != (sekhema.Floor > 0 || sekhema.Active))
+                {
+                    this.lastProcessedZoneHash = inst;
+                    this.lastSekhemaRunKey = sekhema.RunKey;
+                    this.HandleSekhemaTransition(area, details.Name, inst);
+                }
+                if (sekhema.Completed && this.current != null && this.RootRun(this.current).Hash == sekhema.RunKey)
+                    this.FinishCurrentMap(DateTime.UtcNow);
+            }
+            else if (inst != this.lastProcessedZoneHash)
             {
                 this.lastProcessedZoneHash = inst;
                 this.HandleZoneTransition(area, details, inst);
             }
 
-            if (this.onMapArea && this.current?.Hash == inst)
+            if (this.onMapArea && (this.current?.Hash == inst || isSekhema))
                 this.StartRunTimer(DateTime.UtcNow);
 
             // Capture the map-entry baseline on the first frame the inventory reads cleanly (the
@@ -872,6 +898,43 @@ namespace LootTracker
 
         private static bool IsSafeZone(GameHelper.RemoteObjects.FilesStructures.WorldAreaDat details)
             => SafeZoneIds.Contains(details.Id);
+
+        private void HandleSekhemaTransition(GameHelper.RemoteObjects.States.InGameStateObjects.AreaInstance area, string name, string inst)
+        {
+            var now = DateTime.UtcNow;
+            this.BankActiveTime(now);
+            if (this.onMapArea && this.current != null && this.baseline != null)
+                MergeInto(this.current.Gained, this.TrySnapshotInventory(out var snap) ? Diff(snap, this.baseline) : this.liveLegDelta);
+            var state = area.SekhemaRun;
+            this.onMapArea = state.Floor > 0 || state.Active;
+            if (this.onMapArea && state.RunKey.Length > 0)
+            {
+                var root = this.completed.FindLast(r => r.Hash == state.RunKey && r.ProcessId == Core.Process.Pid);
+                if (root == null)
+                {
+                    this.FinishCurrentMap(now);
+                    foreach (var previous in this.completed.Where(r => r.ParentHash.Length == 0 && r.Hash.StartsWith("sekhema:", StringComparison.Ordinal)))
+                        foreach (var member in this.RunFamily(previous)) member.IsFinished = true;
+                    root = new MapRun { Hash = state.RunKey, Name = name, ProcessId = Core.Process.Pid, AreaLevel = area.CurrentAreaLevel };
+                    this.completed.Add(root);
+                    for (int floor = 1; floor <= 4; floor++)
+                        this.completed.Add(new MapRun { Hash = state.RunKey + "/" + floor, ParentHash = root.Hash,
+                            Name = floor + "/4", SekhemaFloor = floor, ProcessId = root.ProcessId, AreaLevel = root.AreaLevel });
+                }
+                this.current = state.Floor == 0 ? root : this.RunFamily(root).Single(r => r.SekhemaFloor == state.Floor);
+                if (state.Floor > 0) { root.AreaLevel = area.CurrentAreaLevel; this.current.AreaLevel = area.CurrentAreaLevel; }
+                if (!this.current.SekhemaAreaHashes.Contains(inst)) this.current.SekhemaAreaHashes.Add(inst);
+                this.TrimCompleted();
+                if (state.Completed) foreach (var member in this.RunFamily(root)) member.IsFinished = true;
+                this.StartRunTimer(now);
+            }
+            this.baseline = null;
+            this.baselinePending = this.onMapArea;
+            this.liveLegDelta.Clear();
+            this.prevSnapshot = null;
+            this.ResetKillTally();
+            this.SaveActiveState();
+        }
 
         private void HandleZoneTransition(GameHelper.RemoteObjects.States.InGameStateObjects.AreaInstance area,
             GameHelper.RemoteObjects.FilesStructures.WorldAreaDat details, string inst)
@@ -913,8 +976,10 @@ namespace LootTracker
                     // A genuinely new map instance: open a run and add it to history straight away, so
                     // the table (compact bar) shows it even before the run is "finished".
                     var parent = wasOnMap && this.current is { IsFinished: false } &&
+                        !this.RootRun(this.current).Hash.StartsWith("sekhema:", StringComparison.Ordinal) &&
                         (this.current.ProcessId == 0 || this.current.ProcessId == Core.Process.Pid) ? this.RootRun(this.current) : null;
-                    if (parent == null && this.current != null) this.FinishCurrentMap(now);
+                    if (parent == null && this.current != null && !this.RootRun(this.current).Hash.StartsWith("sekhema:", StringComparison.Ordinal))
+                        this.FinishCurrentMap(now);
                     this.current = new MapRun
                     {
                         Name = details.Name,

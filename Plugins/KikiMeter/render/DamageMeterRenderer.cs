@@ -451,7 +451,7 @@ internal sealed class DamageMeterRenderer
                         4 => NumberFormatter.Format(stats.Damage),
                         5 => map.EnemySampleVersion > 0 ? (stats.Enemies?.Count ?? 0).ToString() : "—",
                         6 => text.T(row.Parent.Finished ? "meter.map_finished" : meter.MapActive && row.Parent == meter.CurrentMap &&
-                            (map == row.Parent || map.Hash == meter.CurrentAreaHash) ? "meter.map_running" : "meter.map_paused", row.Parent.Finished ? "Finished" : "Paused"),
+                            (map == row.Parent || map.Hash == meter.CurrentSubAreaHash) ? "meter.map_running" : "meter.map_paused", row.Parent.Finished ? "Finished" : "Paused"),
                         _ => map.EnemySampleVersion == 0 ? "—" : SampleDamage(stats, column) is { } damage
                             ? NumberFormatter.Format(damage) : $"{Math.Min(stats.Enemies?.Count ?? 0, column)} / {column}"
                     };

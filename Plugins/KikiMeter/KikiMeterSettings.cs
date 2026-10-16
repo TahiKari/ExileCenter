@@ -51,6 +51,8 @@ public sealed class KikiMeterSettings : IPSettings
             public string Id = Guid.NewGuid().ToString("N");
             public string Hash = "", Name = "", Label = "";
             public uint ProcessId;
+            public int SekhemaFloor;
+            public List<string> SekhemaAreaHashes = new();
             public int AreaLevel;
             public DateTime StartedUtc = DateTime.UtcNow;
             public bool Finished, ReadingInterrupted, SkillsChanged;

@@ -13,6 +13,7 @@ using GameHelper.RemoteEnums;
 using GameHelper.RemoteEnums.Entity;
 using GameHelper.RemoteObjects.Components;
 using GameHelper.RemoteObjects.States;
+using GameHelper.RemoteObjects.States.InGameStateObjects;
 using Newtonsoft.Json;
 using ImGuiNET;
 
@@ -160,10 +161,13 @@ namespace KikiMeter
                     string previousMap = this.damageMeter.CurrentMap?.Id ?? "";
                     if (this.mapPortalGeneration != area.MapPortalGeneration)
                     {
-                        this.damageMeter.FinishMap();
+                        if (this.damageMeter.CurrentMap?.Hash.StartsWith("sekhema:", StringComparison.Ordinal) != true)
+                            this.damageMeter.FinishMap();
                         this.mapPortalGeneration = area.MapPortalGeneration;
                     }
-                    if (!details.IsTown && !details.IsHideout && details.Id != "Abyss_Hub")
+                    if (SekhemaRunTracker.FloorNumber(details.Id) > 0 || details.Id == "G2_13")
+                        this.damageMeter.VisitSekhema(area.SekhemaRun, area.AreaHash, details.Name, area.CurrentAreaLevel, Core.Process.Pid, now, this.Settings.DamageMeterTestName);
+                    else if (!details.IsTown && !details.IsHideout && details.Id != "Abyss_Hub")
                         this.damageMeter.VisitMap(area.AreaHash, details.Name, area.CurrentAreaLevel, Core.Process.Pid, now, this.Settings.DamageMeterTestName);
                     else this.damageMeter.VisitHub();
                     if (this.Settings.DamageMeterDetectSkillChanges &&
@@ -190,6 +194,8 @@ namespace KikiMeter
                             this.damageMeter.Observe(entity.Id, entity.Address, life.Health.Current, life.EnergyShield.Current);
                     }
                     this.damageMeter.EndFrame();
+                    if (area.SekhemaRun.Completed && this.damageMeter.CurrentMap?.Hash == area.SekhemaRun.RunKey)
+                        this.damageMeter.FinishMap();
                     if (this.damageMeter.MapDirty && (now >= this.nextMapSave ||
                         (wasMapActive && !this.damageMeter.MapActive) || previousMap != this.damageMeter.CurrentMap?.Id))
                     {

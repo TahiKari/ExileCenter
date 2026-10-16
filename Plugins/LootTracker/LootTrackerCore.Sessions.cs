@@ -102,6 +102,8 @@ namespace LootTracker
                         Hash = r.Hash,
                         ParentHash = r.ParentHash,
                         ProcessId = r.ProcessId,
+                        SekhemaFloor = r.SekhemaFloor,
+                        SekhemaAreaHashes = new List<string>(r.SekhemaAreaHashes),
                         AreaLevel = r.AreaLevel,
                         IsFinished = r.IsFinished,
                         ActiveTime = isActive ? this.CurrentLiveTime() : r.ActiveTime,

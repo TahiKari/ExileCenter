@@ -183,6 +183,9 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
                 if (this.Address != IntPtr.Zero)
                 {
                     this.UpdateData(false);
+                    // The area ID and instance hash must describe the same frame.
+                    try { Core.States.InGameStateObject.CurrentAreaInstance.UpdateSekhemaRun(); }
+                    catch (Exception ex) { Console.WriteLine($"[SekhemaRun] {ex.Message}"); }
                 }
             }
         }
