@@ -97,6 +97,8 @@ Pour un ticket, joindre la version affichée, la version du jeu, le plugin conce
 
 ## Sources et compilation
 
+Pour afficher le projet sous le nom **ExileCenter** dans l'explorateur de VS Code ou Cursor, ouvrir [`ExileCenter.code-workspace`](ExileCenter.code-workspace). Le dossier du cœur et le projet sont dans `ExileCenter/`, et la solution se nomme `ExileCenter.sln`. Cet espace de travail conserve les chemins relatifs et fonctionne même si Windows verrouille encore le nom physique d'un ancien dossier `GameHelper2` ouvert.
+
 Pour développer : Windows x64, **SDK .NET 10**, Git et éventuellement un IDE C#. Le SDK inclut les runtimes. Le dépôt contient le code du cœur, des plugins et la chaîne de publication.
 
 ```powershell
