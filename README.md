@@ -107,6 +107,16 @@ foreach ($project in @('GameHelper/GameHelper.csproj') + @($plugins)) {
     dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false @properties
     if ($LASTEXITCODE -ne 0) { throw "Compilation échouée : $project" }
 }
+$runtime = Join-Path $PWD 'GameHelper/bin/Release/net10.0-windows/win-x64'
+foreach ($path in @(git ls-files -- 'Plugins/*/Localization/*.json')) {
+    $destination = Join-Path $runtime $path
+    [void][IO.Directory]::CreateDirectory((Split-Path $destination -Parent))
+    Copy-Item -LiteralPath $path -Destination $destination
+}
+$native = Join-Path $runtime 'runtimes/win-x64/native'
+if (Test-Path $native) {
+    Get-ChildItem $native -Filter '*.dll' -File | Copy-Item -Destination $runtime
+}
 ```
 
 Les sorties sont dans `GameHelper\bin\Release\net10.0-windows\win-x64`. Pour préparer un ZIP de test isolé :
