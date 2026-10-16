@@ -6,7 +6,7 @@ ExileCenter rassemble dans une interface modulaire les outils de suivi et d'assi
 
 ## Télécharger
 
-### [Télécharger ExileCenter — Windows x64 (ZIP)](https://github.com/TahiKari/ExileCenter/releases/latest/download/ExileCenter-win-x64.zip)
+### [Télécharger ExileCenter — Windows x64 (ZIP)](https://github.com/TahiKari/ExileCenter/releases/latest/download/ExileCenter-Complete-win-x64.zip)
 
 [Dernière version et changements](https://github.com/TahiKari/ExileCenter/releases/latest) · [Toutes les versions](https://github.com/TahiKari/ExileCenter/releases) · [Signaler un problème](https://github.com/TahiKari/ExileCenter/issues)
 
@@ -63,7 +63,7 @@ L'interface comprend des thèmes sombres distincts par plugin, plusieurs langues
 
 Ce plugin demande le dossier de votre installation du jeu et une bibliothèque **Oodle compatible (`oo2core.dll`) fournie par votre propre installation ou outil local**. Elle n'est pas distribuée dans le ZIP. Le plugin peut aussi lire cette bibliothèque depuis un exécutable Exile Forge déjà présent, sans lancer cet exécutable.
 
-Le jeu doit être fermé pour appliquer ou restaurer le patch. Pour le client autonome, prévoir assez d'espace pour une copie de `Content.ggpk`. Les sauvegardes restent dans `.GameHelperCadavres` afin de conserver la compatibilité avec les restaurations existantes. Cette dépendance n'est pas requise pour les autres plugins.
+Le jeu doit être fermé pour appliquer ou restaurer le patch. Pour le client autonome, prévoir assez d'espace pour une copie de `Content.ggpk`. Les nouvelles sauvegardes utilisent `.ExileCenterCadavres`. Les anciennes sauvegardes restent reconnues pour permettre leur restauration sans altération. Cette dépendance n'est pas requise pour les autres plugins.
 
 ## Mettre à jour et conserver ses réglages
 
@@ -73,10 +73,9 @@ Les dossiers `configs/`, les configurations de plugins et les fichiers `settings
 
 ### Depuis GameHelper P-V1
 
-ExileCenter poursuit cette version personnalisée avec un nouveau nom et un dépôt autonome. Les noms internes `GameHelper.dll`, `GameHelper.exe`, `GameHelper.App.exe`, les chemins de configuration et les tags historiques sont conservés pour la migration. **ExileCenter.exe**, **GameHelper.exe** et **GameHelper.App.exe** démarrent la même application dans les nouveaux paquets.
+Les exécutables, DLL, fichiers .NET, espaces de noms du cœur et références des 25 plugins utilisent désormais **ExileCenter**. Le paquet complet se lance avec **ExileCenter.exe**.
 
-Les anciennes installations peuvent recevoir la Release de transition depuis [l'ancien dépôt](https://github.com/TahiKari/Gamehelper2/releases). Une fois cette mise à jour installée, les versions suivantes sont recherchées dans **TahiKari/ExileCenter**. Le ZIP de compatibilité `GameHelper-Personnalise-win-x64.zip` garde les noms autorisés par l'ancien installateur : continuer à lancer son raccourci habituel. Le ZIP complet ExileCenter comprend aussi `ExileCenter.exe` et `SECURITY.md` ; ces deux fichiers supplémentaires arriveront avec une prochaine mise à jour complète, ou peuvent être obtenus par une installation manuelle.
-
+Les anciens installateurs reçoivent un paquet de transition via leur URL habituelle. Son petit programme de migration met en place les fichiers ExileCenter, relance l’application puis retire uniquement les anciens exécutables et DLL connus. Les réglages, les raccourcis personnels vers cette installation et `GameOffsets.dll` sont préservés ; les raccourcis du Bureau et du menu Démarrer sont redirigés vers ExileCenter. Les anciens noms restent seulement dans les chemins de compatibilité et les archives historiques. Le code de transition est distinct du paquet complet destiné aux nouvelles installations.
 Pour l'installation personnelle de TahiKari, le dossier local `Bureau\ExileCenter\Maj ExileCenter` reste prioritaire. Les archives et le manifeste portent le préfixe `ExileCenter-Maj`. Chaque publication conserve uniquement le nouveau paquet et son prédécesseur, après vérification du paquet et publication du manifeste ; les autres fichiers du dossier ne sont pas supprimés. Les anciens chemins et manifestes restent lisibles pour la migration.
 
 ### Tablettes : couleurs et presets

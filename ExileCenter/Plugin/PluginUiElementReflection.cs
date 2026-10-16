@@ -2,13 +2,13 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Plugin
+namespace ExileCenter.Plugin
 {
     using System;
     using System.Numerics;
     using System.Reflection;
-    using GameHelper.RemoteEnums;
-    using GameHelper.Utils;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.Utils;
     using GameOffsets.Objects.States.InGameState;
     using GameOffsets.Objects.UiElement;
 
@@ -17,13 +17,13 @@ namespace GameHelper.Plugin
     /// </summary>
     public static class PluginUiElementReflection
     {
-        private static readonly Assembly GameHelperAssembly = typeof(Core).Assembly;
+        private static readonly Assembly ExileCenterAssembly = typeof(Core).Assembly;
 
         public static Type? UiElementParentsType { get; } =
-            GameHelperAssembly.GetType("GameHelper.Cache.UiElementParents");
+            ExileCenterAssembly.GetType("GameHelper.Cache.UiElementParents");
 
         public static Type? UiElementBaseType { get; } =
-            GameHelperAssembly.GetType("GameHelper.RemoteObjects.UiElement.UiElementBase");
+            ExileCenterAssembly.GetType("ExileCenter.RemoteObjects.UiElement.UiElementBase");
 
         public static PropertyInfo? UiElementPositionProperty =>
             UiElementBaseType?.GetProperty("Position");

@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.CoroutineEvents
+namespace ExileCenter.CoroutineEvents
 {
     using Coroutine;
 

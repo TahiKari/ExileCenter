@@ -170,7 +170,7 @@ namespace LootTracker
             const ImGuiWindowFlags flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoInputs |
                 ImGuiWindowFlags.NoNav | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.AlwaysAutoResize |
                 ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoMove;
-            if (!GameHelper.Ui.ImGuiTheme.BeginWindow("##loottracker_toasts", flags))
+            if (!ExileCenter.Ui.ImGuiTheme.BeginWindow("##loottracker_toasts", flags))
             {
                 ImGui.End();
                 return;

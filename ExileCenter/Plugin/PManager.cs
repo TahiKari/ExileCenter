@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Plugin
+namespace ExileCenter.Plugin
 {
     using System;
     using System.Collections.Generic;
@@ -529,7 +529,7 @@ namespace GameHelper.Plugin
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.TimeToSaveAllSettings);
+                yield return new Wait(ExileCenterEvents.TimeToSaveAllSettings);
                 SavePluginMetadata();
             }
         }
@@ -538,7 +538,7 @@ namespace GameHelper.Plugin
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.TimeToSaveAllSettings);
+                yield return new Wait(ExileCenterEvents.TimeToSaveAllSettings);
                 PluginContainer[] snapshot;
                 lock (Plugins)
                 {
@@ -572,7 +572,7 @@ namespace GameHelper.Plugin
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnPostRender);
+                yield return new Wait(ExileCenterEvents.OnPostRender);
                 lock (PendingPluginUnloads)
                 {
                     if (PendingPluginUnloads.Count == 0)
@@ -615,7 +615,7 @@ namespace GameHelper.Plugin
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnRender);
+                yield return new Wait(ExileCenterEvents.OnRender);
                 if (CTOUtils.IsKeyPressedAndNotTimeout(Core.GHSettings.DisableAllRenderingKey))
                 {
                     disableRendering = !disableRendering;

@@ -3,12 +3,12 @@
 // </copyright>
 
 
-namespace GameHelper.RemoteObjects.Components
+namespace ExileCenter.RemoteObjects.Components
 {
     using System;
-    using GameHelper.RemoteEnums;
+    using ExileCenter.RemoteEnums;
     using System.Collections.Generic;
-    using GameHelper.Utils;
+    using ExileCenter.Utils;
     using GameOffsets.Objects.Components;
     using GameOffsets.Natives;
 

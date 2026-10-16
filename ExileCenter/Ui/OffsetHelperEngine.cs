@@ -2,15 +2,15 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Ui
+namespace ExileCenter.Ui
 {
     using System;
     using System.Collections.Generic;
     using System.Linq;
     using System.Reflection;
     using System.Runtime.InteropServices;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
-    using GameHelper.Utils;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.Utils;
     using GameOffsets.Natives;
     using GameOffsets.Objects.Components;
     using GameOffsets.Objects.States;

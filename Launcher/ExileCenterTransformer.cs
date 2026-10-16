@@ -7,9 +7,9 @@ namespace Launcher
     using AsmResolver.PE.Win32Resources.Builder;
     using AsmResolver.PE.Win32Resources.Version;
 
-    public static class GameHelperTransformer
+    public static class ExileCenterTransformer
     {
-        public static string TransformGameHelperExecutable(string gameHelperDir, string gameHelperLoc, string newName)
+        public static string TransformExileCenterExecutable(string gameHelperDir, string gameHelperLoc, string newName)
         {
             var newPath = Path.Join(gameHelperDir, $"{newName}.exe");
             TemporaryFileManager.AddFile(newPath);

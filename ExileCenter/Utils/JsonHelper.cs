@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Utils
+namespace ExileCenter.Utils
 {
     using System;
     using System.IO;
@@ -17,7 +17,7 @@ namespace GameHelper.Utils
         /// <summary>Seeds bundled settings only when the user's file does not exist.</summary>
         public static void InitializeDefaultSettings(string directory)
         {
-            using var stream = typeof(JsonHelper).Assembly.GetManifestResourceStream("GameHelper.Data.DefaultSettings.json")
+            using var stream = typeof(JsonHelper).Assembly.GetManifestResourceStream("ExileCenter.Data.DefaultSettings.json")
                 ?? throw new InvalidDataException("Bundled default settings are missing.");
             using var reader = new StreamReader(stream);
             var defaults = JObject.Parse(reader.ReadToEnd());

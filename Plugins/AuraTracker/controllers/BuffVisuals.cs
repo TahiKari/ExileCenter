@@ -4,10 +4,10 @@ using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
 using AuraTracker.util;
-using GameHelper.RemoteObjects;
-using GameHelper.RemoteObjects.Components;
-using GameHelper.RemoteObjects.States.InGameStateObjects;
-using GameHelper.Utils;
+using ExileCenter.RemoteObjects;
+using ExileCenter.RemoteObjects.Components;
+using ExileCenter.RemoteObjects.States.InGameStateObjects;
+using ExileCenter.Utils;
 using ImGuiNET;
 
 namespace AuraTracker.controllers;

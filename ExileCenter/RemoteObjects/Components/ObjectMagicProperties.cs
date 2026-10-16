@@ -2,12 +2,12 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteObjects.Components
+namespace ExileCenter.RemoteObjects.Components
 {
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using GameHelper.Utils;
+    using ExileCenter.Utils;
     using GameOffsets.Natives;
     using GameOffsets.Objects.Components;
     using ImGuiNET;

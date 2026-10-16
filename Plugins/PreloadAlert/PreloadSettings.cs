@@ -5,7 +5,7 @@
 namespace PreloadAlert
 {
     using System.Numerics;
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
 
     /// <summary>
     ///     Preload GUI settings.

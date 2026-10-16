@@ -2,10 +2,10 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteObjects.States.InGameStateObjects
+namespace ExileCenter.RemoteObjects.States.InGameStateObjects
 {
     using System;
-    using GameHelper.RemoteEnums.Entity;
+    using ExileCenter.RemoteEnums.Entity;
     using GameOffsets.Objects.States.InGameState;
 
     /// <summary>

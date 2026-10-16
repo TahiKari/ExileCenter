@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Ui
+namespace ExileCenter.Ui
 {
     using System;
     using System.Collections.Generic;
@@ -33,13 +33,13 @@ namespace GameHelper.Ui
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnRender);
+                yield return new Wait(ExileCenterEvents.OnRender);
                 if (!Core.GHSettings.ShowDataVisualization)
                 {
                     continue;
                 }
 
-                if (GameHelper.Ui.ImGuiTheme.BeginWindow("Data Visualization", ref Core.GHSettings.ShowDataVisualization))
+                if (ExileCenter.Ui.ImGuiTheme.BeginWindow("Data Visualization", ref Core.GHSettings.ShowDataVisualization))
                 {
                     if (ImGui.CollapsingHeader("Settings"))
                     {

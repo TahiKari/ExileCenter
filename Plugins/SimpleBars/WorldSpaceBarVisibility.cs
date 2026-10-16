@@ -2,7 +2,7 @@ namespace SimpleBars
 {
     using System;
     using System.Reflection;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
 
     /// <summary>
     /// Hides world-space bars when fullscreen map UIs are open (Gordin and community forks).

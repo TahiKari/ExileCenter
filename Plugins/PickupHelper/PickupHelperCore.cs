@@ -11,12 +11,12 @@ namespace PickupHelper
     using System.Numerics;
     using System.Reflection;
     using ClickableTransparentOverlay.Win32;
-    using GameHelper;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Newtonsoft.Json;
 
@@ -398,7 +398,7 @@ namespace PickupHelper
         private void DrawDebugWindow(bool haveItem, HoveredItem info)
         {
             ImGui.SetNextWindowSize(new Vector2(380, 320), ImGuiCond.FirstUseEver);
-            if (GameHelper.Ui.ImGuiTheme.BeginWindow(
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow(
                 this.PluginText.Title("window.debug", "PickupHelper Debug", "PHDebugWindow"),
                 ref this.Settings.ShowDebugWindow))
             {
@@ -414,7 +414,7 @@ namespace PickupHelper
                 ImGui.Separator();
                 if (!haveItem)
                 {
-                    ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.no_ground_item_under_cursor", "No ground item under cursor."));
+                    ImGui.TextUnformatted(ExileCenter.Localization.OverlayLocalization.T("ui.labels.no_ground_item_under_cursor", "No ground item under cursor."));
                 }
                 else
                 {

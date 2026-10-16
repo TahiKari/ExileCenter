@@ -1,6 +1,6 @@
 namespace AuraTracker;
 
-using GameHelper.Localization;
+using ExileCenter.Localization;
 
 internal static class AuraTrackerLocalization
 {

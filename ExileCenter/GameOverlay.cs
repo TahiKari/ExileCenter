@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper
+namespace ExileCenter
 {
     using System;
     using System.Collections.Generic;
@@ -16,7 +16,7 @@ namespace GameHelper
     using ClickableTransparentOverlay.Win32;
     using Coroutine;
     using CoroutineEvents;
-    using GameHelper.Utils;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Plugin;
     using Settings;
@@ -24,7 +24,7 @@ namespace GameHelper
     using Vortice.Direct3D11;
     using Vortice.DXGI;
     using Vortice.Mathematics;
-    using L = GameHelper.Localization.OverlayLocalization;
+    using L = ExileCenter.Localization.OverlayLocalization;
 
     /// <inheritdoc />
     public sealed class GameOverlay : Overlay
@@ -98,16 +98,16 @@ namespace GameHelper
             try { CoroutineHandler.Tick(ImGui.GetIO().DeltaTime); }
             catch (Exception ex) { Console.WriteLine($"[GameOverlay.Render.Tick] {ex}"); }
 
-            try { CoroutineHandler.RaiseEvent(GameHelperEvents.PerFrameDataUpdate); }
+            try { CoroutineHandler.RaiseEvent(ExileCenterEvents.PerFrameDataUpdate); }
             catch (Exception ex) { Console.WriteLine($"[GameOverlay.Render.PerFrameDataUpdate] {ex}"); }
 
-            try { CoroutineHandler.RaiseEvent(GameHelperEvents.PostPerFrameDataUpdate); }
+            try { CoroutineHandler.RaiseEvent(ExileCenterEvents.PostPerFrameDataUpdate); }
             catch (Exception ex) { Console.WriteLine($"[GameOverlay.Render.PostPerFrameDataUpdate] {ex}"); }
 
-            try { CoroutineHandler.RaiseEvent(GameHelperEvents.OnRender); }
+            try { CoroutineHandler.RaiseEvent(ExileCenterEvents.OnRender); }
             catch (Exception ex) { Console.WriteLine($"[GameOverlay.Render.OnRender] {ex}"); }
 
-            try { CoroutineHandler.RaiseEvent(GameHelperEvents.OnPostRender); }
+            try { CoroutineHandler.RaiseEvent(ExileCenterEvents.OnPostRender); }
             catch (Exception ex) { Console.WriteLine($"[GameOverlay.Render.OnPostRender] {ex}"); }
 
             LocalUpdates.Render();
@@ -146,7 +146,7 @@ namespace GameHelper
                 this.settingsDisplay?.Dispose();
                 this.settingsDisplay = null;
                 Core.GHSettings.SettingsOnSeparateWindow = false;
-                CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
+                CoroutineHandler.RaiseEvent(ExileCenterEvents.TimeToSaveAllSettings);
             }
         }
 
@@ -154,7 +154,7 @@ namespace GameHelper
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnMoved);
+                yield return new Wait(ExileCenterEvents.OnMoved);
                 this.Position = Core.Process.WindowArea.Location;
                 this.Size = Core.Process.WindowArea.Size -
                     (Core.GHSettings.FixTaskbarNotShowing ?
@@ -169,7 +169,7 @@ namespace GameHelper
     // The adapter resolves the three backend fields once, before creating any native window.
     public sealed class SettingsDisplay : IDisposable
     {
-        private readonly string className = "GameHelper.Settings." + Guid.NewGuid().ToString("N");
+        private readonly string className = "ExileCenter.Settings." + Guid.NewGuid().ToString("N");
         private WNDCLASSEX windowClass;
         private Win32Window? window;
         private readonly ID3D11Device device;
@@ -360,7 +360,7 @@ namespace GameHelper
             s.SettingsWindowHeight = bounds.Height;
             s.SettingsWindowPositionSaved = true;
             if (this.savePlacement != null) this.savePlacement(bounds.Rectangle);
-            else CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
+            else CoroutineHandler.RaiseEvent(ExileCenterEvents.TimeToSaveAllSettings);
         }
 
         internal static Rectangle FitBounds(Rectangle desired, Rectangle workArea)

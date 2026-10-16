@@ -4,7 +4,7 @@ namespace PlayerBuffBar
     using System.Collections.Generic;
     using System.Linq;
     using System.Numerics;
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
 
     public enum BuffBarDisplayMode
     {

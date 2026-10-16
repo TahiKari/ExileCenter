@@ -2,7 +2,7 @@ namespace LootTracker
 {
     using System;
     using System.Numerics;
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
 
     public sealed class LootTrackerSettings : IPSettings
     {

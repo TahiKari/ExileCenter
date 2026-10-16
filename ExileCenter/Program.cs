@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper
+namespace ExileCenter
 {
     using System;
     using System.IO;
@@ -19,7 +19,7 @@ namespace GameHelper
     using System.Threading.Tasks;
     using System.Threading;
     using ImGuiNET;
-    using L = GameHelper.Localization.OverlayLocalization;
+    using L = ExileCenter.Localization.OverlayLocalization;
     using Utils;
 
     /// <summary>
@@ -30,34 +30,18 @@ namespace GameHelper
         /// <summary>
         ///     function executed when the application starts.
         /// </summary>
-        // Returns true if the launcher (GameHelper.App.exe) started us.
-        // The launcher renames the exe before starting it, so our process name
-        // differs from "GameHelper.exe" when we were launched via GameHelper.App.exe.
-        private static bool WasStartedByLauncher()
+        private static async Task Main(string[] args)
         {
-            var myExe = Path.GetFileName(Environment.ProcessPath ?? string.Empty);
-            return !string.Equals(myExe, "GameHelper.exe", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static async Task Main()
-        {
-            // If the user started GameHelper.exe directly (not via launcher),
-            // redirect to GameHelper.App.exe so they get update checks.
-            if (!WasStartedByLauncher() && !LocalUpdates.IsLocalInstallation)
+            if (args.Length >= 2 && args[0] == "--complete-migration" && int.TryParse(args[1], out int owner))
             {
-                var launcherPath = Path.Combine(AppContext.BaseDirectory, "GameHelper.App.exe");
-                if (File.Exists(launcherPath))
-                {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = launcherPath,
-                        WorkingDirectory = AppContext.BaseDirectory,
-                        UseShellExecute = true,
-                    });
-                    return;
-                }
+                await LocalUpdates.CompleteBrandMigrationAsync(owner, !args.Contains("--version"));
+                args = args.Skip(2).ToArray();
             }
-
+            if (args.Length == 1 && args[0] == "--version")
+            {
+                Console.WriteLine(LocalUpdates.InstalledVersion);
+                return;
+            }
             AppDomain.CurrentDomain.UnhandledException += (sender, exceptionArgs) =>
             {
                 var errorText = "Program exited with message:\n " + exceptionArgs.ExceptionObject;
@@ -96,11 +80,78 @@ namespace GameHelper
         private const string StateName = "local-update-state.json";
         private const string ErrorName = "local-update-error.txt";
         private const string Repository = "TahiKari/ExileCenter";
-        private const string GitHubPackageName = "ExileCenter-win-x64.zip";
+        private const string GitHubPackageName = "ExileCenter-Complete-win-x64.zip";
         private static readonly HttpClient GitHubClient = new() { Timeout = TimeSpan.FromSeconds(8) };
         private static readonly HttpClient PackageClient = new() { Timeout = TimeSpan.FromMinutes(3) };
         private static readonly string? CurrentReleaseTag = typeof(Program).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(attribute => attribute.Key == "GameHelperReleaseTag")?.Value;
+            .FirstOrDefault(attribute => attribute.Key == "ExileCenterReleaseTag")?.Value;
+
+        internal static async Task CompleteBrandMigrationAsync(int ownerId, bool updateShortcuts)
+        {
+            // Only a bridge in this installation may request removal of the old binaries.
+            try
+            {
+                using var owner = Process.GetProcessById(ownerId);
+                string ownerPath = owner.MainModule?.FileName ?? "";
+                if (!new[] { "GameHelper.exe", "GameHelper.App.exe" }.Any(name =>
+                    string.Equals(ownerPath, SafeTarget(InstallDirectory, name), StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidDataException("Invalid migration owner.");
+                await owner.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
+            }
+            catch (ArgumentException) { /* The bridge has already exited. */ }
+            catch (InvalidOperationException) { /* The bridge exited while its module was being inspected. */ }
+            foreach (string required in new[] { "ExileCenter.exe", "ExileCenter.dll", "ExileCenter.deps.json", "ExileCenter.runtimeconfig.json" })
+                if (!File.Exists(SafeTarget(InstallDirectory, required))) throw new InvalidDataException("Incomplete ExileCenter migration.");
+            if (updateShortcuts)
+                foreach (var folder in new[] { Environment.SpecialFolder.DesktopDirectory, Environment.SpecialFolder.StartMenu })
+                    MigrateShortcuts(Environment.GetFolderPath(folder), InstallDirectory);
+            foreach (string obsolete in new[] { "GameHelper.exe", "GameHelper.dll", "GameHelper.deps.json", "GameHelper.runtimeconfig.json",
+                "GameHelper.App.exe", "GameHelper.App.dll", "GameHelper.App.deps.json", "GameHelper.App.runtimeconfig.json", "GameHelper.xml" })
+            {
+                string path = SafeTarget(InstallDirectory, obsolete);
+                try { if (File.Exists(path)) File.Delete(path); }
+                catch (IOException ex) { Console.WriteLine("[ExileCenter migration] " + ex.Message); }
+            }
+        }
+
+        internal static void MigrateShortcuts(string directory, string installRoot)
+        {
+            if (!Directory.Exists(directory)) return;
+            object? shell = null;
+            try
+            {
+                shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell", true)!);
+                var oldTargets = new[] { "GameHelper.exe", "GameHelper.App.exe" }.Select(file => SafeTarget(installRoot, file)).ToArray();
+                foreach (string file in Directory.EnumerateFiles(directory, "*.lnk", SearchOption.AllDirectories))
+                {
+                    object? link = null;
+                    try
+                    {
+                        dynamic shortcut = link = ((dynamic)shell!).CreateShortcut(file);
+                        string target = shortcut.TargetPath;
+                        if (!oldTargets.Contains(target, StringComparer.OrdinalIgnoreCase)) continue;
+                        shortcut.TargetPath = SafeTarget(installRoot, "ExileCenter.exe");
+                        shortcut.WorkingDirectory = installRoot;
+                        string icon = shortcut.IconLocation;
+                        if (oldTargets.Any(path => icon.StartsWith(path, StringComparison.OrdinalIgnoreCase)))
+                            shortcut.IconLocation = SafeTarget(installRoot, "ExileCenter.exe") + ",0";
+                        shortcut.Save();
+                        string name = Path.GetFileName(file);
+                        if (name.StartsWith("GameHelper", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string renamed = Path.Combine(Path.GetDirectoryName(file)!, "ExileCenter" + name[10..]);
+                            if (!File.Exists(renamed)) File.Move(file, renamed);
+                        }
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
+                    { Console.WriteLine("[ExileCenter shortcut] " + ex.Message); }
+                    finally { if (link != null) System.Runtime.InteropServices.Marshal.FinalReleaseComObject(link); }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
+            { Console.WriteLine("[ExileCenter shortcuts] " + ex.Message); }
+            finally { if (shell != null) System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell); }
+        }
         private sealed record Package(string Id, string PackageFile, string Sha256, string Label)
         {
             public string? ReleaseTag { get; init; }
@@ -373,7 +424,7 @@ namespace GameHelper
             Interlocked.Exchange(ref downloadBytes, 0);
             Interlocked.Exchange(ref downloadTotal, package.DownloadSize);
             if (package.DownloadUrl == null) return await Task.Run(() => Prepare(package, installRoot, updateRoot, processId));
-            var downloadRoot = Path.Combine(Path.GetTempPath(), "GameHelper-Download-" + Guid.NewGuid().ToString("N"));
+            var downloadRoot = Path.Combine(Path.GetTempPath(), "ExileCenter-Download-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(downloadRoot);
             try
             {
@@ -457,7 +508,7 @@ namespace GameHelper
                 {
                     prepareTask.GetAwaiter().GetResult();
                     prepareTask = null;
-                    Coroutine.CoroutineHandler.RaiseEvent(CoroutineEvents.GameHelperEvents.TimeToSaveAllSettings);
+                    Coroutine.CoroutineHandler.RaiseEvent(CoroutineEvents.ExileCenterEvents.TimeToSaveAllSettings);
                     installerStarted = true;
                     Core.GHSettings.IsOverlayRunning = false;
                 }
@@ -549,7 +600,7 @@ namespace GameHelper
                 Path.GetFileName(relative).Equals("settings.json", StringComparison.OrdinalIgnoreCase)) return false;
             if (segments.Length == 1)
                 return relative.Equals("ExileCenter.exe", StringComparison.OrdinalIgnoreCase) || relative.Equals("GameHelper.exe", StringComparison.OrdinalIgnoreCase) || relative.Equals("GameHelper.App.exe", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
-                    relative is "GameHelper.deps.json" or "GameHelper.runtimeconfig.json" or "LICENSE" or "CREDITS.md" or "README.md" or "SECURITY.md";
+                    relative is "ExileCenter.deps.json" or "ExileCenter.runtimeconfig.json" or "GameHelper.deps.json" or "GameHelper.runtimeconfig.json" or "LICENSE" or "CREDITS.md" or "README.md" or "SECURITY.md";
             return segments[0] is "Plugins" or "Localization" or "fonts" && !relative.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -567,7 +618,7 @@ namespace GameHelper
 
         private static string Prepare(Package package, string installRoot, string updateRoot, int processId)
         {
-            var stage = Path.Combine(Path.GetTempPath(), "GameHelper-Update-" + Guid.NewGuid().ToString("N"));
+            var stage = Path.Combine(Path.GetTempPath(), "ExileCenter-Update-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(stage);
             var localZip = Path.Combine(stage, "package.zip");
             File.Copy(Path.Combine(updateRoot, package.PackageFile), localZip);
@@ -602,10 +653,12 @@ namespace GameHelper
                     files.Add(new { Relative = relative, Hash = Convert.ToHexString(SHA256.HashData(stream)) });
                 }
             }
-            if (!names.Contains("GameHelper.dll") || !names.Contains("GameHelper.exe")) throw new InvalidDataException("GameHelper.dll / GameHelper.exe");
+            if (!(names.Contains("ExileCenter.dll") && names.Contains("ExileCenter.exe")) && !(names.Contains("GameHelper.dll") && names.Contains("GameHelper.exe"))) throw new InvalidDataException("Application entry point missing.");
             File.WriteAllText(Path.Combine(stage, "plan.json"), JsonSerializer.Serialize(new
             {
                 Root = Path.GetFullPath(installRoot), Stage = stage, ProcessId = processId, Files = files,
+                EntryPoint = names.Contains("GameHelper.exe") ? "GameHelper.exe" : "ExileCenter.exe",
+                RollbackEntryPoint = File.Exists(Path.Combine(installRoot, "ExileCenter.exe")) ? "ExileCenter.exe" : "GameHelper.exe",
                 State = new { package.Id, package.Sha256, package.Label },
             }));
             return stage;
@@ -613,7 +666,7 @@ namespace GameHelper
 
         private static async Task StartInstallerAsync(string stage)
         {
-            using var source = typeof(UpdatePathHelper).Assembly.GetManifestResourceStream("GameHelper.Utils.UpdatePathHelper.cs")
+            using var source = typeof(UpdatePathHelper).Assembly.GetManifestResourceStream("ExileCenter.Utils.UpdatePathHelper.cs")
                 ?? throw new InvalidDataException("Update path helper is missing.");
             using var reader = new StreamReader(source);
             var script = InstallerScript.Replace("__PLAN__", Path.Combine(stage, "plan.json").Replace("'", "''"))
@@ -661,12 +714,12 @@ namespace GameHelper
                 if(-not $path.StartsWith($root,[StringComparison]::OrdinalIgnoreCase)) {throw 'Invalid target path'}
                 for($parent=$path; $parent -and $parent.Length -ge $root.Length-1; $parent=[IO.Path]::GetDirectoryName($parent)) {
                     if((Test-Path -LiteralPath $parent) -and ((Get-Item -LiteralPath $parent -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-                        if(-not ('GameHelper.Utils.UpdatePathHelper' -as [type])) {
+                        if(-not ('ExileCenter.Utils.UpdatePathHelper' -as [type])) {
                             Add-Type -TypeDefinition @'
             __UPDATE_PATH_HELPER__
             '@
                         }
-                        if(-not [GameHelper.Utils.UpdatePathHelper]::IsAllowedReparsePoint($parent)) {throw 'Reparse point in target'}
+                        if(-not [ExileCenter.Utils.UpdatePathHelper]::IsAllowedReparsePoint($parent)) {throw 'Reparse point in target'}
                     }
                 }
                 return $path
@@ -710,7 +763,7 @@ namespace GameHelper
                 [IO.File]::WriteAllText($statePath,($plan.State | ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))
                 $errorPath=Target 'local-update-error.txt'
                 if(Test-Path -LiteralPath $errorPath){Remove-Item -LiteralPath $errorPath}
-                Start-Process -FilePath (Target 'GameHelper.exe') -WorkingDirectory $root -WindowStyle Hidden -ErrorAction Stop
+                Start-Process -FilePath (Target $plan.EntryPoint) -WorkingDirectory $root -WindowStyle Hidden -ErrorAction Stop
             } catch {
                 $failure=$_.Exception.Message
                 for($index=$changed.Count-1;$index -ge 0;$index--) {
@@ -731,7 +784,7 @@ namespace GameHelper
                 }
                 try {[IO.File]::WriteAllText((Target 'local-update-error.txt'),$failure)} catch {}
                 try {[IO.File]::WriteAllText((Join-Path $plan.Stage 'error.txt'),$failure)} catch {}
-                if($canRestart){try {Start-Process -FilePath (Target 'GameHelper.exe') -WorkingDirectory $root -WindowStyle Hidden -ErrorAction Stop} catch {}}
+                if($canRestart){try {Start-Process -FilePath (Target $plan.RollbackEntryPoint) -WorkingDirectory $root -WindowStyle Hidden -ErrorAction Stop} catch {}}
             }
             """;
     }

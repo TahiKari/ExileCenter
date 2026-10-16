@@ -7,7 +7,7 @@ namespace AutoHotKeyTrigger.ProfileManager.Templates
     using AutoHotKeyTrigger;
     using AutoHotKeyTrigger.ProfileManager.DynamicConditions;
     using AutoHotKeyTrigger.ProfileManager.DynamicConditions.Interface;
-    using GameHelper.Utils;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using System;
     using System.Collections.Generic;

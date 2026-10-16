@@ -188,7 +188,7 @@ namespace Hiveblood
 
         private bool EnsureProcess()
         {
-            int pid = (int)GameHelper.Core.Process.Pid;
+            int pid = (int)ExileCenter.Core.Process.Pid;
             if (pid == 0)
             {
                 this.ResetProcess();

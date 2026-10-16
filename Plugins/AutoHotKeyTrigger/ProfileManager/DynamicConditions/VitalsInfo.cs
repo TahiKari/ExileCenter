@@ -4,7 +4,7 @@
 
 namespace AutoHotKeyTrigger.ProfileManager.DynamicConditions
 {
-    using GameHelper.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.Components;
     using AutoHotKeyTrigger.ProfileManager.DynamicConditions.Interface;
 
     /// <summary>

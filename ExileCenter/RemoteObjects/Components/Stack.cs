@@ -1,4 +1,4 @@
-namespace GameHelper.RemoteObjects.Components
+namespace ExileCenter.RemoteObjects.Components
 {
     using System;
     using GameOffsets.Objects.Components;

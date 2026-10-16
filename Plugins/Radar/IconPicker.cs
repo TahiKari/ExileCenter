@@ -7,8 +7,8 @@ namespace Radar
     using System;
     using System.IO;
     using System.Numerics;
-    using GameHelper;
-    using GameHelper.Localization;
+    using ExileCenter;
+    using ExileCenter.Localization;
     using ImGuiNET;
     using Newtonsoft.Json;
 
@@ -176,7 +176,7 @@ namespace Radar
                 ImGui.SetNextWindowPos(this.popUpPos, ImGuiCond.Appearing);
                 ImGui.SetNextWindowSize(new Vector2(400), ImGuiCond.Appearing);
                 var title = text.Title("icon_picker.window", "Icon Picker (Double click to select an item)", "RadarIconPicker");
-                if (GameHelper.Ui.ImGuiTheme.BeginWindow(title, ref this.showPopUp, PopUpFlags))
+                if (ExileCenter.Ui.ImGuiTheme.BeginWindow(title, ref this.showPopUp, PopUpFlags))
                 {
                     if (ImGui.IsWindowHovered() && ImGui.GetIO().MouseDoubleClicked[0])
                     {

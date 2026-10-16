@@ -11,11 +11,11 @@ namespace PreloadAlert
     using System.Linq;
     using System.Numerics;
     using Coroutine;
-    using GameHelper;
-    using GameHelper.CoroutineEvents;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.CoroutineEvents;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Newtonsoft.Json;
 
@@ -144,13 +144,13 @@ namespace PreloadAlert
                 ImGui.SetNextWindowPos(this.Settings.Pos);
                 ImGui.SetNextWindowSize(this.Settings.Size);
                 ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0f);
-                GameHelper.Ui.ImGuiTheme.BeginWindow(windowName, ImGuiHelper.TransparentWindowFlags);
+                ExileCenter.Ui.ImGuiTheme.BeginWindow(windowName, ImGuiHelper.TransparentWindowFlags);
                 ImGui.PopStyleVar();
                 this.isPreloadAlertHovered = ImGui.IsMouseHoveringRect(this.Settings.Pos, this.Settings.Pos + this.Settings.Size);
             }
             else
             {
-                GameHelper.Ui.ImGuiTheme.BeginWindow(windowName, ImGuiWindowFlags.NoSavedSettings);
+                ExileCenter.Ui.ImGuiTheme.BeginWindow(windowName, ImGuiWindowFlags.NoSavedSettings);
                 ImGui.TextColored(new Vector4(.86f, .71f, .36f, 1), this.PluginText.T("window.edit_background_color", "Edit Background Color: "));
                 ImGui.SameLine();
                 ImGui.ColorEdit4(

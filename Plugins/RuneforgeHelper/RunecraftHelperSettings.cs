@@ -1,7 +1,7 @@
 namespace RunecraftHelper
 {
     using System;
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
 
     // How the per-row price text is tinted to signal reward value at a glance.
     //   Off       — single neutral colour.

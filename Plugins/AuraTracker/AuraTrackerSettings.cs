@@ -1,7 +1,7 @@
 using System.Numerics;
 using System.Linq;
-using GameHelper.Plugin;
-using GameHelper.RemoteEnums; // Rarity
+using ExileCenter.Plugin;
+using ExileCenter.RemoteEnums; // Rarity
 
 namespace AuraTracker
 {

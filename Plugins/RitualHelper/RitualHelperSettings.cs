@@ -5,7 +5,7 @@
 namespace RitualHelper
 {
     using System.Numerics;
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
 
     /// <summary>
     /// <see cref="RitualHelper"/> plugin settings class.

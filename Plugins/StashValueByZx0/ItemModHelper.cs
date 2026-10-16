@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
-using GameHelper.RemoteObjects.Components;
-using GameHelper.RemoteObjects.States.InGameStateObjects;
+using ExileCenter.RemoteObjects.Components;
+using ExileCenter.RemoteObjects.States.InGameStateObjects;
 
 namespace StashValue
 {

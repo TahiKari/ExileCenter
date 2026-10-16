@@ -2,12 +2,12 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Cache
+namespace ExileCenter.Cache
 {
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using Coroutine;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
     using GameOffsets.Objects.States.InGameState;
     using ImGuiNET;
 

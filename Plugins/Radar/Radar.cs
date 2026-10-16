@@ -13,13 +13,13 @@ namespace Radar
     using System.Threading;
     using System.Threading.Tasks;
     using Coroutine;
-    using GameHelper;
-    using GameHelper.CoroutineEvents;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteEnums.Entity;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.CoroutineEvents;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteEnums.Entity;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Newtonsoft.Json;
     using SixLabors.ImageSharp;
@@ -363,7 +363,7 @@ namespace Radar
             {
                 ImGui.SetNextWindowPos(largeMap.Center, ImGuiCond.Appearing);
                 ImGui.SetNextWindowSize(new Vector2(400f), ImGuiCond.Appearing);
-                GameHelper.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("window.large_map_culling", "Large Map Culling Window", "RadarLargeMapCullingWindow"));
+                ExileCenter.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("window.large_map_culling", "Large Map Culling Window", "RadarLargeMapCullingWindow"));
                 ImGui.TextWrapped(this.PluginText.T("window.large_map_culling.help", "This is a culling window for the large map icons. " +
                                   "Any large map icons outside of this window will be hidden automatically. " +
                                   "Feel free to change the position/size of this window. " +
@@ -460,7 +460,7 @@ namespace Radar
                 ImGui.SetNextWindowSize(this.Settings.CullWindowSize);
                 ImGui.SetNextWindowBgAlpha(0f);
                 ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0f);
-                GameHelper.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("window.large_map_culling", "Large Map Culling Window", "RadarLargeMapCullingWindow"), ImGuiHelper.TransparentWindowFlags);
+                ExileCenter.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("window.large_map_culling", "Large Map Culling Window", "RadarLargeMapCullingWindow"), ImGuiHelper.TransparentWindowFlags);
                 ImGui.PopStyleVar();
                 this.DrawLargeMap(largeMapRealCenter, trackingPos, trackingHeight);
                 this.DrawTgtFiles(largeMapRealCenter, trackingPos, trackingHeight);
@@ -493,7 +493,7 @@ namespace Radar
                 ImGui.SetNextWindowSize(miniMap.Size);
                 ImGui.SetNextWindowBgAlpha(0f);
                 ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0f);
-                GameHelper.Ui.ImGuiTheme.BeginWindow("###minimapRadar", ImGuiHelper.TransparentWindowFlags);
+                ExileCenter.Ui.ImGuiTheme.BeginWindow("###minimapRadar", ImGuiHelper.TransparentWindowFlags);
                 ImGui.PopStyleVar();
                 this.DrawLargeMap(miniMapCenter, trackingPos, trackingHeight, true);
                 this.DrawTgtFiles(miniMapCenter, trackingPos, trackingHeight, true);
@@ -2421,7 +2421,7 @@ namespace Radar
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnMoved);
+                yield return new Wait(ExileCenterEvents.OnMoved);
                 this.UpdateMiniMapDetails();
                 this.UpdateLargeMapDetails();
                 if (this.Settings.MakeCullWindowFullScreen)
@@ -2447,7 +2447,7 @@ namespace Radar
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnClose);
+                yield return new Wait(ExileCenterEvents.OnClose);
                 this.skipOneSettingChange = true;
                 this.CleanUpRadarPluginCaches();
             }
@@ -2457,7 +2457,7 @@ namespace Radar
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnForegroundChanged);
+                yield return new Wait(ExileCenterEvents.OnForegroundChanged);
                 this.UpdateMiniMapDetails();
                 this.UpdateLargeMapDetails();
             }

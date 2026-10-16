@@ -1,153 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-    <StartupObject>Launcher.Program</StartupObject>
-    <AssemblyName>GameHelper.App</AssemblyName>
-    <Version>1.4.2</Version>
-    <AssemblyVersion>1.4.2.0</AssemblyVersion>
-    <FileVersion>1.4.2.0</FileVersion>
-    <SelfContained>false</SelfContained>
-    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>ExileCenter.Migration</AssemblyName>
+    <RootNamespace>ExileCenter.Migration</RootNamespace>
+    <Product>ExileCenter</Product>
+    <AssemblyTitle>ExileCenter Migration</AssemblyTitle>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <ExileCenterReleaseTag Condition="'$(ExileCenterReleaseTag)' == ''">v1.5.11-personnalise.38</ExileCenterReleaseTag>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="AsmResolver.PE.Win32Resources" Version="5.5.1" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <Compile Include="Program.cs" />
+    <Compile Include="../ExileCenter/Utils/UpdatePathHelper.cs" Link="UpdatePathHelper.cs" />
+    <AssemblyMetadata Include="ExileCenterReleaseTag" Value="$(ExileCenterReleaseTag)" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Compile Include="..\Shared\UpdatePathSecurity.cs" Link="Shared\UpdatePathSecurity.cs" />
-    <Compile Include="..\Shared\UpdateManifestVerifier.cs" Link="Shared\UpdateManifestVerifier.cs" />
-    <Compile Include="..\Shared\UpdateRepositoryConfig.cs" Link="Shared\UpdateRepositoryConfig.cs" />
-    <Compile Include="..\Shared\UpdateSigningPublicKey.cs" Link="Shared\UpdateSigningPublicKey.cs" />
-    <Compile Include="..\Shared\UpdateFileHashesCatalog.cs" Link="Shared\UpdateFileHashesCatalog.cs" />
-    <Compile Include="..\Shared\UpdateZipPackage.cs" Link="Shared\UpdateZipPackage.cs" />
-    <Compile Include="..\Shared\UpdateStateHelper.cs" Link="Shared\UpdateStateHelper.cs" />
-    <Compile Include="..\Shared\UpdateMigrationNotice.cs" Link="Shared\UpdateMigrationNotice.cs" />
-    <Compile Include="..\Shared\VersionCompare.cs" Link="Shared\VersionCompare.cs" />
-  </ItemGroup>
-
-  <Target Name="CopyLauncherToOutput" AfterTargets="Build">
-    <Copy SourceFiles="$(OutDir)$(AssemblyName).exe;$(OutDir)$(AssemblyName).dll;$(OutDir)$(AssemblyName).runtimeconfig.json;$(OutDir)$(AssemblyName).deps.json;$(OutDir)AsmResolver.PE.dll;$(OutDir)AsmResolver.PE.File.dll;$(OutDir)AsmResolver.dll;$(OutDir)AsmResolver.PE.Win32Resources.dll;"
-          DestinationFolder="..\ExileCenter\$(OutDir)"
-          SkipUnchangedFiles="true"
-          Condition="Exists('..\ExileCenter\$(OutDir)')" />
-  </Target>
-
 </Project>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

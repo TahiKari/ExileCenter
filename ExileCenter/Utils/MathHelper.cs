@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Utils
+namespace ExileCenter.Utils
 {
     using System.Numerics;
 

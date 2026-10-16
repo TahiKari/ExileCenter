@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper
+namespace ExileCenter
 {
     using System;
     using System.Collections.Generic;
@@ -11,7 +11,7 @@ namespace GameHelper
     using System.Diagnostics;
     using Coroutine;
     using CoroutineEvents;
-    using GameHelper.Cache;
+    using ExileCenter.Cache;
     using ImGuiNET;
     using RemoteObjects;
     using Settings;
@@ -278,7 +278,7 @@ namespace GameHelper
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnClose);
+                yield return new Wait(ExileCenterEvents.OnClose);
                 States.Address = IntPtr.Zero;
                 CurrentAreaLoadedFiles.Address = IntPtr.Zero;
                 AreaChangeCounter.Address = IntPtr.Zero;

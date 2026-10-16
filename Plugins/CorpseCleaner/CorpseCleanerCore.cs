@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
-using GameHelper;
-using GameHelper.Plugin;
+using ExileCenter;
+using ExileCenter.Plugin;
 using ImGuiNET;
 
 namespace CorpseCleaner;
@@ -81,7 +81,7 @@ public sealed class CorpseCleanerCore : PCore<CorpseCleanerSettings>
         if (changed) { Settings.GameDirectory = directory; Settings.OodleSource = native; SaveSettings(); }
         ImGui.TextWrapped(PluginText.T("native_help", "The Oodle library is supplied by your own installation. Selecting Exile Forge extracts only oo2core.dll; its executable is never launched."));
         if (gameRunning) ImGui.TextWrapped(PluginText.T("close_game", "PoE is open. Close the game to apply or restore this patch. There is no instant in-game toggle."));
-        ImGui.TextWrapped(PluginText.T("backup", "The original archive is kept in .GameHelperCadavres inside the game folder. Standalone installations need enough free space for a full copy of Content.ggpk. Restoration is refused if a game update or another tool has changed the patched archive."));
+        ImGui.TextWrapped(PluginText.T("backup", "The original archive is kept in .ExileCenterCadavres inside the game folder. Standalone installations need enough free space for a full copy of Content.ggpk. Restoration is refused if a game update or another tool has changed the patched archive."));
         ImGui.BeginDisabled(gameRunning || directory.Length == 0);
         if (ImGui.Button(PluginText.Label("apply", "Hide corpses (game closed)", "Apply"))) Start(false);
         ImGui.SameLine();

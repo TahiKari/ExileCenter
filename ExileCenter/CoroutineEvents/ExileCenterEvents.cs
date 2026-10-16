@@ -2,14 +2,14 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.CoroutineEvents
+namespace ExileCenter.CoroutineEvents
 {
     using Coroutine;
 
     /// <summary>
     ///     Co-Routine events specific to the GameHelper.
     /// </summary>
-    public static class GameHelperEvents
+    public static class ExileCenterEvents
     {
         /// <summary>
         ///     Gets the event raised when the game has changed its size, position or both.

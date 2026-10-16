@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Plugin
+namespace ExileCenter.Plugin
 {
     /// <summary>
     ///     Interface for loading/saving plugin settings.

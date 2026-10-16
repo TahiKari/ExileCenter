@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteObjects
+namespace ExileCenter.RemoteObjects
 {
     using System;
     using ImGuiNET;

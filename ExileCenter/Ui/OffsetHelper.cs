@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Ui
+namespace ExileCenter.Ui
 {
     using System;
     using System.Collections.Generic;
@@ -11,12 +11,12 @@ namespace GameHelper.Ui
     using System.Threading.Tasks;
     using Coroutine;
     using CoroutineEvents;
-    using GameHelper.Cache;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
-    using GameHelper.RemoteObjects.UiElement;
-    using GameHelper.Utils;
+    using ExileCenter.Cache;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.RemoteObjects.UiElement;
+    using ExileCenter.Utils;
     using GameOffsets;
     using GameOffsets.Natives;
     using ImGuiNET;
@@ -115,7 +115,7 @@ namespace GameHelper.Ui
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnRender);
+                yield return new Wait(ExileCenterEvents.OnRender);
                 if (!Core.GHSettings.ShowOffsetHelper)
                 {
                     continue;
@@ -132,7 +132,7 @@ namespace GameHelper.Ui
 
                 OccludeRects.Clear();
                 ImGui.SetNextWindowSize(new Vector2(720, 640), ImGuiCond.FirstUseEver);
-                if (GameHelper.Ui.ImGuiTheme.BeginWindow("OffsetHelper (OH)", ref Core.GHSettings.ShowOffsetHelper))
+                if (ExileCenter.Ui.ImGuiTheme.BeginWindow("OffsetHelper (OH)", ref Core.GHSettings.ShowOffsetHelper))
                 {
                     RecordOcclusion();
                     DrawToolbar();
@@ -978,7 +978,7 @@ namespace GameHelper.Ui
                 var e = PinnedEntities[i];
                 var open = true;
                 ImGui.SetNextWindowSize(new Vector2(560, 520), ImGuiCond.FirstUseEver);
-                if (GameHelper.Ui.ImGuiTheme.BeginWindow($"{e.EntityType}#{e.Id}###odcard_{e.GetHashCode()}", ref open))
+                if (ExileCenter.Ui.ImGuiTheme.BeginWindow($"{e.EntityType}#{e.Id}###odcard_{e.GetHashCode()}", ref open))
                 {
                     RecordOcclusion();
                     DrawCardBody(e);
@@ -1273,7 +1273,7 @@ namespace GameHelper.Ui
                                            ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoNav |
                                            ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBackground |
                                            ImGuiWindowFlags.NoBringToFrontOnFocus;
-            if (GameHelper.Ui.ImGuiTheme.BeginWindow("##odboxhit", flags))
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow("##odboxhit", flags))
             {
                 ImGui.SetCursorScreenPos(min);
                 if (ImGui.InvisibleButton("##odboxbody", new Vector2(Math.Max(1f, max.X - min.X), Math.Max(1f, max.Y - min.Y))))

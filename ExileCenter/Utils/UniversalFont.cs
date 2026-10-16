@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Utils
+namespace ExileCenter.Utils
 {
     using System;
     using System.IO;
@@ -16,11 +16,11 @@ namespace GameHelper.Utils
     ///
     ///     One merged font is built (first source that has a glyph wins; later sources only fill gaps):
     ///       1. DejaVuSans      — pretty Latin + Cyrillic + Greek (priority for those).
-    ///       2. the configured GH font (<see cref="GameHelper.Settings.State.FontPathName"/>) — keeps
+    ///       2. the configured GH font (<see cref="ExileCenter.Settings.State.FontPathName"/>) — keeps
     ///          the user's language pretty (e.g. CJK), merged so it only fills DejaVu's gaps.
     ///       3. GNU Unifont     — fallback over the whole BMP (CJK/Arabic/Hebrew/Thai/Armenian/…).
     ///
-    ///     Gated by <see cref="GameHelper.Settings.State.UniversalFont"/>; when off, the normal
+    ///     Gated by <see cref="ExileCenter.Settings.State.UniversalFont"/>; when off, the normal
     ///     configured font is loaded instead. Call <see cref="ApplyFromSettings"/> on startup and
     ///     whenever the font settings change.
     /// </summary>
@@ -32,7 +32,7 @@ namespace GameHelper.Utils
         private static GCHandle rangeHandle;
 
         /// <summary>
-        ///     Loads the universal font when <see cref="GameHelper.Settings.State.UniversalFont"/> is
+        ///     Loads the universal font when <see cref="ExileCenter.Settings.State.UniversalFont"/> is
         ///     set, otherwise the normally-configured font. Safe to call before the overlay exists.
         /// </summary>
         public static void ApplyFromSettings()

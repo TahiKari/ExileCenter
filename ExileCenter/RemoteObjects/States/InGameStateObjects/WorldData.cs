@@ -2,14 +2,14 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteObjects.States.InGameStateObjects
+namespace ExileCenter.RemoteObjects.States.InGameStateObjects
 {
     using System;
     using System.Collections.Generic;
     using System.Numerics;
     using Coroutine;
-    using GameHelper.CoroutineEvents;
-    using GameHelper.RemoteObjects.FilesStructures;
+    using ExileCenter.CoroutineEvents;
+    using ExileCenter.RemoteObjects.FilesStructures;
     using GameOffsets.Natives;
     using GameOffsets.Objects.States.InGameState;
     using ImGuiNET;
@@ -179,7 +179,7 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.PostPerFrameDataUpdate);
+                yield return new Wait(ExileCenterEvents.PostPerFrameDataUpdate);
                 if (this.Address != IntPtr.Zero)
                 {
                     this.UpdateData(false);

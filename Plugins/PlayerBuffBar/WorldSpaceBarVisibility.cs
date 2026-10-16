@@ -2,7 +2,7 @@ namespace PlayerBuffBar
 {
     using System;
     using System.Reflection;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
 
     /// <summary>
     ///     Hides world-space overlays when fullscreen map UIs are open (Gordin + community forks).

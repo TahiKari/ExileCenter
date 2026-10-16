@@ -1,6 +1,6 @@
-﻿namespace GameHelper.RemoteObjects.UiElement
+﻿namespace ExileCenter.RemoteObjects.UiElement
 {
-    using GameHelper.Cache;
+    using ExileCenter.Cache;
     using GameOffsets.Natives;
     using ImGuiNET;
     using System;

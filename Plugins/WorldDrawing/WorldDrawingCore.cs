@@ -10,13 +10,13 @@ namespace WorldDrawing
     using System.IO;
     using System.Numerics;
     using Coroutine;
-    using GameHelper;
-    using GameHelper.CoroutineEvents;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteEnums.Entity;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.CoroutineEvents;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteEnums.Entity;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Newtonsoft.Json;
 
@@ -36,7 +36,7 @@ namespace WorldDrawing
             this.DrawSettingsTabs("WorldDrawingSettings",
                 ("general", "Settings", () =>
                 {
-                    ImGui.TextWrapped(GameHelper.Localization.OverlayLocalization.T("settings.plugin.no_settings", "This plugin works automatically and has no additional settings."));
+                    ImGui.TextWrapped(ExileCenter.Localization.OverlayLocalization.T("settings.plugin.no_settings", "This plugin works automatically and has no additional settings."));
                 }));
             
         }

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace GameHelper.RemoteEnums
+namespace ExileCenter.RemoteEnums
 {
     public enum Animation : int
     {

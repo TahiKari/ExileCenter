@@ -8,8 +8,8 @@ namespace PlayerBuffBar
     using System.Collections.Generic;
     using System.Linq;
     using System.Text.RegularExpressions;
-    using GameHelper;
-    using GameHelper.RemoteObjects.Components;
+    using ExileCenter;
+    using ExileCenter.RemoteObjects.Components;
 
     public sealed partial class PlayerBuffBarCore
     {

@@ -3,7 +3,7 @@
 // </copyright>
 
 
-namespace GameHelper.RemoteEnums.Entity
+namespace ExileCenter.RemoteEnums.Entity
 {
     /// <summary>
     ///     Enum for entity states. These states do not translate to anything ingame.

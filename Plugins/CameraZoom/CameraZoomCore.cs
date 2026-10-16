@@ -7,9 +7,9 @@ namespace CameraZoom
     using System.Linq;
     using System.Runtime.InteropServices;
     using System.Text.Json;
-    using GameHelper;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
+    using ExileCenter;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
     using ImGuiNET;
 
     public sealed class CameraZoomSettings : IPSettings

@@ -5,7 +5,7 @@
 namespace SimpleBars
 {
     using System.Collections.Generic;
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
 
     /// <summary>
     ///     <see cref="SimpleBars" /> plugin settings class.

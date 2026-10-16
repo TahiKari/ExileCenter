@@ -1,4 +1,4 @@
-namespace GameHelper.RemoteEnums
+namespace ExileCenter.RemoteEnums
 {
     /// <summary>
     ///     Stats enum taken from GGPK file -> Stats.dat -> Id Column

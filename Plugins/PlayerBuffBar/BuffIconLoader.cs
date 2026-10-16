@@ -7,7 +7,7 @@ namespace PlayerBuffBar
     using System.Net.Http;
     using System.Threading;
     using System.Threading.Tasks;
-    using GameHelper;
+    using ExileCenter;
 
     internal sealed class BuffIconLoader
     {

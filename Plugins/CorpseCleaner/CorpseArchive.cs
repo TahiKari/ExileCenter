@@ -15,7 +15,12 @@ namespace CorpseCleaner;
 internal static class CorpseArchive
 {
     private const string BaseScript = "metadata/monsters/monster.ot";
-    private const string Storage = ".GameHelperCadavres";
+    private const string Storage = ".ExileCenterCadavres";
+    private static string StoragePath(string root)
+    {
+        string current = Safe(root, Storage), legacy = Safe(root, ".GameHelperCadavres");
+        return LoadState(current) == null && LoadState(legacy) != null ? legacy : current;
+    }
     private sealed class State
     {
         public string Id { get; set; } = "";
@@ -23,6 +28,8 @@ internal static class CorpseArchive
         public string OriginalHash { get; set; } = "";
         public string PatchedHash { get; set; } = "";
         public int Files { get; set; }
+        // Older manifests refer to bundles already indexed by the game; retain their path for restoration.
+        public string BundleDirectory { get; set; } = "GameHelperCadavres";
     }
 
     internal static bool GameRunning()
@@ -53,7 +60,7 @@ internal static class CorpseArchive
         Check();
         string root = Path.GetFullPath(directory.Trim().Trim('"'));
         string relative = ArchivePath(root), archive = Safe(root, relative);
-        string storage = Safe(root, Storage);
+        string storage = StoragePath(root);
         if (Directory.Exists(storage) && (File.GetAttributes(storage) & FileAttributes.ReparsePoint) != 0)
             throw new IOException("Le dossier de sauvegarde ne doit pas être une jonction.");
         if (LoadState(storage) != null) throw new InvalidOperationException("Une sauvegarde de patch existe déjà. Restaurez-la avant de réappliquer le patch.");
@@ -61,7 +68,7 @@ internal static class CorpseArchive
         bool ggpk = relative == "Content.ggpk";
         string id = Guid.NewGuid().ToString("N"), job = Safe(storage, id);
         string staged = Safe(job, "prepared.bin"), backup = Safe(job, "original.bin");
-        string bundleRelative = "GameHelperCadavres/" + id + ".bundle.bin";
+        string bundleRelative = "ExileCenterCadavres/" + id + ".bundle.bin";
         string stageBundle = Safe(job, bundleRelative), installedBundle = Safe(root, "Bundles2/" + bundleRelative);
         var drive = new DriveInfo(Path.GetPathRoot(archive)!);
         if (drive.AvailableFreeSpace < new FileInfo(archive).Length + 256L * 1024 * 1024)
@@ -126,7 +133,7 @@ internal static class CorpseArchive
                         throw new InvalidDataException("Échec de vérification : " + change.Path);
                 }
             Flush(staged);
-            var state = new State { Id = id, Archive = relative, OriginalHash = originalHash, PatchedHash = Hash(staged, Check), Files = changes.Count };
+            var state = new State { Id = id, Archive = relative, OriginalHash = originalHash, PatchedHash = Hash(staged, Check), Files = changes.Count, BundleDirectory = "ExileCenterCadavres" };
             Check();
             if (!ggpk)
             {
@@ -160,7 +167,7 @@ internal static class CorpseArchive
         guard ??= EnsureClosed;
         void Check() { token.ThrowIfCancellationRequested(); guard(); }
         Check();
-        string root = Path.GetFullPath(directory.Trim().Trim('"')), storage = Safe(root, Storage);
+        string root = Path.GetFullPath(directory.Trim().Trim('"')), storage = StoragePath(root);
         State state = LoadState(storage) ?? throw new FileNotFoundException("Aucune sauvegarde CorpseCleaner dans ce dossier.");
         string archive = Safe(root, state.Archive), backup = Safe(storage, state.Id + "/original.bin");
         using var current = new FileStream(archive, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -175,7 +182,7 @@ internal static class CorpseArchive
             }
             if (state.Archive != "Content.ggpk")
             {
-                string unused = Safe(root, "Bundles2/GameHelperCadavres/" + state.Id + ".bundle.bin");
+                string unused = Safe(root, "Bundles2/" + state.BundleDirectory + "/" + state.Id + ".bundle.bin");
                 if (File.Exists(unused)) File.Delete(unused);
             }
             return "L'archive d'origine est déjà en place. L'opération interrompue a été annulée.";
@@ -198,7 +205,7 @@ internal static class CorpseArchive
         }
         if (state.Archive != "Content.ggpk")
         {
-            string bundle = Safe(root, "Bundles2/GameHelperCadavres/" + state.Id + ".bundle.bin");
+            string bundle = Safe(root, "Bundles2/" + state.BundleDirectory + "/" + state.Id + ".bundle.bin");
             if (File.Exists(bundle)) File.Delete(bundle);
         }
         File.Delete(previous);
@@ -218,6 +225,7 @@ internal static class CorpseArchive
         var state = JsonSerializer.Deserialize<State>(File.ReadAllText(path));
         if (state == null || !System.Text.RegularExpressions.Regex.IsMatch(state.Id, "^[a-f0-9]{32}$") ||
             state.Archive is not ("Content.ggpk" or "Bundles2/_.index.bin") ||
+            state.BundleDirectory is not ("ExileCenterCadavres" or "GameHelperCadavres") ||
             state.OriginalHash.Length != 64 || state.PatchedHash.Length != 64)
             throw new InvalidDataException("Manifest de sauvegarde invalide.");
         return state;
@@ -312,7 +320,7 @@ internal static class CorpseArchive
         }
         public Stream CreateBundle(string path)
         {
-            if (!path.StartsWith("GameHelperCadavres/", StringComparison.Ordinal)) throw new InvalidDataException("Création de bundle hors du patch refusée.");
+            if (!path.StartsWith("ExileCenterCadavres/", StringComparison.Ordinal)) throw new InvalidDataException("Création de bundle hors du patch refusée.");
             string destination = Safe(stage, path); Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             return new FileStream(destination, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
         }

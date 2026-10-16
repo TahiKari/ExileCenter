@@ -58,7 +58,7 @@ jobs:
           $expected = 'EF67411C6456DE8E92179ED8DB55ADC043D086B072ED37AE52E1109F966F9B93'
           if ((Get-FileHash $offsets -Algorithm SHA256).Hash -ne $expected) { throw 'GameOffsets.dll a changé.' }
           $targets = Join-Path $PWD '.github/ci/PreserveOffsets.targets'
-          $properties = @("-p:DirectoryBuildTargetsPath=$targets", "-p:PinnedGameOffsetsPath=$offsets", "-p:GameHelperReleaseTag=$env:RELEASE_TAG")
+          $properties = @("-p:DirectoryBuildTargetsPath=$targets", "-p:PinnedGameOffsetsPath=$offsets", "-p:ExileCenterReleaseTag=$env:RELEASE_TAG")
           $plugins = [regex]::Matches((Get-Content ExileCenter.sln -Raw), '"(Plugins\\[^"\r\n]+\.csproj)"') |
             ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
           if (!$plugins) { throw 'Aucun plugin dans la solution.' }
@@ -68,6 +68,14 @@ jobs:
             & dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false @properties
             if ($LASTEXITCODE -ne 0) { throw "Échec de compilation : $project" }
           }
+          & dotnet restore Launcher/Launcher.csproj --source https://api.nuget.org/v3/index.json @properties
+          if ($LASTEXITCODE -ne 0) { throw 'Restauration du programme de migration impossible.' }
+          & dotnet build Launcher/Launcher.csproj -c Release --no-restore -p:AssemblyName=GameHelper -o "$env:RUNNER_TEMP/exilecenter-migration" @properties
+          if ($LASTEXITCODE -ne 0) { throw 'Compilation du programme de migration impossible.' }
+          & dotnet restore Downloader/Downloader.csproj --source https://api.nuget.org/v3/index.json -r win-x64 -p:PublishSingleFile=true
+          if ($LASTEXITCODE -ne 0) { throw 'Restauration du telechargeur ExileCenter impossible.' }
+          & dotnet publish Downloader/Downloader.csproj -c Release --no-restore -r win-x64 --self-contained false -p:PublishSingleFile=true -p:ExileCenterReleaseTag=$env:RELEASE_TAG -o "$env:RUNNER_TEMP/exilecenter-downloader"
+          if ($LASTEXITCODE -ne 0) { throw 'Compilation du telechargeur ExileCenter impossible.' }
           $runtime = Join-Path $PWD 'ExileCenter/bin/Release/net10.0-windows/win-x64'
           # Some older plugin projects do not deploy their localization files.
           $localizations = @(git ls-files -- 'Plugins/*/Localization/*.json')
@@ -93,7 +101,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $runtime = Join-Path $PWD 'ExileCenter/bin/Release/net10.0-windows/win-x64'
-          $output = Join-Path $env:RUNNER_TEMP 'gamehelper-release'
+          $output = Join-Path $env:RUNNER_TEMP 'exilecenter-release'
           $version = $env:RELEASE_TAG.TrimStart('v')
           if ($env:RELEASE_TAG -match '-personnalise\.(\d+)$') { $version = '1.' + [Math]::Max(0, [int]$Matches[1] - 5) }
           $releaseName = "ExileCenter P-V$version"
@@ -104,29 +112,33 @@ jobs:
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = [IO.Compression.ZipFile]::OpenRead($archive)
           try {
-            foreach ($name in @('ExileCenter.exe', 'GameHelper.exe', 'GameHelper.App.exe', 'GameHelper.dll', 'GameHelper.deps.json', 'GameHelper.runtimeconfig.json', 'GameOffsets.dll', 'cimgui.dll', 'LICENSE', 'CREDITS.md', 'README.md', 'SECURITY.md')) {
+            foreach ($name in @('ExileCenter.exe', 'ExileCenter.dll', 'ExileCenter.deps.json', 'ExileCenter.runtimeconfig.json', 'GameOffsets.dll', 'cimgui.dll', 'LICENSE', 'CREDITS.md', 'README.md', 'SECURITY.md')) {
               if (!$zip.GetEntry($name)) { throw "Fichier indispensable absent : $name" }
             }
             foreach ($path in @(git ls-files -- 'Plugins/*/Localization/*.json')) {
               if (!$zip.GetEntry($path)) { throw "Traduction absente du ZIP : $path" }
             }
             if ($zip.Entries.FullName -match '(?i)(^|/)(configs?|settings\.json)(/|$)|(?i)(dump|\.pdb$|\.log$)') { throw 'Données locales ou de diagnostic présentes dans le ZIP.' }
+            if ($zip.Entries.FullName -match '(?i)GameHelper') { throw 'Ancien nom dans le paquet complet ExileCenter.' }
           } finally { $zip.Dispose() }
-          $download = Join-Path $output 'ExileCenter-win-x64.zip'
+          $download = Join-Path $output 'ExileCenter-Complete-win-x64.zip'
           Move-Item -LiteralPath $archive -Destination $download
           if ((Get-Item $download).Length -ge 2GB) { throw 'ZIP trop volumineux pour GitHub Releases.' }
           $hash = (Get-FileHash $download -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  ExileCenter-win-x64.zip" | Set-Content "$download.sha256" -Encoding utf8NoBOM
-          # Old installers only accept their historical executable/document names.
-          & ./scripts/publish.ps1 -LocalUpdate -SkipBuild -LegacyPackage -LocalSource $runtime -LocalDestination $output -LocalLabel $releaseName -Version $env:RELEASE_TAG -Changelog 'Migration vers ExileCenter et son dépôt autonome.'
-          $legacyManifest = Get-Content "$output/ExileCenter-Maj.json" -Raw | ConvertFrom-Json
+          "$hash  ExileCenter-Complete-win-x64.zip" | Set-Content "$download.sha256" -Encoding utf8NoBOM
+          # Retain old download URLs while their installers migrate themselves.
+          & ./scripts/publish.ps1 -LocalUpdate -SkipBuild -TransitionPackage -MigrationSource "$env:RUNNER_TEMP/exilecenter-migration" -LocalSource $runtime -LocalDestination $output -LocalLabel $releaseName -Version $env:RELEASE_TAG -Changelog 'Migration des anciens fichiers vers ExileCenter.'
+          $transitionManifest = Get-Content "$output/ExileCenter-Maj.json" -Raw | ConvertFrom-Json
+          $transition = Join-Path $output 'ExileCenter-win-x64.zip'
+          Move-Item -LiteralPath (Join-Path $output $transitionManifest.PackageFile) -Destination $transition
+          $transitionHash = (Get-FileHash $transition -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$transitionHash  ExileCenter-win-x64.zip" | Set-Content "$transition.sha256" -Encoding utf8NoBOM
           $legacy = Join-Path $output 'GameHelper-Personnalise-win-x64.zip'
-          Move-Item -LiteralPath (Join-Path $output $legacyManifest.PackageFile) -Destination $legacy
-          $legacyHash = (Get-FileHash $legacy -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$legacyHash  GameHelper-Personnalise-win-x64.zip" | Set-Content "$legacy.sha256" -Encoding utf8NoBOM
+          Copy-Item -LiteralPath $transition -Destination $legacy
+          "$transitionHash  GameHelper-Personnalise-win-x64.zip" | Set-Content "$legacy.sha256" -Encoding utf8NoBOM
           @"
           $releaseName — le compagnon de TahiKari pour Path of Exile 2 sur Windows x64.
-          Télécharger : https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/ExileCenter-win-x64.zip
+          Télécharger : https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/ExileCenter-Complete-win-x64.zip
           Installation : extraire le ZIP dans un dossier puis lancer ExileCenter.exe.
           Nécessite le runtime .NET 10 Desktop x64. GameOffsets.dll est conservée sans recompilation.
           Les nouvelles installations utilisent le profil de base de TahiKari ; les mises à jour conservent les réglages existants. Le code correspondant est disponible au tag $env:RELEASE_TAG.
@@ -139,8 +151,9 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $output = $env:RELEASE_OUTPUT
+          Copy-Item "$env:RUNNER_TEMP/exilecenter-downloader/ExileCenterDownloader.exe" "$output/ExileCenterDownloader.exe"
           $options = @('--repo', $env:GITHUB_REPOSITORY, '--verify-tag', '--title', $env:RELEASE_NAME, '--notes-file', "$output/notes.txt")
           if ($env:RELEASE_DRAFT -eq 'true') { $options += '--draft' }
-          & gh release create $env:RELEASE_TAG "$output/ExileCenter-win-x64.zip#Télécharger $env:RELEASE_NAME — Windows x64 (ZIP)" "$output/ExileCenter-win-x64.zip.sha256" "$output/GameHelper-Personnalise-win-x64.zip#Compatibilité avec les anciennes installations" "$output/GameHelper-Personnalise-win-x64.zip.sha256" @options
+          & gh release create $env:RELEASE_TAG "$output/ExileCenter-Complete-win-x64.zip#Télécharger $env:RELEASE_NAME — Windows x64 (ZIP)" "$output/ExileCenter-Complete-win-x64.zip.sha256" "$output/ExileCenterDownloader.exe#Telechargeur ExileCenter" "$output/ExileCenter-win-x64.zip#Migration des anciennes installations" "$output/ExileCenter-win-x64.zip.sha256" "$output/GameHelper-Personnalise-win-x64.zip#Compatibilité avec les anciens installateurs" "$output/GameHelper-Personnalise-win-x64.zip.sha256" @options
           if ($LASTEXITCODE -ne 0) { throw 'Échec de publication de la Release.' }
           "Release : https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$env:RELEASE_TAG" >> $env:GITHUB_STEP_SUMMARY

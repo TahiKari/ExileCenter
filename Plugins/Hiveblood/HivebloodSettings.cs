@@ -2,7 +2,7 @@ namespace Hiveblood
 {
     using System;
     using System.Numerics;
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
 
     public enum HivebloodOverlayAnchor
     {

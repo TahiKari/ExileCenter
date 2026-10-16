@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Ui
+namespace ExileCenter.Ui
 {
     using System.Collections.Generic;
     using System.Diagnostics;
@@ -38,7 +38,7 @@ namespace GameHelper.Ui
             var pos = new Vector2(0, 100);
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnRender);
+                yield return new Wait(ExileCenterEvents.OnRender);
                 if (Core.GHSettings.ShowPerfStats)
                 {
                     if (Core.GHSettings.HidePerfStatsWhenBg && !Core.Process.Foreground)
@@ -53,7 +53,7 @@ namespace GameHelper.Ui
                         ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0f);
                     }
 
-                    GameHelper.Ui.ImGuiTheme.BeginWindow("Perf Stats Window", ImGuiHelper.TransparentWindowFlags);
+                    ExileCenter.Ui.ImGuiTheme.BeginWindow("Perf Stats Window", ImGuiHelper.TransparentWindowFlags);
 
                     if (isPerformanceWindowHovered)
                     {

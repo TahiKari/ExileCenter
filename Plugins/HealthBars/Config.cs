@@ -1,8 +1,8 @@
 ﻿namespace HealthBars
 {
     using System.Numerics;
-    using GameHelper.Localization;
-    using GameHelper.Utils;
+    using ExileCenter.Localization;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Newtonsoft.Json;
 

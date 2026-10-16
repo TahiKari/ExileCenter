@@ -2,13 +2,13 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteObjects.States.InGameStateObjects
+namespace ExileCenter.RemoteObjects.States.InGameStateObjects
 {
     using System;
     using System.Collections.Generic;
     using System.Collections.ObjectModel;
     using System.Linq;
-    using GameHelper.Utils;
+    using ExileCenter.Utils;
     using GameOffsets.Natives;
 
     /// <summary>

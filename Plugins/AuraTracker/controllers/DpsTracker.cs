@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using GameHelper.RemoteObjects.Components;
+using ExileCenter.RemoteObjects.Components;
 
 namespace AuraTracker.controllers;
 

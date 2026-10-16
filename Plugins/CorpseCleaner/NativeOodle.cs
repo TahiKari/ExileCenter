@@ -20,7 +20,7 @@ internal static class NativeOodle
         string hash = Convert.ToHexString(SHA256.HashData(bytes));
         if (handle != IntPtr.Zero)
         {
-            if (hash != loadedHash) throw new InvalidOperationException("Redémarrez GameHelper avant de changer de bibliothèque Oodle.");
+            if (hash != loadedHash) throw new InvalidOperationException("Redémarrez ExileCenter avant de changer de bibliothèque Oodle.");
             return;
         }
         string directory = Path.Combine(cacheDirectory, hash);

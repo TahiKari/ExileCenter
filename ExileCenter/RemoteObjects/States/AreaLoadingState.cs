@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteObjects.States
+namespace ExileCenter.RemoteObjects.States
 {
     using System;
     using System.Collections.Generic;
@@ -85,7 +85,7 @@ namespace GameHelper.RemoteObjects.States
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.PerFrameDataUpdate);
+                yield return new Wait(ExileCenterEvents.PerFrameDataUpdate);
                 try
                 {
                     if (this.Address != IntPtr.Zero)

@@ -7,11 +7,11 @@ namespace Autopot
     using System.Runtime.InteropServices;
     using System.Threading.Tasks;
     using ClickableTransparentOverlay.Win32;
-    using GameHelper;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Nefarius.ViGEm.Client;
     using Nefarius.ViGEm.Client.Targets;
@@ -139,7 +139,7 @@ namespace Autopot
         {
             RefreshVitals();
             UpdateServiceStatus();
-            ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.enable_automatic_flasks", "Enable automatic flasks", "Activer les flacons automatiques##EnableAutoPot"), ref Settings.EnableAutoPot);
+            ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.enable_automatic_flasks", "Enable automatic flasks", "Activer les flacons automatiques##EnableAutoPot"), ref Settings.EnableAutoPot);
             ImGui.TextColored(serviceStatus == "Running" ? new Vector4(.35f, .85f, .6f, 1) : new Vector4(.7f, .72f, .77f, 1),
                 LocalizeServiceStatus(serviceStatus));
             if (!string.IsNullOrEmpty(statusDetail)) ImGui.TextWrapped(LocalizeReason(statusDetail));
@@ -188,51 +188,51 @@ namespace Autopot
 
         private void DrawVitalsColumn()
         {
-            ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.current_resources", "Current resources", "Ressources actuelles"));
+            ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.current_resources", "Current resources", "Ressources actuelles"));
             if (lastVitals.Valid)
             {
                 DrawVitalBar("Vie", lastVitals.HpPercent, new Vector4(0.85f, 0.15f, 0.15f, 1f));
                 DrawVitalBar("Bouclier d'énergie", lastVitals.EsPercent, new Vector4(0.92f, 0.92f, 0.92f, 1f));
                 DrawVitalBar("Mana", lastVitals.MpPercent, new Vector4(0.2f, 0.45f, 0.95f, 1f));
             }
-            else GameHelper.Utils.ImGuiHelper.WrappedText(GameHelper.Localization.OverlayLocalization.T("ui.labels.resources_unavailable_enter_a_game_area_to_read_them", "Resources unavailable: enter a game area to read them."));
+            else ExileCenter.Utils.ImGuiHelper.WrappedText(ExileCenter.Localization.OverlayLocalization.T("ui.labels.resources_unavailable_enter_a_game_area_to_read_them", "Resources unavailable: enter a game area to read them."));
 
             ImGui.Spacing();
-            ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.in_game_display", "In-game display", "Affichage en jeu"));
-            ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_resources_in_game", "Show resources in game", "Afficher les ressources en jeu"), ref Settings.ShowVitalsOverlay);
+            ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.in_game_display", "In-game display", "Affichage en jeu"));
+            ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.show_resources_in_game", "Show resources in game", "Afficher les ressources en jeu"), ref Settings.ShowVitalsOverlay);
 
             ImGui.Spacing();
-            ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.input_device", "Input device", "Périphérique de contrôle"));
+            ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.input_device", "Input device", "Périphérique de contrôle"));
             DrawDeviceStatus();
 
             ImGui.Spacing();
-            ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.configured_keys", "Configured keys", "Touches configurées"));
-            ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.F("ui.flask.key", "Flask {0}: {1}", 1, Settings.Key1));
-            ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.F("ui.flask.key", "Flask {0}: {1}", 2, Settings.Key2));
+            ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.configured_keys", "Configured keys", "Touches configurées"));
+            ImGui.TextUnformatted(ExileCenter.Localization.OverlayLocalization.F("ui.flask.key", "Flask {0}: {1}", 1, Settings.Key1));
+            ImGui.TextUnformatted(ExileCenter.Localization.OverlayLocalization.F("ui.flask.key", "Flask {0}: {1}", 2, Settings.Key2));
         }
 
         private void DrawConfigurationColumn()
         {
-            ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.flask_triggers", "Flask triggers", "Déclenchement des flacons"));
-            GameHelper.Utils.ImGuiHelper.WrappedText(GameHelper.Localization.OverlayLocalization.T("ui.labels.choose_the_resources_to_monitor_each_flask_uses_its_own_key_and_delay", "Choose the resources to monitor. Each flask uses its own key and delay."));
+            ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.flask_triggers", "Flask triggers", "Déclenchement des flacons"));
+            ExileCenter.Utils.ImGuiHelper.WrappedText(ExileCenter.Localization.OverlayLocalization.T("ui.labels.choose_the_resources_to_monitor_each_flask_uses_its_own_key_and_delay", "Choose the resources to monitor. Each flask uses its own key and delay."));
             ImGui.SetNextItemWidth(Math.Min(360, ImGui.GetContentRegionAvail().X));
             DrawLogicModeCombo();
             ImGui.Spacing();
             DrawThresholdSliders();
             ImGui.Spacing();
-            ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.also_use_flasks_in_the_hideout", "Also use flasks in the hideout", "Utiliser aussi les flacons dans le repaire"), ref Settings.RunInHideout);
-            GameHelper.Utils.ImGuiHelper.WrappedText(GameHelper.Localization.OverlayLocalization.T("ui.labels.emergency_logout_is_configured_separately_in_protection", "Emergency logout is configured separately in Protection."));
+            ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.also_use_flasks_in_the_hideout", "Also use flasks in the hideout", "Utiliser aussi les flacons dans le repaire"), ref Settings.RunInHideout);
+            ExileCenter.Utils.ImGuiHelper.WrappedText(ExileCenter.Localization.OverlayLocalization.T("ui.labels.emergency_logout_is_configured_separately_in_protection", "Emergency logout is configured separately in Protection."));
         }
 
         private void DrawSafetySettings()
         {
-            ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.emergency_logout", "Emergency logout", "Déconnexion d'urgence"));
-            GameHelper.Utils.ImGuiHelper.WrappedText(GameHelper.Localization.OverlayLocalization.T("ui.labels.disconnects_when_an_enabled_resource_reaches_its_threshold_this_protec", "Disconnects when an enabled resource reaches its threshold. This protection also works when automatic flasks are disabled."));
+            ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.emergency_logout", "Emergency logout", "Déconnexion d'urgence"));
+            ExileCenter.Utils.ImGuiHelper.WrappedText(ExileCenter.Localization.OverlayLocalization.T("ui.labels.disconnects_when_an_enabled_resource_reaches_its_threshold_this_protec", "Disconnects when an enabled resource reaches its threshold. This protection also works when automatic flasks are disabled."));
             if (ImGui.BeginTable("AutoPotSafety", 3, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.SizingStretchProp))
             {
-                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.enabled", "Enabled", "Actif"), ImGuiTableColumnFlags.WidthFixed, 55);
-                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.resource", "Resource", "Ressource"));
-                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.disconnect_at", "Disconnect at", "Déconnexion à"), ImGuiTableColumnFlags.WidthStretch, 1.5f);
+                ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.enabled", "Enabled", "Actif"), ImGuiTableColumnFlags.WidthFixed, 55);
+                ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.resource", "Resource", "Ressource"));
+                ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.disconnect_at", "Disconnect at", "Déconnexion à"), ImGuiTableColumnFlags.WidthStretch, 1.5f);
                 ImGui.TableHeadersRow();
                 DrawSafetyLogoutRow(ref Settings.HpDisconnectEnabled, ref Settings.HpDisconnectPercent, "hpdc", "Vie");
                 DrawSafetyLogoutRow(ref Settings.EsDisconnectEnabled, ref Settings.EsDisconnectPercent, "esdc", "Bouclier d'énergie");
@@ -240,51 +240,51 @@ namespace Autopot
                 ImGui.EndTable();
             }
             ImGui.Spacing();
-            ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.safe_return", "Safe return", "Revenir en sécurité"));
-            if (ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.safe_return_to_hideout", "Safe return to hideout", "Retour sécurisé au repaire"), ref Settings.ReturnToHideoutAfterLogout))
+            ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.safe_return", "Safe return", "Revenir en sécurité"));
+            if (ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.safe_return_to_hideout", "Safe return to hideout", "Retour sécurisé au repaire"), ref Settings.ReturnToHideoutAfterLogout))
             {
                 if (!Settings.ReturnToHideoutAfterLogout) Settings.HideoutReturnPending = false;
             }
-            GameHelper.Utils.ImGuiHelper.WrappedText(GameHelper.Localization.OverlayLocalization.T("ui.labels.after_logout_select_your_character_and_use_return_to_hideout_in_the_au", "After logout, select your character and use Return to hideout in the AutoPot panel. The button uses Ctrl + click on Play. If no hideout is available, the game returns you to town."));
-            GameHelper.Utils.ImGuiHelper.WrappedText(GameHelper.Localization.OverlayLocalization.T("ui.labels.returning_to_the_map_is_interrupted_while_the_hideout_return_is_pendin", "Returning to the map is interrupted while the hideout return is pending."));
+            ExileCenter.Utils.ImGuiHelper.WrappedText(ExileCenter.Localization.OverlayLocalization.T("ui.labels.after_logout_select_your_character_and_use_return_to_hideout_in_the_au", "After logout, select your character and use Return to hideout in the AutoPot panel. The button uses Ctrl + click on Play. If no hideout is available, the game returns you to town."));
+            ExileCenter.Utils.ImGuiHelper.WrappedText(ExileCenter.Localization.OverlayLocalization.T("ui.labels.returning_to_the_map_is_interrupted_while_the_hideout_return_is_pendin", "Returning to the map is interrupted while the hideout return is pending."));
             bool configured = HasReturnPosition(Settings.HideoutPlayPosition, Settings.HideoutPlayWindowSize);
             ImGui.TextColored(configured ? new Vector4(.35f, .85f, .6f, 1) : new Vector4(1, .75f, .3f, 1),
-                configured ? GameHelper.Localization.OverlayLocalization.T("ui.labels.play_button_saved", "Play button saved") : GameHelper.Localization.OverlayLocalization.T("ui.labels.one_time_setup_required", "One-time setup required"));
-            if (ImGui.Button(configured ? GameHelper.Localization.OverlayLocalization.T("ui.labels.move_saved_play_position", "Move saved Play position") : GameHelper.Localization.OverlayLocalization.T("ui.labels.save_play_button_position", "Save Play button position"))) capturePlayPosition = true;
-            GameHelper.Utils.ImGuiHelper.WrappedText(GameHelper.Localization.OverlayLocalization.T("ui.labels.at_character_selection_place_the_pointer_in_the_centre_of_play_and_pre", "At character selection, place the pointer in the centre of Play and press F8. This setup does not click or connect."));
+                configured ? ExileCenter.Localization.OverlayLocalization.T("ui.labels.play_button_saved", "Play button saved") : ExileCenter.Localization.OverlayLocalization.T("ui.labels.one_time_setup_required", "One-time setup required"));
+            if (ImGui.Button(configured ? ExileCenter.Localization.OverlayLocalization.T("ui.labels.move_saved_play_position", "Move saved Play position") : ExileCenter.Localization.OverlayLocalization.T("ui.labels.save_play_button_position", "Save Play button position"))) capturePlayPosition = true;
+            ExileCenter.Utils.ImGuiHelper.WrappedText(ExileCenter.Localization.OverlayLocalization.T("ui.labels.at_character_selection_place_the_pointer_in_the_centre_of_play_and_pre", "At character selection, place the pointer in the centre of Play and press F8. This setup does not click or connect."));
             if (!string.IsNullOrEmpty(returnStatus)) ImGui.TextWrapped(returnStatus);
             ImGui.Spacing();
-            ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.re_arm_protection", "Re-arm protection", "Réarmement de la protection"));
+            ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.re_arm_protection", "Re-arm protection", "Réarmement de la protection"));
             ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
-            ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.delay_after_logout", "Delay after logout"));
+            ImGui.TextUnformatted(ExileCenter.Localization.OverlayLocalization.T("ui.labels.delay_after_logout", "Delay after logout"));
             ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
             ImGui.SliderInt("##SafetyLogoutCooldown", ref Settings.SafetyLogoutCooldownSeconds, 0, 600,
-                Settings.SafetyLogoutCooldownSeconds <= 0 ? GameHelper.Localization.OverlayLocalization.T("ui.labels.disabled", "Disabled") : "%d s");
-            ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.re_arm_after_resources_recover", "Re-arm after resources recover", "Réarmer après récupération"), ref Settings.SafetyLogoutRequireRecovery);
-            GameHelper.Utils.ImGuiHelper.WrappedText(GameHelper.Localization.OverlayLocalization.T("ui.labels.prevents_repeated_logouts_when_you_reconnect_with_a_resource_still_bel", "Prevents repeated logouts when you reconnect with a resource still below its threshold."));
+                Settings.SafetyLogoutCooldownSeconds <= 0 ? ExileCenter.Localization.OverlayLocalization.T("ui.labels.disabled", "Disabled") : "%d s");
+            ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.re_arm_after_resources_recover", "Re-arm after resources recover", "Réarmer après récupération"), ref Settings.SafetyLogoutRequireRecovery);
+            ExileCenter.Utils.ImGuiHelper.WrappedText(ExileCenter.Localization.OverlayLocalization.T("ui.labels.prevents_repeated_logouts_when_you_reconnect_with_a_resource_still_bel", "Prevents repeated logouts when you reconnect with a resource still below its threshold."));
         }
 
         private void DrawKeySettings()
         {
-            ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.flask_keys", "Flask keys", "Touches des flacons"));
+            ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.flask_keys", "Flask keys", "Touches des flacons"));
             DrawHotkeyRow("key1", "Flacon de vie / hybride", ref Settings.Key1Enabled, ref Settings.Key1);
             ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
-            ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.flask_1_delay", "Flask 1 delay"));
+            ImGui.TextUnformatted(ExileCenter.Localization.OverlayLocalization.T("ui.labels.flask_1_delay", "Flask 1 delay"));
             ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
             ImGui.SliderInt("##Key1Delay", ref Settings.Key1DelayMs, 100, 10000, "%d ms");
             ImGui.Spacing();
             DrawHotkeyRow("key2", "Flacon de mana / utilitaire", ref Settings.Key2Enabled, ref Settings.Key2);
             ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
-            ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.flask_2_delay", "Flask 2 delay"));
+            ImGui.TextUnformatted(ExileCenter.Localization.OverlayLocalization.T("ui.labels.flask_2_delay", "Flask 2 delay"));
             ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
             ImGui.SliderInt("##Key2Delay", ref Settings.Key2DelayMs, 100, 10000, "%d ms");
             ImGui.Spacing();
-            ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.controller", "Controller", "Manette"));
+            ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.controller", "Controller", "Manette"));
             DrawDeviceStatus();
         }
         private void DrawLogicModeCombo()
         {
-            ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.monitored_resources", "Monitored resources"));
+            ImGui.TextUnformatted(ExileCenter.Localization.OverlayLocalization.T("ui.labels.monitored_resources", "Monitored resources"));
             ImGui.SetNextItemWidth(-1);
             if (ImGui.BeginCombo("##LogicMode", DisplayLogicMode(Settings.LogicMode)))
             {
@@ -317,16 +317,16 @@ namespace Autopot
                     LogicMode.HybridLifeEs => "Vie + ES",
                     _ => "Vie",
                 };
-                if (hpLabel == "Vie") hpLabel = GameHelper.Localization.OverlayLocalization.T("ui.labels.life", "Life");
-                else if (hpLabel == "Vie + ES") hpLabel = GameHelper.Localization.OverlayLocalization.T("ui.labels.life_energy_shield", "Life + energy shield");
-                ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.flask_1_threshold", "Flask 1 threshold"));
+                if (hpLabel == "Vie") hpLabel = ExileCenter.Localization.OverlayLocalization.T("ui.labels.life", "Life");
+                else if (hpLabel == "Vie + ES") hpLabel = ExileCenter.Localization.OverlayLocalization.T("ui.labels.life_energy_shield", "Life + energy shield");
+                ImGui.TextUnformatted(ExileCenter.Localization.OverlayLocalization.T("ui.labels.flask_1_threshold", "Flask 1 threshold"));
                 ImGui.SetNextItemWidth(Math.Min(360, ImGui.GetContentRegionAvail().X));
                 ImGui.SliderInt("##hpthresh", ref Settings.HpThresholdPercent, 1, 99, $"{hpLabel} %d%%");
             }
 
             if (showMp)
             {
-                ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.flask_2_threshold", "Flask 2 threshold"));
+                ImGui.TextUnformatted(ExileCenter.Localization.OverlayLocalization.T("ui.labels.flask_2_threshold", "Flask 2 threshold"));
                 ImGui.SetNextItemWidth(Math.Min(360, ImGui.GetContentRegionAvail().X));
                 ImGui.SliderInt("##mpthresh", ref Settings.MpThresholdPercent, 1, 99, "Mana %d%%");
             }
@@ -334,7 +334,7 @@ namespace Autopot
 
         private static void DrawSafetyLogoutRow(ref bool enabled, ref int thresholdPercent, string id, string label)
         {
-            label = GameHelper.Localization.OverlayLocalization.T(id == "hpdc" ? "ui.labels.life" : id == "esdc" ? "ui.labels.energy_shield" : "ui.labels.mana", label);
+            label = ExileCenter.Localization.OverlayLocalization.T(id == "hpdc" ? "ui.labels.life" : id == "esdc" ? "ui.labels.energy_shield" : "ui.labels.mana", label);
             ImGui.TableNextRow();
             ImGui.TableNextColumn(); ImGui.Checkbox("##enabled" + id, ref enabled);
             ImGui.TableNextColumn(); ImGui.TextWrapped(label);
@@ -346,7 +346,7 @@ namespace Autopot
         }
         private static void DrawHotkeyRow(string id, string label, ref bool enabled, ref VK key)
         {
-            label = GameHelper.Localization.OverlayLocalization.T(id == "key1" ? "ui.labels.life_flask_hybrid_flask" : "ui.labels.mana_flask_utility_flask", label);
+            label = ExileCenter.Localization.OverlayLocalization.T(id == "key1" ? "ui.labels.life_flask_hybrid_flask" : "ui.labels.mana_flask_utility_flask", label);
             ImGui.Checkbox(label + "##enabled" + id, ref enabled);
             ImGui.BeginDisabled(!enabled);
             ImGui.SetNextItemWidth(Math.Min(250, ImGui.GetContentRegionAvail().X));
@@ -358,31 +358,31 @@ namespace Autopot
         {
             bool vigem = InputDeviceStatus.IsViGEmBusInstalled();
             if (vigem)
-                ImGui.TextColored(new Vector4(0.3f, 1f, 0.3f, 1f), GameHelper.Localization.OverlayLocalization.T("ui.labels.virtual_controller_driver_installed", "Virtual controller driver installed"));
+                ImGui.TextColored(new Vector4(0.3f, 1f, 0.3f, 1f), ExileCenter.Localization.OverlayLocalization.T("ui.labels.virtual_controller_driver_installed", "Virtual controller driver installed"));
             else
             {
-                ImGui.TextColored(new Vector4(1f, 0.35f, 0.35f, 1f), GameHelper.Localization.OverlayLocalization.T("ui.labels.virtual_controller_driver_missing", "Virtual controller driver missing"));
+                ImGui.TextColored(new Vector4(1f, 0.35f, 0.35f, 1f), ExileCenter.Localization.OverlayLocalization.T("ui.labels.virtual_controller_driver_missing", "Virtual controller driver missing"));
                 ImGui.SameLine();
-                if (ImGui.SmallButton(GameHelper.Localization.OverlayLocalization.Title("ui.labels.download_driver", "Download driver", "Télécharger le pilote")))
+                if (ImGui.SmallButton(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.download_driver", "Download driver", "Télécharger le pilote")))
                     System.Diagnostics.Process.Start(new ProcessStartInfo(InputDeviceStatus.ViGEmDownloadLink) { UseShellExecute = true });
             }
 
             if (InputDeviceStatus.IsControllerConnected())
-                ImGui.TextColored(new Vector4(0.3f, 1f, 0.3f, 1f), GameHelper.Localization.OverlayLocalization.T("ui.labels.controller_detected", "Controller detected"));
+                ImGui.TextColored(new Vector4(0.3f, 1f, 0.3f, 1f), ExileCenter.Localization.OverlayLocalization.T("ui.labels.controller_detected", "Controller detected"));
             else
-                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1f), GameHelper.Localization.OverlayLocalization.T("ui.labels.no_controller_detected", "No controller detected"));
+                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1f), ExileCenter.Localization.OverlayLocalization.T("ui.labels.no_controller_detected", "No controller detected"));
 
             ImGui.Spacing();
             if (Core.GHSettings.EnableControllerMode)
-                ImGui.TextColored(new Vector4(1f, 0.75f, 0.2f, 1f), GameHelper.Localization.OverlayLocalization.T("ui.labels.game_in_controller_mode", "Game in controller mode"));
+                ImGui.TextColored(new Vector4(1f, 0.75f, 0.2f, 1f), ExileCenter.Localization.OverlayLocalization.T("ui.labels.game_in_controller_mode", "Game in controller mode"));
             else
-                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1f), GameHelper.Localization.OverlayLocalization.T("ui.labels.game_in_keyboard_mouse_mode", "Game in keyboard/mouse mode"));
-            ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.in_controller_mode_enable_the_virtual_controller_to_send_flask_buttons", "In controller mode, enable the virtual controller to send flask buttons."));
+                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1f), ExileCenter.Localization.OverlayLocalization.T("ui.labels.game_in_keyboard_mouse_mode", "Game in keyboard/mouse mode"));
+            ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.in_controller_mode_enable_the_virtual_controller_to_send_flask_buttons", "In controller mode, enable the virtual controller to send flask buttons."));
 
             ImGui.Spacing();
-            ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.send_flasks_through_the_virtual_controller", "Send flasks through the virtual controller", "Envoyer les flacons via la manette virtuelle"), ref Settings.BypassControllerMode);
+            ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.send_flasks_through_the_virtual_controller", "Send flasks through the virtual controller", "Envoyer les flacons via la manette virtuelle"), ref Settings.BypassControllerMode);
             ImGuiHelper.ToolTip(
-                GameHelper.Localization.OverlayLocalization.T("ui.labels.creates_a_virtual_xbox_360_controller_via_vigembus_and_injects_button_", "Creates a virtual Xbox 360 controller via ViGEmBus and injects button presses\ninstead of keyboard events. Required when PoE2 is in controller mode.\nViGEmBus driver must be installed."));
+                ExileCenter.Localization.OverlayLocalization.T("ui.labels.creates_a_virtual_xbox_360_controller_via_vigembus_and_injects_button_", "Creates a virtual Xbox 360 controller via ViGEmBus and injects button presses\ninstead of keyboard events. Required when PoE2 is in controller mode.\nViGEmBus driver must be installed."));
 
             if (Settings.BypassControllerMode)
             {
@@ -394,9 +394,9 @@ namespace Autopot
                         $"ViGEm: {(_vigemStatus.Length > 0 ? _vigemStatus : "Initializing...")}");
 
                 ImGui.Spacing();
-                ImGui.TextDisabled(GameHelper.Localization.OverlayLocalization.T("ui.labels.life_flask_button", "Life flask button:"));
+                ImGui.TextDisabled(ExileCenter.Localization.OverlayLocalization.T("ui.labels.life_flask_button", "Life flask button:"));
                 DrawXboxButtonCombo("##ctrlbtn1", ref Settings.ControllerKey1Button);
-                ImGui.TextDisabled(GameHelper.Localization.OverlayLocalization.T("ui.labels.mana_flask_button", "Mana flask button:"));
+                ImGui.TextDisabled(ExileCenter.Localization.OverlayLocalization.T("ui.labels.mana_flask_button", "Mana flask button:"));
                 DrawXboxButtonCombo("##ctrlbtn2", ref Settings.ControllerKey2Button);
             }
         }
@@ -426,7 +426,7 @@ namespace Autopot
 
         private static void DrawVitalBar(string label, int percent, Vector4 fillColor)
         {
-            label = GameHelper.Localization.OverlayLocalization.T(label == "Vie" ? "ui.labels.life" : label is "Bouclier d'énergie" or "ES" ? "ui.labels.energy_shield" : "ui.labels.mana", label);
+            label = ExileCenter.Localization.OverlayLocalization.T(label == "Vie" ? "ui.labels.life" : label is "Bouclier d'énergie" or "ES" ? "ui.labels.energy_shield" : "ui.labels.mana", label);
             ImGui.Text($"{label}");
             var avail = ImGui.GetContentRegionAvail().X;
             var barHeight = 18f;
@@ -449,7 +449,7 @@ namespace Autopot
         {
             ImGui.SetNextWindowBgAlpha(0.55f);
             ImGui.SetNextWindowSize(new Vector2(220, 0), ImGuiCond.FirstUseEver);
-            if (!GameHelper.Ui.ImGuiTheme.BeginWindow($"AutoPot · Ressources###AutopotVitals",
+            if (!ExileCenter.Ui.ImGuiTheme.BeginWindow($"AutoPot · Ressources###AutopotVitals",
                     ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.AlwaysAutoResize))
             {
                 ImGui.End();
@@ -739,19 +739,19 @@ namespace Autopot
         {
             ImGui.SetNextWindowPos(new Vector2(ImGui.GetIO().DisplaySize.X * .5f, 30), ImGuiCond.Always, new Vector2(.5f, 0));
             ImGui.SetNextWindowSize(new Vector2(Math.Min(490, ImGui.GetIO().DisplaySize.X - 24), 0), ImGuiCond.Always);
-            if (GameHelper.Ui.ImGuiTheme.BeginWindow("AutoPot · Retour sécurisé###AutoPotReturn",
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow("AutoPot · Retour sécurisé###AutoPotReturn",
                 ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing |
                 ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse))
             {
-                ImGui.TextColored(new Vector4(.45f, .75f, 1, 1), GameHelper.Localization.OverlayLocalization.T("ui.labels.returning_to_the_hideout", "Returning to the hideout"));
-                GameHelper.Utils.ImGuiHelper.WrappedText(GameHelper.Localization.OverlayLocalization.T("ui.labels.choose_your_character_a_normal_click_on_play_may_return_you_to_the_map", "Choose your character. A normal click on Play may return you to the map."));
+                ImGui.TextColored(new Vector4(.45f, .75f, 1, 1), ExileCenter.Localization.OverlayLocalization.T("ui.labels.returning_to_the_hideout", "Returning to the hideout"));
+                ExileCenter.Utils.ImGuiHelper.WrappedText(ExileCenter.Localization.OverlayLocalization.T("ui.labels.choose_your_character_a_normal_click_on_play_may_return_you_to_the_map", "Choose your character. A normal click on Play may return you to the map."));
                 if (capturePlayPosition || !HasReturnPosition(Settings.HideoutPlayPosition, Settings.HideoutPlayWindowSize))
                 {
                     capturePlayPosition = true;
-                    GameHelper.Utils.ImGuiHelper.WrappedText(GameHelper.Localization.OverlayLocalization.T("ui.labels.place_the_pointer_in_the_centre_of_play_then_press_f8_to_save_its_posi", "Place the pointer in the centre of Play, then press F8 to save its position."));
+                    ExileCenter.Utils.ImGuiHelper.WrappedText(ExileCenter.Localization.OverlayLocalization.T("ui.labels.place_the_pointer_in_the_centre_of_play_then_press_f8_to_save_its_posi", "Place the pointer in the centre of Play, then press F8 to save its position."));
                 }
                 ImGui.BeginDisabled(!HasReturnPosition(Settings.HideoutPlayPosition, Settings.HideoutPlayWindowSize));
-                if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.return_to_hideout", "Return to hideout", "Retour au repaire"), new Vector2(-1, 0)))
+                if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.return_to_hideout", "Return to hideout", "Retour au repaire"), new Vector2(-1, 0)))
                 {
                     var window = GetReturnGameWindow();
                     if (window != IntPtr.Zero && Core.States.GameCurrentState == GameStateTypes.SelectCharacterState && ReturnSetForeground(window))
@@ -763,7 +763,7 @@ namespace Autopot
                 }
                 ImGui.EndDisabled();
                 if (!string.IsNullOrEmpty(returnStatus)) ImGui.TextWrapped(returnStatus);
-                GameHelper.Utils.ImGuiHelper.WrappedText(GameHelper.Localization.OverlayLocalization.T("ui.labels.you_can_also_hold_ctrl_and_click_play_yourself", "You can also hold Ctrl and click Play yourself."));
+                ExileCenter.Utils.ImGuiHelper.WrappedText(ExileCenter.Localization.OverlayLocalization.T("ui.labels.you_can_also_hold_ctrl_and_click_play_yourself", "You can also hold Ctrl and click Play yourself."));
             }
             ImGui.End();
         }
@@ -962,20 +962,20 @@ namespace Autopot
 
         private static string DisplayLogicMode(LogicMode mode) => mode switch
         {
-            LogicMode.ManaAndLife => GameHelper.Localization.OverlayLocalization.T("ui.labels.life_mana", "Life + mana"),
-            LogicMode.LifeOnly => GameHelper.Localization.OverlayLocalization.T("ui.labels.life", "Life"),
-            LogicMode.EnergyShield => GameHelper.Localization.OverlayLocalization.T("ui.labels.energy_shield", "Energy shield"),
-            LogicMode.HybridLifeEs => GameHelper.Localization.OverlayLocalization.T("ui.labels.combined_life_and_energy_shield", "Combined life and energy shield"),
+            LogicMode.ManaAndLife => ExileCenter.Localization.OverlayLocalization.T("ui.labels.life_mana", "Life + mana"),
+            LogicMode.LifeOnly => ExileCenter.Localization.OverlayLocalization.T("ui.labels.life", "Life"),
+            LogicMode.EnergyShield => ExileCenter.Localization.OverlayLocalization.T("ui.labels.energy_shield", "Energy shield"),
+            LogicMode.HybridLifeEs => ExileCenter.Localization.OverlayLocalization.T("ui.labels.combined_life_and_energy_shield", "Combined life and energy shield"),
             LogicMode.ManaOnly => "Mana",
-            LogicMode.ManaAndEs => GameHelper.Localization.OverlayLocalization.T("ui.labels.energy_shield_mana", "Energy shield + mana"),
-            LogicMode.LifeEsMana => GameHelper.Localization.OverlayLocalization.T("ui.labels.life_energy_shield_mana", "Life + energy shield + mana"),
+            LogicMode.ManaAndEs => ExileCenter.Localization.OverlayLocalization.T("ui.labels.energy_shield_mana", "Energy shield + mana"),
+            LogicMode.LifeEsMana => ExileCenter.Localization.OverlayLocalization.T("ui.labels.life_energy_shield_mana", "Life + energy shield + mana"),
             _ => mode.ToString()
         };
 
         private static string LocalizeServiceStatus(string status) => status switch
         {
-            "Running" => GameHelper.Localization.OverlayLocalization.T("ui.labels.monitoring_active", "Monitoring active"),
-            "Stopped" => GameHelper.Localization.OverlayLocalization.T("ui.labels.paused", "Paused"),
+            "Running" => ExileCenter.Localization.OverlayLocalization.T("ui.labels.monitoring_active", "Monitoring active"),
+            "Stopped" => ExileCenter.Localization.OverlayLocalization.T("ui.labels.paused", "Paused"),
             _ => status,
         };
 
@@ -984,18 +984,18 @@ namespace Autopot
             if (string.IsNullOrEmpty(reason))
                 return reason;
 
-            if (reason.StartsWith("Game state is ", StringComparison.Ordinal)) return GameHelper.Localization.OverlayLocalization.T("ui.labels.waiting_for_your_character_in_a_game_area", "Waiting for your character in a game area.");
+            if (reason.StartsWith("Game state is ", StringComparison.Ordinal)) return ExileCenter.Localization.OverlayLocalization.T("ui.labels.waiting_for_your_character_in_a_game_area", "Waiting for your character in a game area.");
             return reason switch
             {
-                "Enable AutoPot to start monitoring." => GameHelper.Localization.OverlayLocalization.T("ui.labels.enable_automatic_flasks_to_start", "Enable automatic flasks to start."),
-                "Monitoring vitals and pressing configured keys." => GameHelper.Localization.OverlayLocalization.T("ui.labels.flasks_follow_the_configured_thresholds_and_keys", "Flasks follow the configured thresholds and keys."),
-                "Game window is not in the foreground." => GameHelper.Localization.OverlayLocalization.T("ui.labels.game_is_in_the_background", "Game is in the background."),
-                "Player is in town." => GameHelper.Localization.OverlayLocalization.T("ui.labels.you_are_in_a_safe_area", "You are in a safe area."),
-                "Cannot read player Life component." => GameHelper.Localization.OverlayLocalization.T("ui.labels.character_resources_are_unreadable", "Character resources are unreadable."),
-                "Player is dead." => GameHelper.Localization.OverlayLocalization.T("ui.labels.character_is_dead", "Character is dead."),
-                "Player has grace period." => GameHelper.Localization.OverlayLocalization.T("ui.labels.temporary_protection_after_loading", "Temporary protection after loading."),
+                "Enable AutoPot to start monitoring." => ExileCenter.Localization.OverlayLocalization.T("ui.labels.enable_automatic_flasks_to_start", "Enable automatic flasks to start."),
+                "Monitoring vitals and pressing configured keys." => ExileCenter.Localization.OverlayLocalization.T("ui.labels.flasks_follow_the_configured_thresholds_and_keys", "Flasks follow the configured thresholds and keys."),
+                "Game window is not in the foreground." => ExileCenter.Localization.OverlayLocalization.T("ui.labels.game_is_in_the_background", "Game is in the background."),
+                "Player is in town." => ExileCenter.Localization.OverlayLocalization.T("ui.labels.you_are_in_a_safe_area", "You are in a safe area."),
+                "Cannot read player Life component." => ExileCenter.Localization.OverlayLocalization.T("ui.labels.character_resources_are_unreadable", "Character resources are unreadable."),
+                "Player is dead." => ExileCenter.Localization.OverlayLocalization.T("ui.labels.character_is_dead", "Character is dead."),
+                "Player has grace period." => ExileCenter.Localization.OverlayLocalization.T("ui.labels.temporary_protection_after_loading", "Temporary protection after loading."),
                 "Player is in hideout (enable 'Run in hideout' to allow)." =>
-                    GameHelper.Localization.OverlayLocalization.T("ui.labels.flasks_are_paused_in_the_hideout", "Flasks are paused in the hideout."),
+                    ExileCenter.Localization.OverlayLocalization.T("ui.labels.flasks_are_paused_in_the_hideout", "Flasks are paused in the hideout."),
                 _ => reason,
             };
         }

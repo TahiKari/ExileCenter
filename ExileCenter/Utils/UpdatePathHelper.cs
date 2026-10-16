@@ -3,7 +3,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
-namespace GameHelper.Utils
+namespace ExileCenter.Utils
 {
     // Shared with the standalone PowerShell installer; keep compatible with its C# compiler.
     public static class UpdatePathHelper

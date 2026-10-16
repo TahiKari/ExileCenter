@@ -1,7 +1,7 @@
 using System;
 using System.Numerics;
-using GameHelper.Localization;
-using GameHelper.RemoteEnums;
+using ExileCenter.Localization;
+using ExileCenter.RemoteEnums;
 using ImGuiNET;
 using AuraTracker;
 

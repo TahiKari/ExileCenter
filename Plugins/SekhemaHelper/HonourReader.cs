@@ -1,4 +1,4 @@
-using GameHelper;
+using ExileCenter;
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;

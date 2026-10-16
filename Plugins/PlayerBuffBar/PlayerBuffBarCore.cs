@@ -8,12 +8,12 @@ namespace PlayerBuffBar
     using System.Numerics;
     using System.Runtime.InteropServices;
     using System.Text;
-    using GameHelper;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.Utils;
     using GameOffsets.Objects.Components;
     using ImGuiNET;
     using Newtonsoft.Json;
@@ -802,7 +802,7 @@ namespace PlayerBuffBar
             ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0f);
             ImGui.PushStyleColor(ImGuiCol.WindowBg, Vector4.Zero);
 
-            if (!GameHelper.Ui.ImGuiTheme.BeginWindow(
+            if (!ExileCenter.Ui.ImGuiTheme.BeginWindow(
                     $"###PlayerBuffBarDummy_{windowId}",
                     ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove |
                     ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoBackground))

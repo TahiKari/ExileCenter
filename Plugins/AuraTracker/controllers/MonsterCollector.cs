@@ -5,12 +5,12 @@ using System.Numerics;
 using System.Text;
 using System.Text.RegularExpressions;
 using AuraTracker.util;
-using GameHelper.RemoteEnums;
-using GameHelper.RemoteEnums.Entity;
-using GameHelper.RemoteObjects;
-using GameHelper.RemoteObjects.Components;
-using GameHelper.RemoteObjects.States;
-using GameHelper.RemoteObjects.States.InGameStateObjects;
+using ExileCenter.RemoteEnums;
+using ExileCenter.RemoteEnums.Entity;
+using ExileCenter.RemoteObjects;
+using ExileCenter.RemoteObjects.Components;
+using ExileCenter.RemoteObjects.States;
+using ExileCenter.RemoteObjects.States.InGameStateObjects;
 namespace AuraTracker.controllers;
 
 internal sealed class MonsterCollector

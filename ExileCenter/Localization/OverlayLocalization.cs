@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Localization
+namespace ExileCenter.Localization
 {
     using System;
     using System.Collections.Generic;

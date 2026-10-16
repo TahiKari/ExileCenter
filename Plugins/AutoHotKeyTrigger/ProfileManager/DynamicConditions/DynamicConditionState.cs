@@ -7,9 +7,9 @@ namespace AutoHotKeyTrigger.ProfileManager.DynamicConditions
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States;
     using ClickableTransparentOverlay.Win32;
     using AutoHotKeyTrigger.ProfileManager.DynamicConditions.Interface;
     using System.Linq.Dynamic.Core.CustomTypeProviders;

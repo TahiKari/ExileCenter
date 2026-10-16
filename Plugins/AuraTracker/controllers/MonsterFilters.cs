@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using GameHelper.RemoteEnums;
-using GameHelper.RemoteObjects;
-using GameHelper.RemoteObjects.Components;
-using GameHelper.RemoteObjects.States.InGameStateObjects;
+using ExileCenter.RemoteEnums;
+using ExileCenter.RemoteObjects;
+using ExileCenter.RemoteObjects.Components;
+using ExileCenter.RemoteObjects.States.InGameStateObjects;
 
 namespace AuraTracker.controllers;
 

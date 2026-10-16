@@ -2,12 +2,12 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteObjects.UiElement
+namespace ExileCenter.RemoteObjects.UiElement
 {
     using System;
     using System.Diagnostics.CodeAnalysis;
     using System.Numerics;
-    using GameHelper.Cache;
+    using ExileCenter.Cache;
     using GameOffsets.Objects.UiElement;
     using ImGuiNET;
     using Ui;

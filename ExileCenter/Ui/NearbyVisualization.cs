@@ -3,13 +3,13 @@
 // </copyright>
 
 
-namespace GameHelper.Ui
+namespace ExileCenter.Ui
 {
     using Coroutine;
-    using GameHelper.CoroutineEvents;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.Utils;
+    using ExileCenter.CoroutineEvents;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.Utils;
     using GameOffsets.Objects.States.InGameState;
     using ImGuiNET;
     using System;
@@ -37,7 +37,7 @@ namespace GameHelper.Ui
             var smallColor = ImGuiHelper.Color(255, 255, 0, 255);
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnRender);
+                yield return new Wait(ExileCenterEvents.OnRender);
                 try
                 {
                     // F-179: snapshot the 4-level chain into locals; treat any null /

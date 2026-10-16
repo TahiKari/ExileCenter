@@ -1,9 +1,9 @@
 namespace Atlas2
 {
-    using GameHelper;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
-    using GameHelper.RemoteObjects.UiElement;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.RemoteObjects.UiElement;
+    using ExileCenter.Utils;
     using GameOffsets.Natives;
     using GameOffsets.Objects.UiElement;
     using ImGuiNET;
@@ -66,7 +66,7 @@ namespace Atlas2
         [DllImport("kernel32.dll")]
         private static extern bool CloseHandle(IntPtr handle);
         private string L(string key, string fallback) => PluginText.T(key, fallback);
-        private GameHelper.Localization.PluginLocalization Loc => PluginText;
+        private ExileCenter.Localization.PluginLocalization Loc => PluginText;
 
         private static string ReadWideString(nint address, int stringLength)
         {
@@ -1242,7 +1242,7 @@ namespace Atlas2
 
             ImGui.SetNextWindowSize(new Vector2(760, 500), ImGuiCond.FirstUseEver);
             bool open = true;
-            if (!GameHelper.Ui.ImGuiTheme.BeginWindow(this.Loc.Title("atlas.planner_title", "Head of the king Rewards", "AtlasRitualPlanner"), ref open))
+            if (!ExileCenter.Ui.ImGuiTheme.BeginWindow(this.Loc.Title("atlas.planner_title", "Head of the king Rewards", "AtlasRitualPlanner"), ref open))
             {
                 ImGui.End();
                 return;

@@ -1,11 +1,11 @@
 namespace SekhemaHelper
 {
-    using GameHelper;
-    using GameHelper.Localization;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.Localization;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Newtonsoft.Json;
     using System;
@@ -279,43 +279,43 @@ namespace SekhemaHelper
                         ColorSwatch("Debug Background", ref Settings.BackgroundColor);
                         // Force the Death-crystal route through an explicit crystal-id set (ignores active/collected
                         // state + room filter), to reproduce a routing bug with a known crystal set.
-                        ImGui.InputText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.force_crystal_ids_route_override", "Force Crystal IDs (route override)", "Force Crystal IDs (route override)"), ref Settings.HazardDebugCrystalIds, 128);
-                        ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.comma_space_separated_crystal_entity_ids_read_from_the_yellow_grey_id_", "Comma/space separated crystal entity ids (read from the yellow/grey id labels). Empty = normal room route."));
-                        ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.paint_walkable_grid_where_can_i_walk", "Paint Walkable Grid (where can I walk)", "Paint Walkable Grid (where can I walk)"), ref Settings.HazardDebugDrawWalkable);
-                        ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.green_cells_the_game_marks_walkable_around_the_player_shows_why_an_a_l", "Green = cells the game marks walkable, around the player. Shows why an A* leg goes straight (player on a non-walkable cell)."));
+                        ImGui.InputText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.force_crystal_ids_route_override", "Force Crystal IDs (route override)", "Force Crystal IDs (route override)"), ref Settings.HazardDebugCrystalIds, 128);
+                        ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.comma_space_separated_crystal_entity_ids_read_from_the_yellow_grey_id_", "Comma/space separated crystal entity ids (read from the yellow/grey id labels). Empty = normal room route."));
+                        ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.paint_walkable_grid_where_can_i_walk", "Paint Walkable Grid (where can I walk)", "Paint Walkable Grid (where can I walk)"), ref Settings.HazardDebugDrawWalkable);
+                        ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.green_cells_the_game_marks_walkable_around_the_player_shows_why_an_a_l", "Green = cells the game marks walkable, around the player. Shows why an A* leg goes straight (player on a non-walkable cell)."));
                         if (Settings.HazardDebugDrawWalkable)
-                            ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.walkable_paint_radius", "Walkable Paint Radius", "Walkable Paint Radius"), ref Settings.HazardDebugWalkableRadius, 50f, 1200f, "%.0f");
+                            ImGui.SliderFloat(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.walkable_paint_radius", "Walkable Paint Radius", "Walkable Paint Radius"), ref Settings.HazardDebugWalkableRadius, 50f, 1200f, "%.0f");
                         // Dump every room's content FK pairs (+ the FloorData content vector) to
                         // config\fk_dump.txt on the next frame the Trial map is open.
-                        if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.dump_fk_config_fk_dump_txt", "Dump FK -> config\\fk_dump.txt", "Dump FK -> config\\fk_dump.txt")))
+                        if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.dump_fk_config_fk_dump_txt", "Dump FK -> config\\fk_dump.txt", "Dump FK -> config\\fk_dump.txt")))
                             this.dumpRequested = true;
-                        if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.dump_honour_candidates_config_honour_scan_txt", "Dump Honour candidates -> config\\honour_scan.txt", "Dump Honour candidates -> config\\honour_scan.txt")))
+                        if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.dump_honour_candidates_config_honour_scan_txt", "Dump Honour candidates -> config\\honour_scan.txt", "Dump Honour candidates -> config\\honour_scan.txt")))
                             this.scanHonourRequested = true;
-                        ImGui.InputInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.honour_current", "Honour current", "Honour current"), ref this.honourScanCur);
-                        ImGui.InputInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.honour_max", "Honour max", "Honour max"), ref this.honourScanMax);
-                        if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.locate_honour_by_value_config_honour_byvalue_txt", "Locate Honour by value -> config\\honour_byvalue.txt", "Locate Honour by value -> config\\honour_byvalue.txt")) &&
+                        ImGui.InputInt(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.honour_current", "Honour current", "Honour current"), ref this.honourScanCur);
+                        ImGui.InputInt(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.honour_max", "Honour max", "Honour max"), ref this.honourScanMax);
+                        if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.locate_honour_by_value_config_honour_byvalue_txt", "Locate Honour by value -> config\\honour_byvalue.txt", "Locate Honour by value -> config\\honour_byvalue.txt")) &&
                             this.honourScanCur > 0 && this.honourScanMax > 0)
                             this.scanHonourByValueRequested = true;
-                        if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.dump_ui_fingerprints_config_ui_fp_dump_txt", "Dump UI fingerprints -> config\\ui_fp_dump.txt", "Dump UI fingerprints -> config\\ui_fp_dump.txt")))
+                        if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.dump_ui_fingerprints_config_ui_fp_dump_txt", "Dump UI fingerprints -> config\\ui_fp_dump.txt", "Dump UI fingerprints -> config\\ui_fp_dump.txt")))
                             this.dumpUiFpRequested = true;
                     
                         // Whole-floor read (SanctumPlugin picks + placement records): draw every room (incl.
                         // UI-hidden) on the large map, and dump the floor + raw door bytes for edge-graph RE.
-                        ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.draw_floor_plots_all_rooms_on_large_map", "Draw floor plots (all rooms on large map)", "Draw floor plots (all rooms on large map)"), ref Settings.DebugDrawFloorPlots);
-                        ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.reads_the_client_s_terrain_layout_every_room_s_type_reward_at_its_worl", "Reads the client's terrain layout: every room's type+reward at its world position, incl. rooms the UI hides. Open the large map to see it."));
-                        if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.dump_floor_config_sekhema_floor_dump_txt", "Dump floor -> config\\sekhema_floor_dump.txt", "Dump floor -> config\\sekhema_floor_dump.txt")))
+                        ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.draw_floor_plots_all_rooms_on_large_map", "Draw floor plots (all rooms on large map)", "Draw floor plots (all rooms on large map)"), ref Settings.DebugDrawFloorPlots);
+                        ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.reads_the_client_s_terrain_layout_every_room_s_type_reward_at_its_worl", "Reads the client's terrain layout: every room's type+reward at its world position, incl. rooms the UI hides. Open the large map to see it."));
+                        if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.dump_floor_config_sekhema_floor_dump_txt", "Dump floor -> config\\sekhema_floor_dump.txt", "Dump floor -> config\\sekhema_floor_dump.txt")))
                             this.dumpFloorRequested = true;
                     
                         // --- Node->physical-room mapping research (open the Trial map for each action) ---
-                        ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.room_mapping_research", "Room-mapping research", "Room-mapping research"));
-                        ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.collect_ground_truth_to_reverse_the_server_s_layer_room_physical_room_", "Collect ground-truth to reverse the server's (layer,room)->physical-room assignment. Keep the Trial map OPEN when pressing these.\n1) enter a fresh floor -> New floor snapshot\n2) in each room you visit -> Record current room\n3) at floor end -> Save floor\nRepeat for 8-15 floors; data lands in config\\sekhema_research\\dataset.jsonl."));
-                        if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.1_new_floor_snapshot", "1) New floor snapshot", "1) New floor snapshot")))
+                        ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.room_mapping_research", "Room-mapping research", "Room-mapping research"));
+                        ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.collect_ground_truth_to_reverse_the_server_s_layer_room_physical_room_", "Collect ground-truth to reverse the server's (layer,room)->physical-room assignment. Keep the Trial map OPEN when pressing these.\n1) enter a fresh floor -> New floor snapshot\n2) in each room you visit -> Record current room\n3) at floor end -> Save floor\nRepeat for 8-15 floors; data lands in config\\sekhema_research\\dataset.jsonl."));
+                        if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.1_new_floor_snapshot", "1) New floor snapshot", "1) New floor snapshot")))
                             this.researchNewFloorRequested = true;
                         ImGui.SameLine();
-                        if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.2_record_current_room", "2) Record current room", "2) Record current room")))
+                        if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.2_record_current_room", "2) Record current room", "2) Record current room")))
                             this.researchRecordRoomRequested = true;
                         ImGui.SameLine();
-                        if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.3_save_floor_dataset_jsonl", "3) Save floor -> dataset.jsonl", "3) Save floor -> dataset.jsonl")))
+                        if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.3_save_floor_dataset_jsonl", "3) Save floor -> dataset.jsonl", "3) Save floor -> dataset.jsonl")))
                             this.researchSaveFloorRequested = true;
                         ImGui.TextDisabled(FloorResearch.Status);
                     }

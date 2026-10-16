@@ -7,13 +7,13 @@ namespace AmanamuVoidAlert
     using System.Linq;
     using System.Numerics;
     using Coroutine;
-    using GameHelper;
-    using GameHelper.CoroutineEvents;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteEnums.Entity;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter;
+    using ExileCenter.CoroutineEvents;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteEnums.Entity;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
     using ImGuiNET;
     using Newtonsoft.Json;
 
@@ -432,7 +432,7 @@ namespace AmanamuVoidAlert
         private void DrawDebugWindow(AreaInstance area)
         {
             ImGui.SetNextWindowSize(new Vector2(820f, 460f), ImGuiCond.FirstUseEver);
-            if (!GameHelper.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("debug.window_title", "Amanamu Void Alert Debug", "AmanamuVoidAlertDebug"), ref this.Settings.ShowDebugWindow))
+            if (!ExileCenter.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("debug.window_title", "Amanamu Void Alert Debug", "AmanamuVoidAlertDebug"), ref this.Settings.ShowDebugWindow))
             {
                 ImGui.End();
                 return;

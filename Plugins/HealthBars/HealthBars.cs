@@ -9,14 +9,14 @@ namespace HealthBars
     using System.IO;
     using System.Numerics;
     using Coroutine;
-    using GameHelper;
-    using GameHelper.CoroutineEvents;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteEnums.Entity;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.CoroutineEvents;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteEnums.Entity;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Newtonsoft.Json;
 

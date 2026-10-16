@@ -1,4 +1,4 @@
-using GameHelper.RemoteObjects.UiElement;
+using ExileCenter.RemoteObjects.UiElement;
 using GameOffsets.Natives;
 using System;
 using System.Collections.Generic;

@@ -4,7 +4,7 @@ namespace Atlas
     using System.IO;
     using System.Runtime.InteropServices;
     using ClickableTransparentOverlay;
-    using GameHelper;
+    using ExileCenter;
     using ImGuiNET;
 
     /// <summary>

@@ -2,9 +2,9 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Plugin
+namespace ExileCenter.Plugin
 {
-    using GameHelper.Localization;
+    using ExileCenter.Localization;
     using System;
     using System.Collections.Generic;
     using System.Numerics;
@@ -45,7 +45,7 @@ namespace GameHelper.Plugin
                 {
                     foreach (var page in pages)
                     {
-                        using var theme = GameHelper.Ui.ImGuiTheme.UsePluginTheme(this.GetType().Assembly.GetName().Name + "/" + page.key);
+                        using var theme = ExileCenter.Ui.ImGuiTheme.UsePluginTheme(this.GetType().Assembly.GetName().Name + "/" + page.key);
                         var title = OverlayLocalization.T("settings.section." + page.key, page.title);
                         if (!ImGui.BeginTabItem(title + "###" + page.key)) continue;
                         try

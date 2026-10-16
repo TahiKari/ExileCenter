@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Ui;
+namespace ExileCenter.Ui;
 
 using System;
 using System.Threading;
@@ -49,14 +49,14 @@ public static class PerformanceProfiler
     {
         while (true)
         {
-            yield return new Wait(GameHelperEvents.OnPostRender);
+            yield return new Wait(ExileCenterEvents.OnPostRender);
             if (!Core.GHSettings.ShowPerfProfiler)
             {
                 continue;
             }
 
             ImGui.SetNextWindowSize(new Vector2(700, 500), ImGuiCond.FirstUseEver);
-            if (GameHelper.Ui.ImGuiTheme.BeginWindow("Performance Profiler", ref Core.GHSettings.ShowPerfProfiler, ImGuiWindowFlags.MenuBar))
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow("Performance Profiler", ref Core.GHSettings.ShowPerfProfiler, ImGuiWindowFlags.MenuBar))
             {
                 if (ImGui.BeginMenuBar())
                 {

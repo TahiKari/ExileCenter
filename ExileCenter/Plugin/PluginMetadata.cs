@@ -1,4 +1,4 @@
-﻿namespace GameHelper.Plugin
+﻿namespace ExileCenter.Plugin
 {
     /// <summary>
     ///     Container for plugin metadata.

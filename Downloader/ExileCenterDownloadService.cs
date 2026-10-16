@@ -23,7 +23,7 @@ namespace Downloader
 
 
 
-    internal sealed class GameHelperDownloadService
+    internal sealed class ExileCenterDownloadService
 
     {
 
@@ -73,15 +73,15 @@ namespace Downloader
 
         [
 
-            "GameHelper.exe",
+            "ExileCenter.exe",
 
-            "AsmResolver.dll",
+            "ExileCenter.dll",
 
-            "AsmResolver.PE.dll",
+            "ExileCenter.deps.json",
 
-            "AsmResolver.PE.File.dll",
+            "ExileCenter.runtimeconfig.json",
 
-            "AsmResolver.PE.Win32Resources.dll",
+
 
         ];
 
@@ -93,7 +93,7 @@ namespace Downloader
 
             var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
 
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("GameHelperDownloader/1.0");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("ExileCenterDownloader/1.0");
 
             return client;
 
@@ -428,7 +428,7 @@ namespace Downloader
 
                 Path.Combine(targetDir, "VERSION.txt"),
 
-                $"GameHelper {version}\nDownloaded: {DateTime.UtcNow:o}",
+                $"ExileCenter {version}\nDownloaded: {DateTime.UtcNow:o}",
 
                 cancellationToken).ConfigureAwait(false);
 
@@ -489,39 +489,25 @@ namespace Downloader
 
 
         private async Task<JObject> FetchManifestAsync(CancellationToken cancellationToken)
-
         {
-
-            using var manifestRequest = new HttpRequestMessage(HttpMethod.Get, DownloadConfig.ManifestUrl);
-
-            using var manifestResponse = await HttpClient.SendAsync(manifestRequest, cancellationToken).ConfigureAwait(false);
-
-            manifestResponse.EnsureSuccessStatusCode();
-
-            var content = await manifestResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-
-            using var signatureRequest = new HttpRequestMessage(HttpMethod.Get, DownloadConfig.ManifestSignatureUrl);
-
-            using var signatureResponse = await HttpClient.SendAsync(signatureRequest, cancellationToken).ConfigureAwait(false);
-
-            signatureResponse.EnsureSuccessStatusCode();
-
-            var signature = await signatureResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-
-            if (!UpdateManifestVerifier.TryVerify(content, signature, out var verifyError))
-
-            {
-
-                throw new InvalidOperationException(verifyError);
-
-            }
-
-            return JObject.Parse(content);
-
+            string repository = UpdateRepositoryConfig.Repository;
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{repository}/releases/latest");
+            using var response = await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            var release = JObject.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+            string tag = release["tag_name"]?.ToString() ?? "";
+            var assets = release["assets"]?.OfType<JObject>().Where(a => a["name"]?.ToString() == "ExileCenter-Complete-win-x64.zip" && a["state"]?.ToString() == "uploaded").ToArray();
+            if (assets?.Length != 1 || release["draft"]?.Value<bool>() == true || release["prerelease"]?.Value<bool>() == true ||
+                !System.Text.RegularExpressions.Regex.IsMatch(tag, @"^v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?$"))
+                throw new InvalidDataException("No complete ExileCenter release available.");
+            string expectedUrl = $"https://github.com/{repository}/releases/download/{Uri.EscapeDataString(tag)}/ExileCenter-Complete-win-x64.zip";
+            string digest = assets[0]["digest"]?.ToString() ?? "";
+            if (assets[0]["browser_download_url"]?.ToString() != expectedUrl ||
+                !System.Text.RegularExpressions.Regex.IsMatch(digest, "^sha256:[a-fA-F0-9]{64}$"))
+                throw new InvalidDataException("Invalid release URL or SHA256.");
+            return new JObject { ["version"] = tag, ["published"] = release["published_at"],
+                ["package"] = new JObject { ["name"] = "ExileCenter-Complete-win-x64.zip", ["hash"] = digest[7..], ["size"] = assets[0]["size"] } };
         }
-
-
-
         private async Task DownloadFileAsync(
 
             string url,

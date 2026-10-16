@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteEnums
+namespace ExileCenter.RemoteEnums
 {
     using Newtonsoft.Json;
     using Newtonsoft.Json.Converters;

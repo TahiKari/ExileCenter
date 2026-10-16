@@ -2,15 +2,15 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Settings
+namespace ExileCenter.Settings
 {
     using System.Collections.Generic;
     using System.IO;
     using ClickableTransparentOverlay;
     using ClickableTransparentOverlay.Win32;
-    using GameHelper.Localization;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteEnums.Entity;
+    using ExileCenter.Localization;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteEnums.Entity;
     using Newtonsoft.Json;
 
     /// <summary>

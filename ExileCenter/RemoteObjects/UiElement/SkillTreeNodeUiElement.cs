@@ -2,10 +2,10 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteObjects.UiElement
+namespace ExileCenter.RemoteObjects.UiElement
 {
     using System;
-    using GameHelper.Cache;
+    using ExileCenter.Cache;
     using GameOffsets.Objects.UiElement;
     using ImGuiNET;
 

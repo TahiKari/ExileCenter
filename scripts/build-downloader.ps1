@@ -1,4 +1,4 @@
-# Erstellt GameHelperDownloader.exe (einzelne Datei, laedt oeffentlich von GitHub Releases).
+# Erstellt ExileCenterDownloader.exe (einzelne Datei, laedt oeffentlich von GitHub Releases).
 
 param(
 
@@ -22,7 +22,7 @@ $OutDir = Join-Path $Root "publish-downloader"
 
 
 
-Write-Host "=== GameHelperDownloader bauen ($Configuration) ===" -ForegroundColor Cyan
+Write-Host "=== ExileCenterDownloader bauen ($Configuration) ===" -ForegroundColor Cyan
 
 Write-Host "Download-Quelle: GitHub Releases (oeffentlich, kein Token)." -ForegroundColor DarkGray
 
@@ -76,9 +76,9 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish fehlgeschlagen" }
 
 
 
-$builtExe = Join-Path $OutDir "GameHelperDownloader.exe"
+$builtExe = Join-Path $OutDir "ExileCenterDownloader.exe"
 
-$rootExe = Join-Path $Root "GameHelperDownloader.exe"
+$rootExe = Join-Path $Root "ExileCenterDownloader.exe"
 
 Copy-Item $builtExe $rootExe -Force
 

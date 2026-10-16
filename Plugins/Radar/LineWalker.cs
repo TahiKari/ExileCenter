@@ -3,8 +3,8 @@ namespace Radar
     using System;
     using System.Collections.Generic;
     using System.Numerics;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
 
     /// <summary>
     /// Grid-space line walkability checker.

@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteObjects.States.InGameStateObjects
+namespace ExileCenter.RemoteObjects.States.InGameStateObjects
 {
     using System;
     using System.Collections.Concurrent;
@@ -17,9 +17,9 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
     using Components;
     using Coroutine;
     using CoroutineEvents;
-    using GameHelper.Cache;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteEnums.Entity;
+    using ExileCenter.Cache;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteEnums.Entity;
     using GameOffsets.Natives;
     using GameOffsets.Objects.States.InGameState;
     using ImGuiNET;
@@ -308,7 +308,7 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
                 foreach (var entity in this.AwakeEntities.Values)
                 {
                     if (!entity.IsValid || entity.Path != SekhemaRunTracker.EntranceDoorPath ||
-                        !entity.TryGetComponent<GameHelper.RemoteObjects.Components.StateMachine>(out var machine)) continue;
+                        !entity.TryGetComponent<ExileCenter.RemoteObjects.Components.StateMachine>(out var machine)) continue;
                     foreach (var state in machine.States)
                         if (state.Name == "open" && state.Value is 0 or 1)
                             this.SekhemaRun.ObserveGate(this.AreaHash, state.Value == 1, Environment.TickCount64);
@@ -339,9 +339,9 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
                 if (!entity.IsValid) continue;
                 bool mapPortal = entity.Path.Equals("Metadata/MiscellaneousObjects/MapPortal", StringComparison.OrdinalIgnoreCase);
                 if (!mapPortal && entity.Path.Equals("Metadata/MiscellaneousObjects/MultiplexPortal", StringComparison.OrdinalIgnoreCase)
-                    && entity.TryGetComponent<GameHelper.RemoteObjects.Components.StateMachine>(out var machine))
+                    && entity.TryGetComponent<ExileCenter.RemoteObjects.Components.StateMachine>(out var machine))
                     mapPortal = machine.States.Any(state => state.Name == "portal" && state.Value == 3);
-                if (mapPortal && entity.TryGetComponent<GameHelper.RemoteObjects.Components.Targetable>(out var target) && target.IsTargetable)
+                if (mapPortal && entity.TryGetComponent<ExileCenter.RemoteObjects.Components.Targetable>(out var target) && target.IsTargetable)
                     ids.Add(entity.Id);
             }
             this.mapPortals.Observe(Core.Process.Pid, this.AreaHash, ids, now);
@@ -1225,7 +1225,7 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.PerFrameDataUpdate);
+                yield return new Wait(ExileCenterEvents.PerFrameDataUpdate);
                 try
                 {
                     if (this.Address != IntPtr.Zero)

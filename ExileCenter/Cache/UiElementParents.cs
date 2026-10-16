@@ -3,18 +3,18 @@
 // </copyright>
 
 
-namespace GameHelper.Cache
+namespace ExileCenter.Cache
 {
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Diagnostics.CodeAnalysis;
     using Coroutine;
-    using GameHelper.RemoteObjects.UiElement;
-    using GameHelper.CoroutineEvents;
+    using ExileCenter.RemoteObjects.UiElement;
+    using ExileCenter.CoroutineEvents;
     using GameOffsets.Objects.UiElement;
     using ImGuiNET;
-    using GameHelper.RemoteEnums;
+    using ExileCenter.RemoteEnums;
     using System.Threading.Tasks;
 
     internal class UiElementParents
@@ -198,7 +198,7 @@ namespace GameHelper.Cache
         {
             while (true)
             {
-                yield return new(GameHelperEvents.OnClose);
+                yield return new(ExileCenterEvents.OnClose);
                 try
                 {
                     lock (this.cache)

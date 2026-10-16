@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteEnums
+namespace ExileCenter.RemoteEnums
 {
     /// <summary>
     ///     Gets all known states of the game.

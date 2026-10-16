@@ -2,11 +2,11 @@ namespace Launcher
 {
     using System;
     using System.IO;
-    public static class GameHelperFinder
+    public static class ExileCenterFinder
     {
         private const string AppExeName = "GameHelper.exe";
 
-        public static bool TryFindGameHelperExe(out string installDir, out string appExePath)
+        public static bool TryFindExileCenterExe(out string installDir, out string appExePath)
         {
             installDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             appExePath = Path.Join(installDir, AppExeName);

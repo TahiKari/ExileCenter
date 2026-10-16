@@ -11,24 +11,24 @@ if (-not (Test-Path -LiteralPath $CheckAssembly -PathType Leaf)) { throw "Missin
 
 # Children inherit this process-local error mode. No Windows-wide settings are changed.
 # https://learn.microsoft.com/windows/win32/api/errhandlingapi/nf-errhandlingapi-seterrormode
-if (-not ('GameHelperCheckErrorMode' -as [type])) {
+if (-not ('ExileCenterCheckErrorMode' -as [type])) {
     Add-Type -TypeDefinition @'
 using System.Runtime.InteropServices;
-public static class GameHelperCheckErrorMode {
+public static class ExileCenterCheckErrorMode {
     [DllImport("kernel32.dll")] public static extern uint GetErrorMode();
     [DllImport("kernel32.dll")] public static extern uint SetErrorMode(uint mode);
 }
 '@
 }
-$previousMode = [GameHelperCheckErrorMode]::GetErrorMode()
+$previousMode = [ExileCenterCheckErrorMode]::GetErrorMode()
 $checkExit = 1
 try {
     # SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX; failures still go to the console.
-    [void][GameHelperCheckErrorMode]::SetErrorMode($previousMode -bor 3)
+    [void][ExileCenterCheckErrorMode]::SetErrorMode($previousMode -bor 3)
     $ErrorActionPreference = 'Continue'
     & dotnet $CheckAssembly @CheckArguments
     $checkExit = $LASTEXITCODE
 } finally {
-    [void][GameHelperCheckErrorMode]::SetErrorMode($previousMode)
+    [void][ExileCenterCheckErrorMode]::SetErrorMode($previousMode)
 }
 exit $checkExit

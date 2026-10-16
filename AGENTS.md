@@ -5,7 +5,7 @@ Consulter ce fichier avant chaque intervention dans ce dépôt. Répondre en fra
 - Lire uniquement les fichiers nécessaires, appliquer un patch minimal et préserver les modifications existantes.
 - Aucun audit global, refactor massif ou installation de dépendances sans demande explicite.
 - Ne jamais reconstruire ni remplacer `GameOffsets.dll` ; conserver le binaire validé à l'identique.
-- Ne pas arrêter GameHelper, déplacer la souris ni cliquer dans le jeu pendant que l'utilisateur joue. Conserver l'arrêt de sécurité lorsque la souris bouge.
+- Ne pas arrêter ExileCenter (ni une ancienne instance GameHelper), déplacer la souris ni cliquer dans le jeu pendant que l'utilisateur joue. Conserver l'arrêt de sécurité lorsque la souris bouge.
 - Exécuter les fixtures .NET avec `scripts/run-check.ps1`, dans des dossiers de test isolés.
 
 ## Publication après chaque mise à jour de l'application

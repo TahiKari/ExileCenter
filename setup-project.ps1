@@ -3,7 +3,7 @@
 
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
-$Backup = "D:\ZusatzProgramme\Sicherung\Download\GameHelper2_v2.3.0_source"
+$Backup = "D:\ZusatzProgramme\Sicherung\Download\ExileCenter2_v2.3.0_source"
 
 if (-not (Test-Path $Backup)) {
     Write-Error "Backup nicht gefunden: $Backup"
@@ -49,7 +49,7 @@ function Copy-SourceTree {
 
 # Kern-Projekte
 @(
-    "GameHelper",
+    "ExileCenter",
     "GameOffsets",
     "Launcher",
     "Plugins\AutoHotKeyTrigger",
@@ -68,21 +68,21 @@ foreach ($file in @("Directory.Build.props", "NuGet.config", ".editorconfig")) {
     }
 }
 
-# GameHelper.App als interner Overlay-Name
+# ExileCenter.App als interner Overlay-Name
 $ghProj = Join-Path $Root "ExileCenter\ExileCenter.csproj"
 if (Test-Path $ghProj) {
     $xml = Get-Content $ghProj -Raw
-    if ($xml -notmatch '<AssemblyName>GameHelper.App</AssemblyName>') {
+    if ($xml -notmatch '<AssemblyName>ExileCenter.App</AssemblyName>') {
         $xml = $xml -replace '<TargetFramework>net10.0-windows</TargetFramework>', @'
 <TargetFramework>net10.0-windows</TargetFramework>
-    <AssemblyName>GameHelper.App</AssemblyName>
+    <AssemblyName>ExileCenter.App</AssemblyName>
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
 '@
         $xml = $xml -replace '(?s)<Target Name="CopyDocumentationFiles".*?</Target>\s*', ''
         Set-Content $ghProj $xml -Encoding UTF8
-        Write-Host "GameHelper.csproj angepasst (GameHelper.App)" -ForegroundColor Green
+        Write-Host "ExileCenter.csproj angepasst (ExileCenter.App)" -ForegroundColor Green
     }
 }
 

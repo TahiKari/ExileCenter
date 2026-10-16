@@ -9,7 +9,7 @@ namespace AutoHotKeyTrigger.ProfileManager.DynamicConditions
     using System.Numerics;
     using AutoHotKeyTrigger;
     using AutoHotKeyTrigger.ProfileManager.Component;
-    using GameHelper;
+    using ExileCenter;
     using ImGuiNET;
     using Newtonsoft.Json;
 
@@ -171,7 +171,7 @@ namespace AutoHotKeyTrigger.ProfileManager.DynamicConditions
 
                 var types = new System.Collections.Generic.List<Type>
                 {
-                    typeof(GameHelper.RemoteEnums.Animation),
+                    typeof(ExileCenter.RemoteEnums.Animation),
                     typeof(Interface.MonsterRarity),
                     typeof(Interface.MonsterNearbyZones),
                     typeof(ClickableTransparentOverlay.Win32.VK)

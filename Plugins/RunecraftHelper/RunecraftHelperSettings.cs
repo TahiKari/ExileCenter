@@ -3,7 +3,7 @@ namespace RunecraftHelper
     using System;
     using System.Collections.Generic;
     using ClickableTransparentOverlay.Win32;
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
     using Newtonsoft.Json;
 
     // How the per-row price text is tinted to signal reward value at a glance.

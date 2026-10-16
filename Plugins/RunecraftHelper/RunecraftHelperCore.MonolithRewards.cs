@@ -4,10 +4,10 @@ namespace RunecraftHelper
     using System.Collections.Generic;
     using System.IO;
     using System.Numerics;
-    using GameHelper;
-    using GameHelper.RemoteEnums.Entity;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter;
+    using ExileCenter.RemoteEnums.Entity;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
     using GameOffsets.Objects.UiElement;
     using ImGuiNET;
     using Newtonsoft.Json;
@@ -402,17 +402,17 @@ namespace RunecraftHelper
             // as recipe tables are expanded/collapsed. The constraint keeps width sane and caps height so a
             // long list can't run off-screen (it scrolls past the cap instead).
             ImGui.SetNextWindowSizeConstraints(new Vector2(260, 0), new Vector2(640, 900));
-            if (GameHelper.Ui.ImGuiTheme.BeginWindow("Monolith Rewards", ImGuiWindowFlags.AlwaysAutoResize))
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow("Monolith Rewards", ImGuiWindowFlags.AlwaysAutoResize))
             {
                 // Only shown when an 8+ hole monolith is in the area: that is the case still reported
                 // as wrong, it is rare enough that a reporter gets one shot at capturing it, and on
                 // every ordinary map the button would just be clutter.
                 if (this.HasBigMonolith())
                 {
-                    if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.copy_for_bug_report", "Copy for bug report", "Copy for bug report"))) this.OpenBugReport(null);
+                    if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.copy_for_bug_report", "Copy for bug report", "Copy for bug report"))) this.OpenBugReport(null);
                     if (ImGui.IsItemHovered())
                         ImGui.SetTooltip(
-                            GameHelper.Localization.OverlayLocalization.T("ui.labels.an_8_hole_monolith_is_nearby_open_its_runeshape_combinations_panel_fir", "An 8+ hole monolith is nearby. Open its Runeshape Combinations panel\nfirst, then press this: with the panel open, the report can compare\nthe game's own recipe list against ours."));
+                            ExileCenter.Localization.OverlayLocalization.T("ui.labels.an_8_hole_monolith_is_nearby_open_its_runeshape_combinations_panel_fir", "An 8+ hole monolith is nearby. Open its Runeshape Combinations panel\nfirst, then press this: with the panel open, the report can compare\nthe game's own recipe list against ours."));
                     ImGui.Separator();
                 }
 
@@ -476,7 +476,7 @@ namespace RunecraftHelper
 
                     if (v.AnchorIdx < 0 && !v.IsUnique && !(v.IsRerolled && v.Candidates.Count > 0))
                     {
-                        ImGui.TextDisabled(GameHelper.Localization.OverlayLocalization.T("ui.labels.anchor_not_resolved_station_unavailable", "  anchor not resolved (station unavailable)"));
+                        ImGui.TextDisabled(ExileCenter.Localization.OverlayLocalization.T("ui.labels.anchor_not_resolved_station_unavailable", "  anchor not resolved (station unavailable)"));
                         continue;
                     }
 
@@ -486,10 +486,10 @@ namespace RunecraftHelper
                             ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders | ImGuiTableFlags.SizingStretchProp,
                             new Vector2(430f, 0f)))
                     {
-                        ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.reward", "Reward", "Reward"), ImGuiTableColumnFlags.WidthStretch);
+                        ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.reward", "Reward", "Reward"), ImGuiTableColumnFlags.WidthStretch);
                         ImGui.TableSetupColumn("x", ImGuiTableColumnFlags.WidthFixed, 26f);
-                        ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.unit", "Unit", "Unit"), ImGuiTableColumnFlags.WidthFixed, 58f);
-                        ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.total", "Total", "Total"), ImGuiTableColumnFlags.WidthFixed, 62f);
+                        ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.unit", "Unit", "Unit"), ImGuiTableColumnFlags.WidthFixed, 58f);
+                        ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.total", "Total", "Total"), ImGuiTableColumnFlags.WidthFixed, 62f);
                         ImGui.TableHeadersRow();
 
                         int shown = 0;
@@ -525,7 +525,7 @@ namespace RunecraftHelper
                         {
                             ImGui.TableNextRow();
                             ImGui.TableSetColumnIndex(0);
-                            ImGui.TextDisabled(GameHelper.Localization.OverlayLocalization.T("ui.labels.nothing_above_threshold", "(nothing above threshold)"));
+                            ImGui.TextDisabled(ExileCenter.Localization.OverlayLocalization.T("ui.labels.nothing_above_threshold", "(nothing above threshold)"));
                         }
 
                         ImGui.EndTable();
@@ -545,7 +545,7 @@ namespace RunecraftHelper
         private void DrawMonolithDebugWindow()
         {
             ImGui.SetNextWindowSize(new Vector2(680, 460), ImGuiCond.FirstUseEver);
-            if (!GameHelper.Ui.ImGuiTheme.BeginWindow("Monolith Debug###RunecraftMonolithDebug"))
+            if (!ExileCenter.Ui.ImGuiTheme.BeginWindow("Monolith Debug###RunecraftMonolithDebug"))
             {
                 ImGui.End();
                 return;
@@ -553,7 +553,7 @@ namespace RunecraftHelper
 
             if (this.monolithViews.Count == 0)
             {
-                ImGui.TextDisabled(GameHelper.Localization.OverlayLocalization.T("ui.labels.no_monoliths_detected_in_this_area", "No monoliths detected in this area."));
+                ImGui.TextDisabled(ExileCenter.Localization.OverlayLocalization.T("ui.labels.no_monoliths_detected_in_this_area", "No monoliths detected in this area."));
                 ImGui.End();
                 return;
             }
@@ -570,7 +570,7 @@ namespace RunecraftHelper
             }
             if (this.monolithDebugSel < 0 || this.monolithDebugSel >= labels.Length) this.monolithDebugSel = 0;
             ImGui.SetNextItemWidth(420f);
-            ImGui.Combo(GameHelper.Localization.OverlayLocalization.Title("ui.labels.monolith", "Monolith", "Monolith"), ref this.monolithDebugSel, labels, labels.Length);
+            ImGui.Combo(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.monolith", "Monolith", "Monolith"), ref this.monolithDebugSel, labels, labels.Length);
 
             var v = this.monolithViews[this.monolithDebugSel];
             var red = new Vector4(1f, 0.45f, 0.45f, 1f);
@@ -604,7 +604,7 @@ namespace RunecraftHelper
             // Same report as the rewards window's button, focused on the selected monolith. This entry
             // point has no hole-count condition, which is the fallback when the hole count itself
             // under-reads and the other button therefore never appears.
-            if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.copy_report", "Copy report", "Copy report")))
+            if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.copy_report", "Copy report", "Copy report")))
                 this.OpenBugReport(v);
             ImGui.SameLine();
             ImGui.TextDisabled($"{v.Candidates.Count} recipe(s) offered");
@@ -614,14 +614,14 @@ namespace RunecraftHelper
                     ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders | ImGuiTableFlags.ScrollY |
                     ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.Resizable))
             {
-                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.row", "row", "row"), ImGuiTableColumnFlags.WidthFixed, 44f);
-                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.sz", "sz", "sz"), ImGuiTableColumnFlags.WidthFixed, 26f);
-                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.gate", "gate", "gate"), ImGuiTableColumnFlags.WidthFixed, 40f);
-                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.cat", "cat", "cat"), ImGuiTableColumnFlags.WidthFixed, 28f);
-                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.reward_7696ff", "reward", "reward"), ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.row", "row", "row"), ImGuiTableColumnFlags.WidthFixed, 44f);
+                ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.sz", "sz", "sz"), ImGuiTableColumnFlags.WidthFixed, 26f);
+                ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.gate", "gate", "gate"), ImGuiTableColumnFlags.WidthFixed, 40f);
+                ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.cat", "cat", "cat"), ImGuiTableColumnFlags.WidthFixed, 28f);
+                ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.reward_7696ff", "reward", "reward"), ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupColumn("FK / Id", ImGuiTableColumnFlags.WidthStretch);
-                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.lvl", "lvl", "lvl"), ImGuiTableColumnFlags.WidthFixed, 56f);
-                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.holes_anchor_in", "holes (anchor in [])", "holes (anchor in [])"), ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.lvl", "lvl", "lvl"), ImGuiTableColumnFlags.WidthFixed, 56f);
+                ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.holes_anchor_in", "holes (anchor in [])", "holes (anchor in [])"), ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupScrollFreeze(0, 1);
                 ImGui.TableHeadersRow();
 
@@ -642,7 +642,7 @@ namespace RunecraftHelper
                 {
                     ImGui.TableNextRow();
                     ImGui.TableSetColumnIndex(4);
-                    ImGui.TextDisabled(GameHelper.Localization.OverlayLocalization.T("ui.labels.no_recipes", "(no recipes)"));
+                    ImGui.TextDisabled(ExileCenter.Localization.OverlayLocalization.T("ui.labels.no_recipes", "(no recipes)"));
                 }
 
                 ImGui.EndTable();
@@ -658,7 +658,7 @@ namespace RunecraftHelper
         private void DrawOverlayRowsDebugWindow()
         {
             ImGui.SetNextWindowSize(new Vector2(640, 320), ImGuiCond.FirstUseEver);
-            if (!GameHelper.Ui.ImGuiTheme.BeginWindow("Overlay Rows Debug###RunecraftOverlayRowsDebug"))
+            if (!ExileCenter.Ui.ImGuiTheme.BeginWindow("Overlay Rows Debug###RunecraftOverlayRowsDebug"))
             {
                 ImGui.End();
                 return;
@@ -670,11 +670,11 @@ namespace RunecraftHelper
                     ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.Resizable))
             {
                 ImGui.TableSetupColumn("x", ImGuiTableColumnFlags.WidthFixed, 24f);
-                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.parsed_name", "parsed name", "parsed name"), ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.parsed_name", "parsed name", "parsed name"), ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupColumn("MetaId", ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupColumn("DdsArt", ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupColumn("ex", ImGuiTableColumnFlags.WidthFixed, 64f);
-                ImGui.TableSetupColumn(GameHelper.Localization.OverlayLocalization.Title("ui.labels.branch", "branch", "branch"), ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableSetupColumn(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.branch", "branch", "branch"), ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupScrollFreeze(0, 1);
                 ImGui.TableHeadersRow();
 

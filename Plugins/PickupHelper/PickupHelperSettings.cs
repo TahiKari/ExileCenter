@@ -7,7 +7,7 @@ namespace PickupHelper
     using System;
     using System.Collections.Generic;
     using ClickableTransparentOverlay.Win32;
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
 
     /// <summary>
     ///     Settings for the <see cref="PickupHelperCore" /> plugin.

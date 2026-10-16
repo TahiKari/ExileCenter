@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Ui
+namespace ExileCenter.Ui
 {
     using System.Collections.Generic;
     using System.Linq;
@@ -10,7 +10,7 @@ namespace GameHelper.Ui
     using ClickableTransparentOverlay.Win32;
     using Coroutine;
     using CoroutineEvents;
-    using GameHelper.Cache;
+    using ExileCenter.Cache;
     using ImGuiNET;
     using RemoteEnums;
     using RemoteObjects.UiElement;
@@ -190,7 +190,7 @@ namespace GameHelper.Ui
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnRender);
+                yield return new Wait(ExileCenterEvents.OnRender);
 
                 // Hotkey check — works even when the window is closed.
                 if (Utils.IsKeyPressedAndNotTimeout(Core.GHSettings.ElementFinderHotKey))
@@ -203,7 +203,7 @@ namespace GameHelper.Ui
                     continue;
                 }
 
-                if (GameHelper.Ui.ImGuiTheme.BeginWindow("Element Finder", ref Core.GHSettings.ShowElementFinder))
+                if (ExileCenter.Ui.ImGuiTheme.BeginWindow("Element Finder", ref Core.GHSettings.ShowElementFinder))
                 {
                     // Root address input.
                     ImGui.AlignTextToFramePadding();

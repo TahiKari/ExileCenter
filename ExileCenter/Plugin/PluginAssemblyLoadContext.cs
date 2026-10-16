@@ -1,4 +1,4 @@
-﻿namespace GameHelper.Plugin
+﻿namespace ExileCenter.Plugin
 {
     using System;
     using System.Collections.Generic;

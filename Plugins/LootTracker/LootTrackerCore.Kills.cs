@@ -2,9 +2,9 @@ namespace LootTracker
 {
     using System;
     using System.Collections.Generic;
-    using GameHelper;
-    using GameHelper.RemoteEnums.Entity;
-    using GameHelper.RemoteObjects.Components;
+    using ExileCenter;
+    using ExileCenter.RemoteEnums.Entity;
+    using ExileCenter.RemoteObjects.Components;
 
     public sealed partial class LootTrackerCore
     {

@@ -11,13 +11,13 @@ namespace AutoHotKeyTrigger
     using System.Numerics;
     using ClickableTransparentOverlay.Win32;
     using Coroutine;
-    using GameHelper;
-    using GameHelper.CoroutineEvents;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteEnums.Entity;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.CoroutineEvents;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteEnums.Entity;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Newtonsoft.Json;
     using AutoHotKeyTrigger.ProfileManager;
@@ -169,7 +169,7 @@ namespace AutoHotKeyTrigger
             if (this.Settings.DebugMode)
             {
                 ImGui.SetNextWindowSize(size, ImGuiCond.FirstUseEver);
-                if (GameHelper.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("window.debug", "AHK Debug Window", "AhkDebugWindow"), ref this.Settings.DebugMode,
+                if (ExileCenter.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("window.debug", "AHK Debug Window", "AhkDebugWindow"), ref this.Settings.DebugMode,
                     this.isDebugWindowHovered ? ImGuiWindowFlags.MenuBar : ImGuiWindowFlags.None))
                 {
                     this.isDebugWindowHovered =  ImGui.IsWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem);

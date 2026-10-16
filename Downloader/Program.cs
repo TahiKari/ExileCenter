@@ -51,14 +51,14 @@ namespace Downloader
             if (string.IsNullOrWhiteSpace(targetDir))
             {
                 targetDir = PromptForTargetDirectory()
-                    ?? Path.Combine(AppContext.BaseDirectory, "GameHelper");
+                    ?? Path.Combine(AppContext.BaseDirectory, "ExileCenter");
             }
 
-            Console.WriteLine("=== GameHelper Download ===");
+            Console.WriteLine("=== ExileCenter Download ===");
             Console.WriteLine($"{DownloaderLocalization.B("Target folder", "Zielordner")}: {Path.GetFullPath(targetDir)}");
             Console.WriteLine();
 
-            var service = new GameHelperDownloadService();
+            var service = new ExileCenterDownloadService();
             var progress = new Progress<string>(line => Console.WriteLine(line));
 
             DownloadResult result;
@@ -89,13 +89,13 @@ namespace Downloader
 
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine(DownloaderLocalization.B(
-                "Done. GameHelper is installed in:",
-                "Fertig. GameHelper liegt in:"));
+                "Done. ExileCenter is installed in:",
+                "Fertig. ExileCenter liegt in:"));
             Console.WriteLine($"  {result.TargetDir}");
             Console.ResetColor();
             Console.WriteLine();
             Console.WriteLine(DownloaderLocalization.B("Start with:", "Starten mit:"));
-            Console.WriteLine($"  {Path.Combine(result.TargetDir!, "GameHelper.exe")}");
+            Console.WriteLine($"  {Path.Combine(result.TargetDir!, "ExileCenter.exe")}");
             WaitForKey();
             return 0;
         }
@@ -108,8 +108,8 @@ namespace Downloader
                 using var dialog = new FolderBrowserDialog
                 {
                     Description = DownloaderLocalization.B(
-                        "Choose target folder for GameHelper",
-                        "Zielordner fuer GameHelper waehlen"),
+                        "Choose target folder for ExileCenter",
+                        "Zielordner fuer ExileCenter waehlen"),
                     UseDescriptionForTitle = true,
                     SelectedPath = AppContext.BaseDirectory,
                 };
@@ -126,15 +126,15 @@ namespace Downloader
 
         private static void PrintHelp()
         {
-            Console.WriteLine("GameHelperDownloader");
+            Console.WriteLine("ExileCenterDownloader");
             Console.WriteLine();
             Console.WriteLine(DownloaderLocalization.B("Usage:", "Verwendung:"));
-            Console.WriteLine("  GameHelperDownloader.exe [target folder] [--force]");
-            Console.WriteLine("  GameHelperDownloader.exe --target \"D:\\Games\\GameHelper\"");
+            Console.WriteLine("  ExileCenterDownloader.exe [target folder] [--force]");
+            Console.WriteLine("  ExileCenterDownloader.exe --target \"D:\\Games\\ExileCenter\"");
             Console.WriteLine();
             Console.WriteLine(DownloaderLocalization.B(
-                "Without target folder: folder picker dialog, otherwise .\\GameHelper",
-                "Ohne Zielordner: Ordnerauswahl-Dialog, sonst .\\GameHelper"));
+                "Without target folder: folder picker dialog, otherwise .\\ExileCenter",
+                "Ohne Zielordner: Ordnerauswahl-Dialog, sonst .\\ExileCenter"));
         }
 
         private static void WaitForKey()

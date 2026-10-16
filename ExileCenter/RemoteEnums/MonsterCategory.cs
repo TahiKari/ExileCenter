@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteEnums
+namespace ExileCenter.RemoteEnums
 {
     using System;
 
@@ -12,7 +12,7 @@ namespace GameHelper.RemoteEnums
     ///     <see cref="Humanoid" /> | <see cref="Beast" />, and a skeletal snake is
     ///     <see cref="Beast" /> | <see cref="Undead" /> — so this is a <see cref="FlagsAttribute" />
     ///     set rather than a single value. Resolved from the shipped <c>Data/MonsterCategories.tsv</c>
-    ///     by <see cref="GameHelper.Utils.MonsterCategories" /> (that file's tags come straight from
+    ///     by <see cref="ExileCenter.Utils.MonsterCategories" /> (that file's tags come straight from
     ///     the game's <c>MonsterVarieties</c> data table).
     /// </summary>
     [Flags]

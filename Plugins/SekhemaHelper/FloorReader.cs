@@ -1,8 +1,8 @@
 namespace SekhemaHelper
 {
-    using GameHelper;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.Utils;
     using GameOffsets.Natives;
     using ImGuiNET;
     using System;

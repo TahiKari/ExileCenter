@@ -8,7 +8,7 @@ namespace HealthBars
     using System;
     using System.Collections.Generic;
     using System.IO;
-    using GameHelper;
+    using ExileCenter;
 
     /// <summary>
     ///     Loads and cleans up the textures.

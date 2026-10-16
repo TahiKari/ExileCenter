@@ -4,11 +4,11 @@
 
 namespace AutoHotKeyTrigger.ProfileManager.DynamicConditions
 {
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteEnums.Entity;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteEnums.Entity;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
     using System;
     using System.Collections.Generic;
     using AutoHotKeyTrigger.ProfileManager.DynamicConditions.Interface;

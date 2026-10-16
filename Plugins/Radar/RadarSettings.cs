@@ -7,11 +7,11 @@ namespace Radar
     using System.Collections.Generic;
     using System.IO;
     using System.Numerics;
-    using GameHelper.Localization;
-    using GameHelper.Plugin;
+    using ExileCenter.Localization;
+    using ExileCenter.Plugin;
     using ImGuiNET;
     using Newtonsoft.Json;
-    using GameHelper.Utils;
+    using ExileCenter.Utils;
 
     /// <summary>
     /// <see cref="Radar"/> plugin settings class.

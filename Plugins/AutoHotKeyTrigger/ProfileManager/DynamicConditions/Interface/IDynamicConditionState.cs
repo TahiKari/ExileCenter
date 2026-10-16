@@ -6,8 +6,8 @@ namespace AutoHotKeyTrigger.ProfileManager.DynamicConditions.Interface
 {
     using System.Collections.Generic;
     using ClickableTransparentOverlay.Win32;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteObjects.Components;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteObjects.Components;
     using GameOffsets.Objects.Components;
 
     /// <summary>

@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper
+namespace ExileCenter
 {
     using System;
     using System.Collections.Generic;
@@ -14,7 +14,7 @@ namespace GameHelper
     using ImGuiNET;
     using System.Drawing;
     using Utils;
-    using L = GameHelper.Localization.OverlayLocalization;
+    using L = ExileCenter.Localization.OverlayLocalization;
 
     /// <summary>
     ///     Allows process manipulation. It uses the (time/event based) co-routines
@@ -147,7 +147,7 @@ namespace GameHelper
             this.Information?.Close();
             this.WindowArea = Rectangle.Empty;
             this.Foreground = false;
-            CoroutineHandler.RaiseEvent(GameHelperEvents.OnClose);
+            CoroutineHandler.RaiseEvent(ExileCenterEvents.OnClose);
             if (monitorForNewGame)
             {
                 CoroutineHandler.Start(this.FindAndOpen());
@@ -211,7 +211,7 @@ namespace GameHelper
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnRender);
+                yield return new Wait(ExileCenterEvents.OnRender);
                 if (this.showSelectGameMenu)
                 {
                     ImGui.OpenPopup("SelectGameMenu");
@@ -322,7 +322,7 @@ namespace GameHelper
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnOpened);
+                yield return new Wait(ExileCenterEvents.OnOpened);
                 var baseAddress = this.Address;
                 if (baseAddress == IntPtr.Zero)
                 {
@@ -362,7 +362,7 @@ namespace GameHelper
 
             Core.CoroutinesRegistrar.Add(CoroutineHandler.Start(
                 this.Monitor(), "[GameProcess] Monitoring Game Process"));
-            CoroutineHandler.RaiseEvent(GameHelperEvents.OnOpened);
+            CoroutineHandler.RaiseEvent(ExileCenterEvents.OnOpened);
             return true;
         }
 
@@ -375,7 +375,7 @@ namespace GameHelper
             if (foreground != this.Foreground)
             {
                 this.Foreground = foreground;
-                CoroutineHandler.RaiseEvent(GameHelperEvents.OnForegroundChanged);
+                CoroutineHandler.RaiseEvent(ExileCenterEvents.OnForegroundChanged);
             }
         }
 
@@ -390,7 +390,7 @@ namespace GameHelper
             if (sizePos != this.WindowArea && sizePos.Size != Size.Empty)
             {
                 this.WindowArea = sizePos;
-                CoroutineHandler.RaiseEvent(GameHelperEvents.OnMoved);
+                CoroutineHandler.RaiseEvent(ExileCenterEvents.OnMoved);
             }
         }
 

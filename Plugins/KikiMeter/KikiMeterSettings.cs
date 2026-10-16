@@ -1,5 +1,5 @@
 using System.Numerics;
-using GameHelper.Plugin;
+using ExileCenter.Plugin;
 using Newtonsoft.Json;
 
 namespace KikiMeter;

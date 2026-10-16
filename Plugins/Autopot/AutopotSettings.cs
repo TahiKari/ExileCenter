@@ -1,5 +1,5 @@
 using ClickableTransparentOverlay.Win32;
-using GameHelper.Plugin;
+using ExileCenter.Plugin;
 using Nefarius.ViGEm.Client.Targets.Xbox360;
 
 namespace Autopot

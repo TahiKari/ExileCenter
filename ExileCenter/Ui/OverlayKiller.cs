@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Ui
+namespace ExileCenter.Ui
 {
     using System.Collections.Generic;
     using System.Diagnostics;
@@ -10,7 +10,7 @@ namespace GameHelper.Ui
     using Coroutine;
     using CoroutineEvents;
     using ImGuiNET;
-    using L = GameHelper.Localization.OverlayLocalization;
+    using L = ExileCenter.Localization.OverlayLocalization;
 
     /// <summary>
     ///     Kills the overlay.
@@ -34,7 +34,7 @@ namespace GameHelper.Ui
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnRender);
+                yield return new Wait(ExileCenterEvents.OnRender);
                 if (!Core.States.InGameStateObject.CurrentWorldInstance.AreaDetails.IsBattleRoyale)
                 {
                     Sw.Restart();
@@ -42,7 +42,7 @@ namespace GameHelper.Ui
                 }
 
                 ImGui.SetNextWindowSize(Size);
-                GameHelper.Ui.ImGuiTheme.BeginWindow(L.Title("overlay_killer.title", "Player Vs Player (PVP) Detected", "PvpDetected"));
+                ExileCenter.Ui.ImGuiTheme.BeginWindow(L.Title("overlay_killer.title", "Player Vs Player (PVP) Detected", "PvpDetected"));
                 ImGui.TextWrapped(
                     L.F(
                         "overlay_killer.message",

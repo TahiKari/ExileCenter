@@ -1,9 +1,9 @@
 namespace SekhemaHelper
 {
-    using GameHelper;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using System;
     using System.Collections.Generic;

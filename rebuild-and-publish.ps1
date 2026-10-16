@@ -1,4 +1,4 @@
-# GameHelper: komplett neu bauen und oeffentlich auf GitHub Releases hochladen.
+# ExileCenter: komplett neu bauen und oeffentlich auf GitHub Releases hochladen.
 # Doppelklick auf rebuild-and-publish.bat oder:
 #   powershell -ExecutionPolicy Bypass -File rebuild-and-publish.ps1
 #
@@ -35,7 +35,7 @@ if (-not (Test-Path $BuildScript)) {
 $started = Get-Date
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host " GameHelper Rebuild + Publish" -ForegroundColor Cyan
+Write-Host " ExileCenter Rebuild + Publish" -ForegroundColor Cyan
 Write-Host " $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
@@ -114,8 +114,8 @@ else {
 }
 
 $publishDir = Join-Path $Root "publish"
-if (-not (Test-Path (Join-Path $publishDir "GameHelper.exe"))) {
-    throw "GameHelper.exe fehlt in publish\. Build unvollstaendig."
+if (-not (Test-Path (Join-Path $publishDir "ExileCenter.exe"))) {
+    throw "ExileCenter.exe fehlt in publish\. Build unvollstaendig."
 }
 
 $elapsed = (Get-Date) - $started
@@ -123,18 +123,18 @@ Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host " Fertig: v$Version in $([math]::Round($elapsed.TotalSeconds, 1))s" -ForegroundColor Green
 Write-Host " Ordner:  $publishDir" -ForegroundColor Green
-Write-Host " Starten: $publishDir\GameHelper.exe" -ForegroundColor Green
+Write-Host " Starten: $publishDir\ExileCenter.exe" -ForegroundColor Green
 Write-Host " Version: $publishDir\VERSION.txt" -ForegroundColor Green
 if (-not $SkipUpload) {
     Write-Host " Releases:    https://github.com/MordWraith/Gamehelper/releases" -ForegroundColor Green
-    Write-Host " Downloader:  https://github.com/MordWraith/Gamehelper/releases/latest/download/GameHelperDownloader.exe" -ForegroundColor Green
+    Write-Host " Downloader:  https://github.com/MordWraith/Gamehelper/releases/latest/download/ExileCenterDownloader.exe" -ForegroundColor Green
     if ($PushSource) {
         Write-Host " Source:      https://github.com/MordWraith/Gamehelper/tree/main" -ForegroundColor Green
     }
 }
 Write-Host ""
 Write-Host " Fuer deinen Freund:" -ForegroundColor Yellow
-Write-Host "   - Nur GameHelperDownloader.exe teilen (oeffentlicher GitHub-Link oben)" -ForegroundColor Yellow
+Write-Host "   - Nur ExileCenterDownloader.exe teilen (oeffentlicher GitHub-Link oben)" -ForegroundColor Yellow
 Write-Host "   - In LEEREN Ordner installieren lassen" -ForegroundColor Yellow
 Write-Host "   - Kein Token / keine ZIP noetig" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Green

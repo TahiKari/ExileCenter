@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Settings
+namespace ExileCenter.Settings
 {
     using System;
     using System.Collections.Generic;
@@ -16,10 +16,10 @@ namespace GameHelper.Settings
     using Plugin;
     using Utils;
     using GameOffsets.Objects.States.InGameState;
-    using GameHelper.RemoteEnums.Entity;
-    using GameHelper.RemoteEnums;
-    using GameHelper.Ui;
-    using L = GameHelper.Localization.OverlayLocalization;
+    using ExileCenter.RemoteEnums.Entity;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.Ui;
+    using L = ExileCenter.Localization.OverlayLocalization;
 
     /// <summary>
     ///     Creates the MainMenu on the UI.
@@ -89,7 +89,7 @@ namespace GameHelper.Settings
                 ImGui.SameLine(ImGui.GetWindowWidth() - actionsWidth - 24f);
             else ImGui.SameLine();
             if (ImGui.SmallButton(saveLabel + "##SaveSettingsNow"))
-                CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
+                CoroutineHandler.RaiseEvent(ExileCenterEvents.TimeToSaveAllSettings);
             if (LocalUpdates.IsAvailable)
             {
                 ImGui.SameLine();
@@ -331,7 +331,7 @@ namespace GameHelper.Settings
             isSettingsWindowVisible = false;
             Core.IsSettingsMenuOpen = false;
             ImGui.GetIO().WantCaptureMouse = true;
-            CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
+            CoroutineHandler.RaiseEvent(ExileCenterEvents.TimeToSaveAllSettings);
         }
 
         /// <summary>
@@ -461,7 +461,7 @@ namespace GameHelper.Settings
         private static void SetPluginEnabled(PluginContainer container, bool enabled)
         {
             PManager.SetPluginEnabled(container, enabled);
-            CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
+            CoroutineHandler.RaiseEvent(ExileCenterEvents.TimeToSaveAllSettings);
         }
 
         private static void ReloadAllPlugins()
@@ -471,7 +471,7 @@ namespace GameHelper.Settings
                 var loadedCount = PManager.ReloadAllPlugins();
                 pluginReloadStatus = L.F("settings.plugin.reload_done", "Reloaded {0} plugins", loadedCount);
                 selectedSettingsPage = PluginManagerPageId;
-                CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
+                CoroutineHandler.RaiseEvent(ExileCenterEvents.TimeToSaveAllSettings);
             }
             catch (Exception ex)
             {
@@ -597,7 +597,7 @@ namespace GameHelper.Settings
                     if (ImGui.Selectable(L.DisplayName(language), selected))
                     {
                         Core.GHSettings.UiLanguage = language;
-                        CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
+                        CoroutineHandler.RaiseEvent(ExileCenterEvents.TimeToSaveAllSettings);
                     }
 
                     if (selected)
@@ -629,7 +629,7 @@ namespace GameHelper.Settings
             {
                 Core.GHSettings.SettingsWindowPositionSaved = false;
                 Core.Overlay?.ResetSettingsDisplay();
-                CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
+                CoroutineHandler.RaiseEvent(ExileCenterEvents.TimeToSaveAllSettings);
             }
             if (!string.IsNullOrEmpty(Core.Overlay?.SettingsDisplayError))
             {
@@ -642,7 +642,7 @@ namespace GameHelper.Settings
         private static void SetSeparateSettingsWindow(bool enabled)
         {
             Core.GHSettings.SettingsOnSeparateWindow = enabled;
-            CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
+            CoroutineHandler.RaiseEvent(ExileCenterEvents.TimeToSaveAllSettings);
         }
 
         private static void DrawNearbyWidget()
@@ -1024,7 +1024,7 @@ namespace GameHelper.Settings
                 {
                     if (Core.States.GameCurrentState != GameStateTypes.GameNotLoaded)
                     {
-                        CoroutineHandler.RaiseEvent(GameHelperEvents.OnMoved);
+                        CoroutineHandler.RaiseEvent(ExileCenterEvents.OnMoved);
                     }
                 }
 
@@ -1193,7 +1193,7 @@ namespace GameHelper.Settings
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnRender);
+                yield return new Wait(ExileCenterEvents.OnRender);
                 if (Utils.IsKeyPressedAndNotTimeout(Core.GHSettings.MainMenuHotKey))
                 {
                     if (isSettingsWindowVisible)
@@ -1250,7 +1250,7 @@ namespace GameHelper.Settings
                     }
                     if (!isOverlayRunningLocal) ImGui.OpenPopup("GameHelperCloseConfirmation");
                     DrawConfirmationPopup();
-                    if (!Core.GHSettings.IsOverlayRunning) CoroutineHandler.RaiseEvent(GameHelperEvents.TimeToSaveAllSettings);
+                    if (!Core.GHSettings.IsOverlayRunning) CoroutineHandler.RaiseEvent(ExileCenterEvents.TimeToSaveAllSettings);
                     if (!expanded) return;
                     DrawManuBar();
                     DrawSettingsLayout();
@@ -1268,7 +1268,7 @@ namespace GameHelper.Settings
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.TimeToSaveAllSettings);
+                yield return new Wait(ExileCenterEvents.TimeToSaveAllSettings);
                 JsonHelper.SafeToFile(Core.GHSettings, State.CoreSettingFile);
             }
         }

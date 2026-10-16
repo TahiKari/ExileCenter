@@ -6,11 +6,11 @@ namespace RunecraftHelper
     using System.Numerics;
     using System.Runtime.InteropServices;
     using System.Text;
-    using GameHelper;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
     using GameOffsets.Natives;
     using GameOffsets.Objects.UiElement;
     using ImGuiNET;

@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteObjects.States.InGameStateObjects
+namespace ExileCenter.RemoteObjects.States.InGameStateObjects
 {
     using System;
     using System.Collections.Concurrent;
@@ -10,8 +10,8 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
     using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using Components;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteEnums.Entity;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteEnums.Entity;
     using GameOffsets.Objects.States.InGameState;
     using ImGuiNET;
     using Utils;

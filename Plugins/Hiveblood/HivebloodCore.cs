@@ -6,11 +6,11 @@ namespace Hiveblood
     using System.IO;
     using System.Numerics;
     using System.Runtime.InteropServices;
-    using GameHelper;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteObjects.UiElement;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteObjects.UiElement;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Newtonsoft.Json;
 
@@ -72,67 +72,67 @@ namespace Hiveblood
             this.DrawSettingsTabs("HivebloodSettings",
                 ("tracking", "Tracking", () =>
                 {
-                    GameHelper.Utils.ImGuiHelper.WrappedText(
-                        GameHelper.Localization.OverlayLocalization.T("ui.labels.tracks_hiveblood_syncs_from_genesis_tree_breach_popups_visit_the_tree_", "Tracks Hiveblood: syncs from Genesis Tree (+ Breach popups). Visit the tree once to calibrate."));
-                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.only_when_inventory_is_open", "Only when inventory is open", "Only when inventory is open"), ref this.Settings.ShowOnlyWithInventory);
-                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.also_show_when_inventory_is_closed", "Also show when inventory is closed", "Also show when inventory is closed"), ref this.Settings.ShowAlways);
-                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.warn_near_cap_100_000", "Warn near cap (100,000)", "Warn near cap (100,000)"), ref this.Settings.WarnNearCap);
-                    ImGui.SliderInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.warn_from_amount", "Warn from amount", "Warn from amount"), ref this.Settings.WarnThreshold, 80_000, 100_000);
+                    ExileCenter.Utils.ImGuiHelper.WrappedText(
+                        ExileCenter.Localization.OverlayLocalization.T("ui.labels.tracks_hiveblood_syncs_from_genesis_tree_breach_popups_visit_the_tree_", "Tracks Hiveblood: syncs from Genesis Tree (+ Breach popups). Visit the tree once to calibrate."));
+                    ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.only_when_inventory_is_open", "Only when inventory is open", "Only when inventory is open"), ref this.Settings.ShowOnlyWithInventory);
+                    ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.also_show_when_inventory_is_closed", "Also show when inventory is closed", "Also show when inventory is closed"), ref this.Settings.ShowAlways);
+                    ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.warn_near_cap_100_000", "Warn near cap (100,000)", "Warn near cap (100,000)"), ref this.Settings.WarnNearCap);
+                    ImGui.SliderInt(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.warn_from_amount", "Warn from amount", "Warn from amount"), ref this.Settings.WarnThreshold, 80_000, 100_000);
                     ImGuiHelper.ToolTip(
-                        GameHelper.Localization.OverlayLocalization.T("ui.labels.above_the_threshold_the_overlay_text_turns_orange_red_and_blinks_it_is", "Above the threshold the overlay text turns orange-red and blinks. It is also shown while the inventory is closed (at the last in-inventory position)."));
-                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_gains_since_last_tree_sync", "Show gains since last tree sync", "Show gains since last tree sync"), ref this.Settings.ShowSessionGains);
+                        ExileCenter.Localization.OverlayLocalization.T("ui.labels.above_the_threshold_the_overlay_text_turns_orange_red_and_blinks_it_is", "Above the threshold the overlay text turns orange-red and blinks. It is also shown while the inventory is closed (at the last in-inventory position)."));
+                    ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.show_gains_since_last_tree_sync", "Show gains since last tree sync", "Show gains since last tree sync"), ref this.Settings.ShowSessionGains);
                     this.DrawStatusBlock();
                 }),
                 ("appearance", "Appearance", () =>
                 {
-                    ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.font_scale", "Font scale", "Font scale"), ref this.Settings.OverlayFontScale, 0.75f, 1.6f, "%.2f");
+                    ImGui.SliderFloat(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.font_scale", "Font scale", "Font scale"), ref this.Settings.OverlayFontScale, 0.75f, 1.6f, "%.2f");
                     
                     var anchorIndex = (int)this.Settings.OverlayAnchor;
                     if (ImGui.Combo(
-                            GameHelper.Localization.OverlayLocalization.Title("ui.labels.position_anchor", "Position anchor", "Position anchor"),
+                            ExileCenter.Localization.OverlayLocalization.Title("ui.labels.position_anchor", "Position anchor", "Position anchor"),
                             ref anchorIndex,
-                            GameHelper.Localization.OverlayLocalization.T("ui.labels.inventory_top_left_inventory_bottom_near_gold_custom_screen_position", "Inventory top-left\0Inventory bottom (near gold)\0Custom screen position\0")))
+                            ExileCenter.Localization.OverlayLocalization.T("ui.labels.inventory_top_left_inventory_bottom_near_gold_custom_screen_position", "Inventory top-left\0Inventory bottom (near gold)\0Custom screen position\0")))
                     {
                         this.Settings.OverlayAnchor = (HivebloodOverlayAnchor)anchorIndex;
                     }
                     
                     ImGui.DragFloat2(
-                        GameHelper.Localization.OverlayLocalization.Title("ui.labels.offset_from_anchor_px", "Offset from anchor (px)", "Offset from anchor (px)"),
+                        ExileCenter.Localization.OverlayLocalization.Title("ui.labels.offset_from_anchor_px", "Offset from anchor (px)", "Offset from anchor (px)"),
                         ref this.Settings.OverlayOffset,
                         1f,
                         -400f,
                         400f,
                         "%.0f");
                     ImGuiHelper.ToolTip(
-                        GameHelper.Localization.OverlayLocalization.T("ui.labels.bottom_anchor_left_edge_of_the_inventory_panel_just_above_the_gold_lin", "Bottom anchor: left edge of the inventory panel, just above the gold line. Drag X/Y to fine-tune."));
+                        ExileCenter.Localization.OverlayLocalization.T("ui.labels.bottom_anchor_left_edge_of_the_inventory_panel_just_above_the_gold_lin", "Bottom anchor: left edge of the inventory panel, just above the gold line. Drag X/Y to fine-tune."));
                     
                     ImGui.Checkbox(
-                        GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_position_dummy_drag_then_disable", "Show position dummy (drag, then disable)", "Show position dummy (drag, then disable)"),
+                        ExileCenter.Localization.OverlayLocalization.Title("ui.labels.show_position_dummy_drag_then_disable", "Show position dummy (drag, then disable)", "Show position dummy (drag, then disable)"),
                         ref this.Settings.ShowPositionDummy);
                     ImGuiHelper.ToolTip(
-                        GameHelper.Localization.OverlayLocalization.T("ui.labels.shows_a_draggable_preview_in_game_and_saves_a_fixed_screen_position_sw", "Shows a draggable preview in-game and saves a fixed screen position. Switches to custom screen position."));
+                        ExileCenter.Localization.OverlayLocalization.T("ui.labels.shows_a_draggable_preview_in_game_and_saves_a_fixed_screen_position_sw", "Shows a draggable preview in-game and saves a fixed screen position. Switches to custom screen position."));
                     
                     if (this.Settings.ShowPositionDummy ||
                         this.Settings.OverlayAnchor == HivebloodOverlayAnchor.CustomScreen)
                     {
                         ImGui.DragFloat2(
-                            GameHelper.Localization.OverlayLocalization.Title("ui.labels.screen_position_px", "Screen position (px)", "Screen position (px)"),
+                            ExileCenter.Localization.OverlayLocalization.Title("ui.labels.screen_position_px", "Screen position (px)", "Screen position (px)"),
                             ref this.Settings.OverlayScreenPosition,
                             1f,
                             0f,
                             4000f,
                             "%.0f");
                     }
-                    ImGui.ColorEdit4(GameHelper.Localization.OverlayLocalization.Title("ui.labels.text_color_4a69d0", "Text color", "Text color"), ref this.Settings.TextColor);
+                    ImGui.ColorEdit4(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.text_color_4a69d0", "Text color", "Text color"), ref this.Settings.TextColor);
                 }),
                 ("diagnostics", "Diagnostics", () =>
                 {
-                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.debug_status_line", "Debug status line", "Debug status line"), ref this.Settings.DebugStatusLine);
-                    ImGui.SliderInt(GameHelper.Localization.OverlayLocalization.Title("ui.labels.ui_scan_interval_ms", "UI scan interval (ms)", "UI scan interval (ms)"), ref this.Settings.ScanIntervalMs, 150, 1000);
+                    ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.debug_status_line", "Debug status line", "Debug status line"), ref this.Settings.DebugStatusLine);
+                    ImGui.SliderInt(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.ui_scan_interval_ms", "UI scan interval (ms)", "UI scan interval (ms)"), ref this.Settings.ScanIntervalMs, 150, 1000);
                     ImGuiHelper.ToolTip(
-                        GameHelper.Localization.OverlayLocalization.T("ui.labels.how_often_the_plugin_reads_the_game_ui_tree_lower_values_react_faster_", "How often the plugin reads the game UI tree. Lower values react faster but use more CPU (default 300)."));
+                        ExileCenter.Localization.OverlayLocalization.T("ui.labels.how_often_the_plugin_reads_the_game_ui_tree_lower_values_react_faster_", "How often the plugin reads the game UI tree. Lower values react faster but use more CPU (default 300)."));
                     
-                    if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.reset_tracker", "Reset tracker", "Reset tracker")))
+                    if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.reset_tracker", "Reset tracker", "Reset tracker")))
                     {
                         this.Settings.EstimatedAmount = 0;
                         this.Settings.HasSyncedOnce = false;
@@ -143,7 +143,7 @@ namespace Hiveblood
                     }
                     
                     ImGui.SameLine();
-                    if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.save_now", "Save now", "Save now")))
+                    if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.save_now", "Save now", "Save now")))
                     {
                         this.FlushPendingTrackerSave(force: true);
                         this.SaveSettings();
@@ -248,7 +248,7 @@ namespace Hiveblood
                     this.recentGainKeys.Clear();
                     changed = true;
                     treeSyncedThisFrame = true;
-                    this.lastStatus = GameHelper.Localization.OverlayLocalization.F("ui.hiveblood.synced", "Synchronised from the Genesis Tree: {0:N0}", total);
+                    this.lastStatus = ExileCenter.Localization.OverlayLocalization.F("ui.hiveblood.synced", "Synchronised from the Genesis Tree: {0:N0}", total);
                 }
             }
 
@@ -404,7 +404,7 @@ namespace Hiveblood
                 ImDrawFlags.None,
                 1.5f);
 
-            var hint = GameHelper.Localization.OverlayLocalization.T("ui.labels.drag_to_move_disable_dummy_in_settings_when_done", "Drag to move. Disable dummy in settings when done.");
+            var hint = ExileCenter.Localization.OverlayLocalization.T("ui.labels.drag_to_move_disable_dummy_in_settings_when_done", "Drag to move. Disable dummy in settings when done.");
             var hintSize = ImGui.CalcTextSize(hint);
             var hintPos = new Vector2(pos.X, pos.Y - hintSize.Y - 6f);
             fg.AddText(hintPos + Vector2.One, ImGuiHelper.Color(new Vector4(0f, 0f, 0f, 0.9f)), hint);
@@ -416,7 +416,7 @@ namespace Hiveblood
             ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0f);
             ImGui.PushStyleColor(ImGuiCol.WindowBg, Vector4.Zero);
 
-            if (!GameHelper.Ui.ImGuiTheme.BeginWindow(
+            if (!ExileCenter.Ui.ImGuiTheme.BeginWindow(
                     "###HivebloodPositionDummy",
                     ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove |
                     ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoBackground))
@@ -453,14 +453,14 @@ namespace Hiveblood
             line2 = null;
             if (!this.Settings.HasSyncedOnce)
             {
-                line1 = GameHelper.Localization.OverlayLocalization.T("ui.hiveblood.visit", "Hiveblood: visit the Genesis Tree");
+                line1 = ExileCenter.Localization.OverlayLocalization.T("ui.hiveblood.visit", "Hiveblood: visit the Genesis Tree");
                 return;
             }
 
             line1 = $"Hiveblood: {this.Settings.EstimatedAmount:N0}";
             if (this.Settings.ShowSessionGains && this.Settings.SessionGainSinceSync > 0)
             {
-                line2 = GameHelper.Localization.OverlayLocalization.F("ui.hiveblood.gains", "(+{0:N0} since synchronisation)", this.Settings.SessionGainSinceSync);
+                line2 = ExileCenter.Localization.OverlayLocalization.F("ui.hiveblood.gains", "(+{0:N0} since synchronisation)", this.Settings.SessionGainSinceSync);
             }
         }
 
@@ -539,20 +539,20 @@ namespace Hiveblood
 
         private void DrawStatusBlock()
         {
-            ImGui.TextDisabled(GameHelper.Localization.OverlayLocalization.T("ui.labels.tracker", "Tracker"));
+            ImGui.TextDisabled(ExileCenter.Localization.OverlayLocalization.T("ui.labels.tracker", "Tracker"));
             ImGui.BulletText(this.Settings.HasSyncedOnce
-                ? GameHelper.Localization.OverlayLocalization.F("ui.hiveblood.amount", "Estimated amount: {0:N0}", this.Settings.EstimatedAmount)
-                : GameHelper.Localization.OverlayLocalization.T("ui.hiveblood.unset", "Not synchronised yet"));
+                ? ExileCenter.Localization.OverlayLocalization.F("ui.hiveblood.amount", "Estimated amount: {0:N0}", this.Settings.EstimatedAmount)
+                : ExileCenter.Localization.OverlayLocalization.T("ui.hiveblood.unset", "Not synchronised yet"));
             if (this.Settings.LastTreeSyncUtc != DateTime.MinValue)
             {
                 ImGui.BulletText(
-                    GameHelper.Localization.OverlayLocalization.F("ui.hiveblood.last", "Last tree synchronisation: {0:g}", this.Settings.LastTreeSyncUtc.ToLocalTime()));
+                    ExileCenter.Localization.OverlayLocalization.F("ui.hiveblood.last", "Last tree synchronisation: {0:g}", this.Settings.LastTreeSyncUtc.ToLocalTime()));
             }
 
             if (this.Settings.SessionGainSinceSync > 0)
             {
                 ImGui.BulletText(
-                    GameHelper.Localization.OverlayLocalization.F("ui.hiveblood.since", "Gains since synchronisation: +{0:N0}", this.Settings.SessionGainSinceSync));
+                    ExileCenter.Localization.OverlayLocalization.F("ui.hiveblood.since", "Gains since synchronisation: +{0:N0}", this.Settings.SessionGainSinceSync));
             }
 
             if (!string.IsNullOrEmpty(this.lastStatus))

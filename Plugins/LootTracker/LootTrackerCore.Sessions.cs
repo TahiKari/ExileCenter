@@ -336,7 +336,7 @@ namespace LootTracker
 
             ImGui.SetNextWindowSize(new System.Numerics.Vector2(760, 380), ImGuiCond.FirstUseEver);
             bool open = true;
-            if (GameHelper.Ui.ImGuiTheme.BeginWindow(this.Loc.Title("lt.session_history", "Session history", "lt_session_history"), ref open))
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow(this.Loc.Title("lt.session_history", "Session history", "lt_session_history"), ref open))
             {
                 if (ImGui.Button(this.L("lt.refresh", "Refresh")))
                 {
@@ -417,7 +417,7 @@ namespace LootTracker
 
             ImGui.SetNextWindowSize(new System.Numerics.Vector2(620, 420), ImGuiCond.FirstUseEver);
             bool open = true;
-            if (GameHelper.Ui.ImGuiTheme.BeginWindow($"{this.L("lt.session", "Session")} {rec.StartUtc.ToLocalTime():yyyy-MM-dd HH:mm}###session_detail", ref open))
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow($"{this.L("lt.session", "Session")} {rec.StartUtc.ToLocalTime():yyyy-MM-dd HH:mm}###session_detail", ref open))
             {
                 int maps = rec.Maps.Count(m => m.ParentHash.Length == 0);
                 double totalEx = rec.TotalEx();
@@ -507,7 +507,7 @@ namespace LootTracker
 
             ImGui.SetNextWindowSize(new System.Numerics.Vector2(420, 360), ImGuiCond.FirstUseEver);
             bool open = true;
-            if (GameHelper.Ui.ImGuiTheme.BeginWindow($"{this.L("lt.loot", "Loot")} — {m.Name}###map_loot", ref open))
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow($"{this.L("lt.loot", "Loot")} — {m.Name}###map_loot", ref open))
             {
                 ImGui.TextColored(m.ProfitEx >= 0 ? GreenCol : RedCol, divHist
                     ? $"{m.ProfitEx / rate:+0.##;-0.##;0} div"

@@ -3,7 +3,7 @@
 // </copyright>
 
 
-namespace GameHelper.RemoteEnums.Entity
+namespace ExileCenter.RemoteEnums.Entity
 {
     using System;
 

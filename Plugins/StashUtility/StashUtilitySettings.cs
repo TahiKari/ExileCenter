@@ -1,6 +1,6 @@
 namespace StashUtility
 {
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
     using System.Collections.Generic;
     using System.Numerics;
 

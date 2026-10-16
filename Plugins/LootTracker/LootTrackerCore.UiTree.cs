@@ -4,7 +4,7 @@ namespace LootTracker
     using System.Numerics;
     using System.Reflection;
     using System.Runtime.InteropServices;
-    using GameHelper;
+    using ExileCenter;
     using ImGuiNET;
 
     // ── Experience-bar resolution by Flags fingerprint (fork-independent) ─────────────────────────
@@ -36,8 +36,8 @@ namespace LootTracker
             EnsureGameUiReflection(ui);
             var excluded = new System.Collections.Generic.HashSet<IntPtr>
             { ui.ChatParent.Address, ui.LeftPanel.Address, ui.RightPanel.Address };
-            if (atlasProp?.GetValue(ui) is GameHelper.RemoteObjects.UiElement.UiElementBase atlas) excluded.Add(atlas.Address);
-            if (worldMapProp?.GetValue(ui) is GameHelper.RemoteObjects.UiElement.UiElementBase world) excluded.Add(world.Address);
+            if (atlasProp?.GetValue(ui) is ExileCenter.RemoteObjects.UiElement.UiElementBase atlas) excluded.Add(atlas.Address);
+            if (worldMapProp?.GetValue(ui) is ExileCenter.RemoteObjects.UiElement.UiElementBase world) excluded.Add(world.Address);
             if (this.HasMapCompletionLabel(ui.Address, excluded)) this.FinishCurrentMap(now);
         }
 

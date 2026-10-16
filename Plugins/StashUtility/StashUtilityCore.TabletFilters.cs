@@ -5,8 +5,8 @@ namespace StashUtility
     using System.IO;
     using System.Linq;
     using System.Numerics;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.Utils;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Models;
 
@@ -20,7 +20,7 @@ namespace StashUtility
         private static void MetaText(string text) => ImGuiHelper.WrappedText(text);
         private static TabletMetaCatalog MetaCatalog => Data.ModDatabase.TabletMeta;
         private static string MetaDisplayText(TabletMetaModifier modifier) =>
-            GameHelper.Localization.OverlayLocalization.CurrentLanguage == GameHelper.Localization.OverlayLanguage.French
+            ExileCenter.Localization.OverlayLocalization.CurrentLanguage == ExileCenter.Localization.OverlayLanguage.French
                 ? modifier.FrenchText : modifier.EnglishText;
         private static TabletFilterProfile ActiveMetaProfile(TabletProfile settings)
             => settings.MetaProfiles?.FirstOrDefault(p => p != null && p.Id == settings.ActiveMetaProfileId);
@@ -522,7 +522,7 @@ namespace StashUtility
         {
             Settings.TabletProfiles.TryGetValue(type ?? "", out var settings);
             var observation = MetaCatalog.Recognize(type, mods?.ExplicitMods.Select(m => m.name),
-                mods != null && mods.Rarity != GameHelper.RemoteEnums.Rarity.Unique);
+                mods != null && mods.Rarity != ExileCenter.RemoteEnums.Rarity.Unique);
             for (int i = 0; mods != null && i < observation.Mods.Count; i++)
             {
                 var raw = mods.ExplicitMods[i];
@@ -562,14 +562,14 @@ namespace StashUtility
             DrawTabletRankBadge(pos, size, badge, scale, Math.Max(2, Settings.BorderMargin * scale));
         }
 
-        private void DrawItemRarityMarker(Vector2 pos, Vector2 size, float margin, float borderThickness, GameHelper.RemoteEnums.Rarity rarity)
+        private void DrawItemRarityMarker(Vector2 pos, Vector2 size, float margin, float borderThickness, ExileCenter.RemoteEnums.Rarity rarity)
         {
             Vector4 color = rarity switch
             {
-                GameHelper.RemoteEnums.Rarity.Normal => Settings.NormalRarityColor,
-                GameHelper.RemoteEnums.Rarity.Magic => Settings.MagicRarityColor,
-                GameHelper.RemoteEnums.Rarity.Rare => Settings.RareRarityColor,
-                GameHelper.RemoteEnums.Rarity.Unique => new(1, .5f, 0, 1),
+                ExileCenter.RemoteEnums.Rarity.Normal => Settings.NormalRarityColor,
+                ExileCenter.RemoteEnums.Rarity.Magic => Settings.MagicRarityColor,
+                ExileCenter.RemoteEnums.Rarity.Rare => Settings.RareRarityColor,
+                ExileCenter.RemoteEnums.Rarity.Unique => new(1, .5f, 0, 1),
                 _ => Settings.NormalRarityColor
             };
             float offset = margin + borderThickness, indicator = Settings.RarityIndicatorSize;

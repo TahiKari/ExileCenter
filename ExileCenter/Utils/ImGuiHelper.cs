@@ -2,13 +2,13 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Utils
+namespace ExileCenter.Utils
 {
     using System;
     using System.Collections.Generic;
     using System.Numerics;
     using System.Linq;
-    using GameHelper.RemoteEnums;
+    using ExileCenter.RemoteEnums;
     using GameOffsets.Natives;
     using ImGuiNET;
 

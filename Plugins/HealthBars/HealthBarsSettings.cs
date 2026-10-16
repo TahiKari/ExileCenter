@@ -5,7 +5,7 @@
 namespace HealthBars
 {
     using System.Collections.Generic;
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
 
     /// <summary>
     ///     <see cref="HealthBars" /> plugin settings class.

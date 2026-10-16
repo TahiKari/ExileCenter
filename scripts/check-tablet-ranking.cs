@@ -12,7 +12,7 @@ using System.Runtime.InteropServices;
 using StashUtility;
 using StashUtility.Models;
 using StashUtility.Data;
-using GameHelper.RemoteObjects.Components;
+using ExileCenter.RemoteObjects.Components;
 using Newtonsoft.Json;
 
 internal static class TabletRankingCheck
@@ -348,10 +348,10 @@ internal static class TabletRankingCheck
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
         string previousDirectory = Directory.GetCurrentDirectory();
         Directory.SetCurrentDirectory(Path.GetDirectoryName(typeof(TabletRankingCheck).Assembly.Location));
-        var process = GameHelper.Core.Process;
+        var process = ExileCenter.Core.Process;
         var handle = process.GetType().GetProperty("Handle", flags);
         var previousReader = handle.GetValue(process);
-        var readerType = typeof(GameHelper.Core).Assembly.GetType("GameHelper.Utils.SafeMemoryHandle");
+        var readerType = typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Utils.SafeMemoryHandle");
         var reader = Activator.CreateInstance(readerType, flags, null, new object[] { System.Diagnostics.Process.GetCurrentProcess().Id }, null);
         var parent = Marshal.AllocHGlobal(Marshal.SizeOf<GameOffsets.Objects.UiElement.UiElementBaseOffset>());
         var child = Marshal.AllocHGlobal(Marshal.SizeOf<GameOffsets.Objects.UiElement.UiElementBaseOffset>());
@@ -367,7 +367,7 @@ internal static class TabletRankingCheck
             var highlightPlugin = new StashUtilityCore { DllDirectory = root };
             highlightPlugin.Settings.EnableTabletManager = true;
             highlightPlugin.Settings.HideTabletHighlightsOnItemHover = false;
-            var itemType = typeof(GameHelper.RemoteObjects.States.InGameStateObjects.Item);
+            var itemType = typeof(ExileCenter.RemoteObjects.States.InGameStateObjects.Item);
             var entityType = itemType.BaseType;
             var highlight = typeof(StashUtilityCore).GetMethod("EvaluateAndHighlightItem", flags);
             void CheckItemOverlay(string path, string name, bool expected)
@@ -376,7 +376,7 @@ internal static class TabletRankingCheck
                 entityType.GetProperty("Path").SetValue(item, path);
                 var baseComponent = new Base(IntPtr.Zero);
                 typeof(Base).GetProperty("BaseItemName").SetValue(baseComponent, name);
-                var components = (System.Collections.Concurrent.ConcurrentDictionary<string, GameHelper.RemoteObjects.Components.ComponentBase>)entityType.GetField("componentCache", flags).GetValue(item);
+                var components = (System.Collections.Concurrent.ConcurrentDictionary<string, ExileCenter.RemoteObjects.Components.ComponentBase>)entityType.GetField("componentCache", flags).GetValue(item);
                 components["Base"] = baseComponent;
                 ImGuiNET.ImGui.NewFrame();
                 int before = ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer.Size;
@@ -441,7 +441,7 @@ internal static class TabletRankingCheck
             ImGuiNET.ImGui.NewFrame();
             typeof(StashUtilityCore).GetMethod("DrawMetaTabletHighlight", flags).Invoke(uiPlugin, new object[] { "Fixture", "Irradiated Tablet", new Vector2(200,40), new Vector2(52), badgeMods });
             vertices = ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
-            uint gold = GameHelper.Utils.ImGuiHelper.Color(new Vector4(.92f, .76f, .32f, 1));
+            uint gold = ExileCenter.Utils.ImGuiHelper.Color(new Vector4(.92f, .76f, .32f, 1));
             Check(Enumerable.Range(0, vertices.Size).Any(i => vertices[i].col == gold), "AND / OR border uses the best user rank rather than a yellow status override");
             ImGuiNET.ImGui.EndFrame();
             string absent = ModDatabase.AllTabletMods.First(m => m.TabletTypes.Contains("Irradiated Tablet") &&
@@ -499,7 +499,7 @@ internal static class TabletRankingCheck
             {
                 ImGuiNET.ImGui.GetIO().MousePos = mouse;
                 ImGuiNET.ImGui.GetIO().WantCaptureMouse = false;
-                queue.Add(((GameHelper.RemoteObjects.States.InGameStateObjects.Item)null, new Vector2(200, 40), new Vector2(30)));
+                queue.Add(((ExileCenter.RemoteObjects.States.InGameStateObjects.Item)null, new Vector2(200, 40), new Vector2(30)));
                 flush.Invoke(plugin, null);
             }
             Check(plugin.Settings.HideTabletHighlightsOnItemHover, "Automatic hiding enabled by default");
@@ -534,7 +534,7 @@ internal static class TabletRankingCheck
         const BindingFlags flags = BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic;
         var context = ImGuiNET.ImGui.CreateContext();
         string previousDirectory = Directory.GetCurrentDirectory();
-        var previousLanguage = GameHelper.Core.GHSettings.UiLanguage;
+        var previousLanguage = ExileCenter.Core.GHSettings.UiLanguage;
         var isolated = Path.Combine(Path.GetDirectoryName(typeof(TabletRankingCheck).Assembly.Location), "tablet-layout-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(isolated, "Localization"));
         foreach (string language in new[] { "fr-FR", "en-US" })
@@ -542,7 +542,7 @@ internal static class TabletRankingCheck
         try
         {
             Directory.SetCurrentDirectory(isolated);
-            GameHelper.Core.GHSettings.UiLanguage = GameHelper.Localization.OverlayLanguage.French;
+            ExileCenter.Core.GHSettings.UiLanguage = ExileCenter.Localization.OverlayLanguage.French;
             var io = ImGuiNET.ImGui.GetIO();
             unsafe { io.NativePtr->IniFilename = null; }
             io.DisplaySize = new Vector2(1280, 960); io.DeltaTime = 1f / 60;
@@ -550,11 +550,11 @@ internal static class TabletRankingCheck
             io.Fonts.GetTexDataAsRGBA32(out IntPtr atlas, out int atlasWidth, out int atlasHeight, out int bytes);
             io.Fonts.SetTexID(new IntPtr(1));
             var pixels = new byte[atlasWidth * atlasHeight * bytes]; Marshal.Copy(atlas, pixels, 0, pixels.Length);
-            typeof(GameHelper.Ui.ImGuiTheme).GetMethod("Apply", flags).Invoke(null, null);
+            typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("Apply", flags).Invoke(null, null);
             Vector4[] Colors() => Enumerable.Range(0, (int)ImGuiNET.ImGuiCol.COUNT).Select(i => ImGuiNET.ImGui.GetStyle().Colors[i]).ToArray();
             var original = Colors();
-            var names = (string[])typeof(GameHelper.Ui.ImGuiTheme).GetField("PluginThemeNames", flags).GetValue(null);
-            Check(names.Select(GameHelper.Ui.ImGuiTheme.PluginAccent).Distinct().Count() == names.Length, "Every bundled plugin has a distinct accent");
+            var names = (string[])typeof(ExileCenter.Ui.ImGuiTheme).GetField("PluginThemeNames", flags).GetValue(null);
+            Check(names.Select(ExileCenter.Ui.ImGuiTheme.PluginAccent).Distinct().Count() == names.Length, "Every bundled plugin has a distinct accent");
             // OKLab measures perceived differences; unequal RGB values alone do not prevent lookalikes.
             Vector3 PerceptualColor(Vector4 color)
             {
@@ -570,23 +570,23 @@ internal static class TabletRankingCheck
             for (int i = 0; i < names.Length; i++)
                 for (int j = 0; j < i; j++)
                 {
-                    Check(Vector3.Distance(PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[i])),
-                        PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[j]))) >= .075f, "Muted plugin colours remain perceptually separated: " + names[i] + " / " + names[j]);
-                    Check(Vector3.Distance(PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[i] + "/appearance")),
-                        PerceptualColor(GameHelper.Ui.ImGuiTheme.PluginAccent(names[j] + "/appearance"))) >= .075f, "Muted section colours remain separated: " + names[i] + " / " + names[j]);
+                    Check(Vector3.Distance(PerceptualColor(ExileCenter.Ui.ImGuiTheme.PluginAccent(names[i])),
+                        PerceptualColor(ExileCenter.Ui.ImGuiTheme.PluginAccent(names[j]))) >= .075f, "Muted plugin colours remain perceptually separated: " + names[i] + " / " + names[j]);
+                    Check(Vector3.Distance(PerceptualColor(ExileCenter.Ui.ImGuiTheme.PluginAccent(names[i] + "/appearance")),
+                        PerceptualColor(ExileCenter.Ui.ImGuiTheme.PluginAccent(names[j] + "/appearance"))) >= .075f, "Muted section colours remain separated: " + names[i] + " / " + names[j]);
                 }
             var backgrounds = new HashSet<Vector4>();
             foreach (string name in names)
             {
-                using (GameHelper.Ui.ImGuiTheme.UsePluginTheme(name))
+                using (ExileCenter.Ui.ImGuiTheme.UsePluginTheme(name))
                 {
                     var accent = ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark];
-                    Check(accent == GameHelper.Ui.ImGuiTheme.PluginAccent(name), "Plugin theme is applied: " + name);
+                    Check(accent == ExileCenter.Ui.ImGuiTheme.PluginAccent(name), "Plugin theme is applied: " + name);
                     ImGuiNET.ImGui.ColorConvertRGBtoHSV(accent.X, accent.Y, accent.Z, out _, out float saturation, out float brightness);
                     Check(saturation <= .73f && brightness <= .881f, "Plugin accents stay subdued: " + name);
                     backgrounds.Add(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.WindowBg]);
                     Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.FrameBg] != original[(int)ImGuiNET.ImGuiCol.FrameBg], "Input fields follow the plugin palette: " + name);
-                    using (GameHelper.Ui.ImGuiTheme.UsePluginTheme(name + "/appearance"))
+                    using (ExileCenter.Ui.ImGuiTheme.UsePluginTheme(name + "/appearance"))
                     {
                         Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.CheckMark] == accent, "Sections retain the exact plugin accent: " + name);
                     }
@@ -597,7 +597,7 @@ internal static class TabletRankingCheck
             Check(backgrounds.Count == names.Length, "Every plugin has a distinct dark background");
             ImGuiNET.ImGui.PushStyleColor(ImGuiNET.ImGuiCol.WindowBg, Vector4.Zero);
             ImGuiNET.ImGui.PushStyleColor(ImGuiNET.ImGuiCol.ChildBg, Vector4.Zero);
-            using (GameHelper.Ui.ImGuiTheme.UsePluginTheme("Radar"))
+            using (ExileCenter.Ui.ImGuiTheme.UsePluginTheme("Radar"))
             {
                 Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.WindowBg].W == 0, "Transparent gameplay windows remain transparent");
                 Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.ChildBg].W == 0, "Transparent gameplay children remain transparent");
@@ -611,11 +611,11 @@ internal static class TabletRankingCheck
                     ImGuiNET.ImGui.NewFrame();
                     for (int index = 0; index < names.Length; index++)
                     {
-                        using var theme = GameHelper.Ui.ImGuiTheme.UsePluginTheme(names[index]);
+                        using var theme = ExileCenter.Ui.ImGuiTheme.UsePluginTheme(names[index]);
                         ImGuiNET.ImGui.SetNextWindowPos(new Vector2(10 + index % 5 * 254, 10 + index / 5 * 188));
                         ImGuiNET.ImGui.SetNextWindowSize(new Vector2(244, 180));
                         ImGuiNET.ImGui.Begin(names[index] + "##ThemePreview", ImGuiNET.ImGuiWindowFlags.NoSavedSettings | ImGuiNET.ImGuiWindowFlags.NoResize | ImGuiNET.ImGuiWindowFlags.NoMove | ImGuiNET.ImGuiWindowFlags.NoCollapse);
-                        ImGuiNET.ImGui.TextColored(GameHelper.Ui.ImGuiTheme.PluginAccent(names[index]), "Relique ancienne");
+                        ImGuiNET.ImGui.TextColored(ExileCenter.Ui.ImGuiTheme.PluginAccent(names[index]), "Relique ancienne");
                         bool enabled = true; float intensity = .65f;
                         ImGuiNET.ImGui.Checkbox("Activer", ref enabled);
                         ImGuiNET.ImGui.SetNextItemWidth(-1);
@@ -632,26 +632,26 @@ internal static class TabletRankingCheck
             ImGuiNET.ImGui.SetCurrentContext(secondary);
             var secondaryColors = Colors();
             ImGuiNET.ImGui.SetCurrentContext(context);
-            var scope = GameHelper.Ui.ImGuiTheme.UsePluginTheme("LootTracker");
+            var scope = ExileCenter.Ui.ImGuiTheme.UsePluginTheme("LootTracker");
             ImGuiNET.ImGui.SetCurrentContext(secondary);
             scope.Dispose();
             Check(ImGuiNET.ImGui.GetCurrentContext() == secondary && Colors().SequenceEqual(secondaryColors), "Theme disposal respects the native-window ImGui context");
             ImGuiNET.ImGui.DestroyContext(secondary); ImGuiNET.ImGui.SetCurrentContext(context);
             Check(Colors().SequenceEqual(original), "Original context also restored after native-window theme");
-            using (GameHelper.Utils.ImGuiHelper.UseHelpTooltips(false))
+            using (ExileCenter.Utils.ImGuiHelper.UseHelpTooltips(false))
             {
-                Check(!GameHelper.Utils.ImGuiHelper.HelpTooltipsEnabled, "Help can be disabled");
-                using (GameHelper.Utils.ImGuiHelper.UseHelpTooltips(true)) Check(GameHelper.Utils.ImGuiHelper.HelpTooltipsEnabled, "Nested help can be enabled");
-                Check(!GameHelper.Utils.ImGuiHelper.HelpTooltipsEnabled, "Help preference restored after nested page");
+                Check(!ExileCenter.Utils.ImGuiHelper.HelpTooltipsEnabled, "Help can be disabled");
+                using (ExileCenter.Utils.ImGuiHelper.UseHelpTooltips(true)) Check(ExileCenter.Utils.ImGuiHelper.HelpTooltipsEnabled, "Nested help can be enabled");
+                Check(!ExileCenter.Utils.ImGuiHelper.HelpTooltipsEnabled, "Help preference restored after nested page");
             }
-            Check(GameHelper.Utils.ImGuiHelper.HelpTooltipsEnabled, "Tablet help does not disable another plugin's help");
+            Check(ExileCenter.Utils.ImGuiHelper.HelpTooltipsEnabled, "Tablet help does not disable another plugin's help");
             var plugin = new StashUtilityCore { DllDirectory = isolated };
             typeof(StashUtilityCore).GetMethod("ApplyTabletFarmPreset", flags).Invoke(plugin, new object[] { true });
             var profile = plugin.Settings.TabletProfiles["Breach Tablet"];
             var meta = typeof(StashUtilityCore).GetMethod("DrawTabletMetaFilters", flags);
             var draw = typeof(StashUtilityCore).GetMethod("DrawTabletFilterSettings", flags);
-            var push = typeof(GameHelper.Ui.ImGuiTheme).GetMethod("PushSettingsStyle", flags);
-            var pop = typeof(GameHelper.Ui.ImGuiTheme).GetMethod("PopSettingsStyle", flags);
+            var push = typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("PushSettingsStyle", flags);
+            var pop = typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("PopSettingsStyle", flags);
             (Vector2 center, float height, bool referenceOpen) MetaFrame(Vector2 mouse, bool down)
             {
                 io.AddMousePosEvent(mouse.X, mouse.Y); io.AddMouseButtonEvent(0, down);
@@ -704,7 +704,7 @@ internal static class TabletRankingCheck
                 io.AddMousePosEvent(position.X, position.Y); io.AddMouseButtonEvent(0, down);
                 ImGuiNET.ImGui.NewFrame(); push.Invoke(null, null);
                 Vector2 helpCenter;
-                using (GameHelper.Ui.ImGuiTheme.UsePluginTheme("StashUtility/tablets"))
+                using (ExileCenter.Ui.ImGuiTheme.UsePluginTheme("StashUtility/tablets"))
                 {
                     ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16)); ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width, 900));
                     ImGuiNET.ImGui.Begin("Tablettes · ExileCenter", ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
@@ -756,7 +756,7 @@ internal static class TabletRankingCheck
         }
         finally
         {
-            GameHelper.Core.GHSettings.UiLanguage = previousLanguage;
+            ExileCenter.Core.GHSettings.UiLanguage = previousLanguage;
             Directory.SetCurrentDirectory(previousDirectory); ImGuiNET.ImGui.DestroyContext(context);
         }
     }

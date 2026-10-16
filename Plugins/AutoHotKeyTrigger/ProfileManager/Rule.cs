@@ -10,7 +10,7 @@ namespace AutoHotKeyTrigger.ProfileManager
     using System.Linq;
     using System.Numerics;
     using AutoHotKeyTrigger;
-    using GameHelper.Utils;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Newtonsoft.Json;
     using AutoHotKeyTrigger.ProfileManager.Enums;

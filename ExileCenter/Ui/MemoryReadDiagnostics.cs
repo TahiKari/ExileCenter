@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Ui;
+namespace ExileCenter.Ui;
 
 using System;
 using System.Collections.Concurrent;
@@ -79,14 +79,14 @@ public static class MemoryReadDiagnostics
     {
         while (true)
         {
-            yield return new Wait(GameHelperEvents.OnPostRender);
+            yield return new Wait(ExileCenterEvents.OnPostRender);
             if (!Core.GHSettings.ShowMemoryDiagnostics)
             {
                 continue;
             }
 
             ImGui.SetNextWindowSize(new Vector2(900, 500), ImGuiCond.FirstUseEver);
-            if (GameHelper.Ui.ImGuiTheme.BeginWindow("Memory Read Diagnostics", ref Core.GHSettings.ShowMemoryDiagnostics, ImGuiWindowFlags.MenuBar))
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow("Memory Read Diagnostics", ref Core.GHSettings.ShowMemoryDiagnostics, ImGuiWindowFlags.MenuBar))
             {
                 RefreshRowsThrottled();
 
@@ -445,7 +445,7 @@ internal sealed class DiagnosticRow
         // only points at a wrong offset if it's a *plausible* pointer; a repeated null or
         // out-of-range value is just a not-yet-populated field read during load.
         var dominant = topAddresses.Count > 0 ? topAddresses[0].Item1 : 0L;
-        var dominantIsPlausible = GameHelper.Utils.SafeMemoryHandle.IsValidAddress(new IntPtr(dominant));
+        var dominantIsPlausible = ExileCenter.Utils.SafeMemoryHandle.IsValidAddress(new IntPtr(dominant));
         var repeatsHeavily = maxPerAddress >= StructuralRepeatThreshold && uniqueAddresses <= 8;
 
         if (total < 20)

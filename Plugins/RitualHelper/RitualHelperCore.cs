@@ -10,11 +10,11 @@ namespace RitualHelper
     using System.Numerics;
     using System.Reflection;
     using System.Text.RegularExpressions;
-    using GameHelper;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
     using GameOffsets.Objects.States.InGameState;
     using GameOffsets.Objects.UiElement;
     using GameOffsets.Natives;
@@ -1045,7 +1045,7 @@ namespace RitualHelper
         {
             ImGui.SetNextWindowSize(new Vector2(400, 400), ImGuiCond.FirstUseEver);
             var flags = ImGuiWindowFlags.NoFocusOnAppearing;
-            if (GameHelper.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("window.debug_inventories", "Ritual Debug Inventories", "RitualHelperDebug"), ref this.Settings.DebugMode, flags))
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow(this.PluginText.Title("window.debug_inventories", "Ritual Debug Inventories", "RitualHelperDebug"), ref this.Settings.DebugMode, flags))
             {
                 ImGui.TextWrapped(
                     this.PluginText.T("debug.inventories_help", "Showing all active ServerData PlayerInventories with >0 items."));

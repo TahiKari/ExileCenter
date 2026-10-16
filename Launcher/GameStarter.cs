@@ -13,7 +13,7 @@ namespace Launcher
                 var newName = MiscHelper.GenerateRandomString();
                 TemporaryFileManager.Purge();
 
-                var gameHelperPath = GameHelperTransformer.TransformGameHelperExecutable(installDir, appExePath, newName);
+                var gameHelperPath = ExileCenterTransformer.TransformExileCenterExecutable(installDir, appExePath, newName);
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = gameHelperPath,

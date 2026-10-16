@@ -4,9 +4,9 @@ using System.Linq;
 using System.Numerics;
 using AuraTracker.controllers;
 using AuraTracker.util;
-using GameHelper.Localization;
-using GameHelper.RemoteEnums;
-using GameHelper.Utils;
+using ExileCenter.Localization;
+using ExileCenter.RemoteEnums;
+using ExileCenter.Utils;
 using ImGuiNET;
 
 namespace AuraTracker.render;

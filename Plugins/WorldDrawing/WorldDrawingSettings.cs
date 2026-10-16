@@ -4,7 +4,7 @@
 
 namespace WorldDrawing
 {
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
     using System.Numerics;
 
     /// <summary>

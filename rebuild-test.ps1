@@ -1,4 +1,4 @@
-# GameHelper: neu bauen und in den Test-Ordner deployen (ohne GitHub-Upload).
+# ExileCenter: neu bauen und in den Test-Ordner deployen (ohne GitHub-Upload).
 # Doppelklick auf rebuild-test.bat oder:
 #   powershell -ExecutionPolicy Bypass -File rebuild-test.ps1
 #
@@ -30,7 +30,7 @@ else {
 $started = Get-Date
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host " GameHelper Rebuild (Test)" -ForegroundColor Cyan
+Write-Host " ExileCenter Rebuild (Test)" -ForegroundColor Cyan
 Write-Host " $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
@@ -40,8 +40,8 @@ Write-Host ""
 
 & $BuildScript -Configuration $Configuration -OutputDir $OutputDir
 
-if (-not (Test-Path (Join-Path $deployDir "GameHelper.exe"))) {
-    throw "GameHelper.exe fehlt in $deployDir. Build unvollstaendig."
+if (-not (Test-Path (Join-Path $deployDir "ExileCenter.exe"))) {
+    throw "ExileCenter.exe fehlt in $deployDir. Build unvollstaendig."
 }
 
 $elapsed = (Get-Date) - $started
@@ -49,7 +49,7 @@ Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host " Fertig in $([math]::Round($elapsed.TotalSeconds, 1))s" -ForegroundColor Green
 Write-Host " Testordner: $deployDir" -ForegroundColor Green
-Write-Host " Starten:    $deployDir\GameHelper.exe" -ForegroundColor Green
+Write-Host " Starten:    $deployDir\ExileCenter.exe" -ForegroundColor Green
 Write-Host " Version:    $deployDir\VERSION.txt" -ForegroundColor Green
 Write-Host ""
 Write-Host " Hinweis: publish\ bleibt unveraendert." -ForegroundColor DarkGray

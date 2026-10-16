@@ -14,7 +14,10 @@
 
     <LangVersion>latest</LangVersion>
 
-    <AssemblyName>GameHelperDownloader</AssemblyName>
+    <AssemblyName>ExileCenterDownloader</AssemblyName>
+    <Product>ExileCenter</Product>
+    <AssemblyTitle>ExileCenter Downloader</AssemblyTitle>
+    <ExileCenterReleaseTag Condition="'$(ExileCenterReleaseTag)' == ''">v1.5.11-personnalise.38</ExileCenterReleaseTag>
 
     <RootNamespace>Downloader</RootNamespace>
 
@@ -29,6 +32,7 @@
 
 
   <ItemGroup>
+    <AssemblyMetadata Include="ExileCenterReleaseTag" Value="$(ExileCenterReleaseTag)" />
 
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 

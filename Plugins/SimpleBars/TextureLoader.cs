@@ -9,7 +9,7 @@ namespace SimpleBars
     using System.Collections.Generic;
     using System.IO;
     using System.Linq;
-    using GameHelper;
+    using ExileCenter;
 
     /// <summary>
     ///     Loads and cleans up the textures.

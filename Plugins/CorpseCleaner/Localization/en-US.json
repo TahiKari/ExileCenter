@@ -6,7 +6,7 @@
   "native": "oo2core.dll or Exile Forge executable",
   "native_help": "The Oodle library is supplied by your own installation. Selecting Exile Forge extracts only oo2core.dll; its executable is never launched.",
   "close_game": "PoE is open. Close the game to apply or restore this patch. There is no instant in-game toggle.",
-  "backup": "The original archive is kept in .GameHelperCadavres inside the game folder. Standalone installations need enough free space for a full copy of Content.ggpk. Restoration is refused if a game update or another tool has changed the patched archive.",
+  "backup": "The original archive is kept in .ExileCenterCadavres inside the game folder. Standalone installations need enough free space for a full copy of Content.ggpk. Restoration is refused if a game update or another tool has changed the patched archive.",
   "apply": "Hide corpses (game closed)",
   "restore": "Restore original files",
   "cancel": "Cancel preparation",

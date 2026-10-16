@@ -2,14 +2,14 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Cache
+namespace ExileCenter.Cache
 {
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using ImGuiNET;
     using Coroutine;
-    using GameHelper.Utils;
+    using ExileCenter.Utils;
 
     /// <summary>
     ///    The purpose of this class is to cache GGPK data on their addresses.
@@ -66,7 +66,7 @@ namespace GameHelper.Cache
         {
             while (true)
             {
-                yield return new(CoroutineEvents.GameHelperEvents.OnClose);
+                yield return new(CoroutineEvents.ExileCenterEvents.OnClose);
                 this.cache.Clear();
             }
         }

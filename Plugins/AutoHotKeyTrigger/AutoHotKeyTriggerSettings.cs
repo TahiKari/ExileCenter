@@ -5,7 +5,7 @@
 namespace AutoHotKeyTrigger
 {
     using System.Collections.Generic;
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
     using AutoHotKeyTrigger.ProfileManager;
     using ClickableTransparentOverlay.Win32;
     using AutoHotKeyTrigger.ProfileManager.DynamicConditions;

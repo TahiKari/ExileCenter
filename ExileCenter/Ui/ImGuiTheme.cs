@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Ui
+namespace ExileCenter.Ui
 {
     using System;
     using System.Numerics;
@@ -48,13 +48,13 @@ namespace GameHelper.Ui
                 backgroundLoaded = true;
                 try
                 {
-                    using var stream = typeof(ImGuiTheme).Assembly.GetManifestResourceStream("GameHelper.Data.Poe2Background.png");
+                    using var stream = typeof(ImGuiTheme).Assembly.GetManifestResourceStream("ExileCenter.Data.Poe2Background.png");
                     if (stream == null) return;
                     var configuration = Configuration.Default.Clone();
                     configuration.PreferContiguousImageBuffers = true;
                     using var image = Image.Load<Rgba32>(new SixLabors.ImageSharp.Formats.DecoderOptions { Configuration = configuration }, stream);
                     backgroundSize = new Vector2(image.Width, image.Height);
-                    Core.Overlay.AddOrGetImagePointer("GameHelper.Poe2Background", image, false, out backgroundTexture);
+                    Core.Overlay.AddOrGetImagePointer("ExileCenter.Poe2Background", image, false, out backgroundTexture);
                 }
                 catch (Exception ex) { Console.WriteLine($"[Settings.Background] {ex.Message}"); }
             }

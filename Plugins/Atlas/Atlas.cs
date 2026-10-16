@@ -1,10 +1,10 @@
 namespace Atlas
 {
-    using GameHelper;
-    using GameHelper.Localization;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.Localization;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.Utils;
     using GameOffsets.Natives;
     using GameOffsets.Objects.UiElement;
     using ImGuiNET;
@@ -1092,8 +1092,8 @@ namespace Atlas
         {
             var inventoryPanel = InventoryPanel();
 
-            var isGameHelperForeground = Process.GetCurrentProcess().MainWindowHandle == GetForegroundWindow();
-            if (!Core.Process.Foreground && !isGameHelperForeground)
+            var isExileCenterForeground = Process.GetCurrentProcess().MainWindowHandle == GetForegroundWindow();
+            if (!Core.Process.Foreground && !isExileCenterForeground)
                 return;
 
             EnsureProcessHandle();
@@ -4693,7 +4693,7 @@ namespace Atlas
 
             ImGui.SetNextWindowSize(new Vector2(760, 500), ImGuiCond.FirstUseEver);
             bool open = true;
-            if (!GameHelper.Ui.ImGuiTheme.BeginWindow(this.Loc.Title("atlas.planner_title", "Head of the king Rewards", "AtlasRitualPlanner"), ref open))
+            if (!ExileCenter.Ui.ImGuiTheme.BeginWindow(this.Loc.Title("atlas.planner_title", "Head of the king Rewards", "AtlasRitualPlanner"), ref open))
             {
                 ImGui.End();
                 return;

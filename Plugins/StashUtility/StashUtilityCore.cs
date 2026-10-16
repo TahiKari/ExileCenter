@@ -1,12 +1,12 @@
 namespace StashUtility
 {
-    using GameHelper;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
-    using GameHelper.RemoteObjects.UiElement;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.RemoteObjects.UiElement;
+    using ExileCenter.Utils;
     using GameOffsets.Objects.UiElement;
     using GameOffsets.Natives;
     using ImGuiNET;
@@ -414,7 +414,7 @@ namespace StashUtility
             if (!ImGui.BeginTabBar("##stashSettingsPages", ImGuiTabBarFlags.FittingPolicyScroll)) return;
             for (int i = 0; i < pages.Length; i++)
             {
-                using var theme = GameHelper.Ui.ImGuiTheme.UsePluginTheme("StashUtility/" + pages[i]);
+                using var theme = ExileCenter.Ui.ImGuiTheme.UsePluginTheme("StashUtility/" + pages[i]);
                 if (!ImGui.BeginTabItem(PluginText.T("stashutility.ui." + pages[i], labels[i]) + "###stashSettings_" + pages[i])) continue;
                 if (ImGui.BeginChild("##stashSettingsBody", Vector2.Zero))
                 {
@@ -442,7 +442,7 @@ namespace StashUtility
             if (!ImGui.BeginTabBar("##stashFilterPages", ImGuiTabBarFlags.FittingPolicyScroll)) return;
             for (int i = 0; i < groups.Length; i++)
             {
-                using var theme = GameHelper.Ui.ImGuiTheme.UsePluginTheme("StashUtility/" + groups[i]);
+                using var theme = ExileCenter.Ui.ImGuiTheme.UsePluginTheme("StashUtility/" + groups[i]);
                 if (!ImGui.BeginTabItem(PluginText.T("stashutility.ui." + groups[i], labels[i]) + "###stashFilter_" + groups[i])) continue;
                 switch (i)
                 {
@@ -2265,7 +2265,7 @@ namespace StashUtility
                 {
                     if (Core.IsSettingsMenuOpen)
                     {
-                        var hide = typeof(Core).Assembly.GetType("GameHelper.Settings.SettingsWindow")?.GetMethod("HideSettingsWindow", BindingFlags.Static | BindingFlags.NonPublic);
+                        var hide = typeof(Core).Assembly.GetType("ExileCenter.Settings.SettingsWindow")?.GetMethod("HideSettingsWindow", BindingFlags.Static | BindingFlags.NonPublic);
                         if (hide == null) throw new InvalidOperationException(PluginText.T("stashutility.transfer.affinity_menu_failed", "Could not close the GameHelper menu. Close it before starting."));
                         hide.Invoke(null, null);
                     }
@@ -2644,7 +2644,7 @@ namespace StashUtility
                     {
                         if (Core.IsSettingsMenuOpen)
                         {
-                            var hideMenu = typeof(Core).Assembly.GetType("GameHelper.Settings.SettingsWindow")?
+                            var hideMenu = typeof(Core).Assembly.GetType("ExileCenter.Settings.SettingsWindow")?
                                 .GetMethod("HideSettingsWindow", BindingFlags.Static | BindingFlags.NonPublic);
                             if (hideMenu == null)
                             {
@@ -3741,7 +3741,7 @@ namespace StashUtility
             if (affinityTransferRunning || sortRunning) flags |= ImGuiWindowFlags.NoInputs;
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4));
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(4));
-            if (GameHelper.Ui.ImGuiTheme.BeginWindow("##stashInventoryTransfer", flags))
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow("##stashInventoryTransfer", flags))
             {
                 DrawToolbarPositionControls(anchor, location, windowSize, ref Settings.InventoryTransferButtonOffset,
                     ref Settings.InventoryTransferButtonLocked, lockFirst: true);
@@ -3933,7 +3933,7 @@ namespace StashUtility
             if (sortRunning || affinityTransferRunning) flags |= ImGuiWindowFlags.NoInputs;
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4));
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(4));
-            if (GameHelper.Ui.ImGuiTheme.BeginWindow(merchant ? "##sortMerchantStash" : "##sortCurrentStash", flags))
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow(merchant ? "##sortMerchantStash" : "##sortCurrentStash", flags))
             {
                 if (Settings.ShowStashSortButton)
                 {
@@ -3979,7 +3979,7 @@ namespace StashUtility
             ImGui.SetNextWindowPos(viewport.Pos + new Vector2(viewport.Size.X / 2f, 25), ImGuiCond.Always, new Vector2(0.5f, 0));
             ImGui.SetNextWindowSize(new Vector2(Math.Min(compact ? 360f : 650f, Math.Max(250f, viewport.Size.X - 40f)), 0), ImGuiCond.Always);
             ImGui.SetNextWindowBgAlpha(compact ? 0.72f : 0.85f);
-            if (GameHelper.Ui.ImGuiTheme.BeginWindow("##stashAffinityFeedback", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoInputs |
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow("##stashAffinityFeedback", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoInputs |
                 ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.AlwaysAutoResize))
             {
                 ImGui.SetWindowFontScale(compact ? 0.9f : 1f);
@@ -5727,13 +5727,13 @@ namespace StashUtility
                     mouse.X < pos.X + size.X && mouse.Y < pos.Y + size.Y) return;
             }
 
-            var rarity = GameHelper.RemoteEnums.Rarity.Normal;
+            var rarity = ExileCenter.RemoteEnums.Rarity.Normal;
             if (item.TryGetComponent<Mods>(out var modsComponent))
             {
                 rarity = modsComponent.Rarity;
             }
 
-            if (isWaystone && Settings.HideNormalWaystones && rarity == GameHelper.RemoteEnums.Rarity.Normal) return;
+            if (isWaystone && Settings.HideNormalWaystones && rarity == ExileCenter.RemoteEnums.Rarity.Normal) return;
 
             int tier = 0;
             if (isWaystone)

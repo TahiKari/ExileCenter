@@ -97,7 +97,7 @@ internal sealed class DamageTracker
         AccumulateMapTime(now);
     }
 
-    public void VisitSekhema(GameHelper.RemoteObjects.States.InGameStateObjects.SekhemaRunTracker state,
+    public void VisitSekhema(ExileCenter.RemoteObjects.States.InGameStateObjects.SekhemaRunTracker state,
         string hash, string name, int level, uint processId, double now, string label)
     {
         if (string.IsNullOrWhiteSpace(hash) || string.IsNullOrWhiteSpace(name) || !double.IsFinite(now)) { PauseMap(); return; }

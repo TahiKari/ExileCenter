@@ -8,8 +8,8 @@ namespace AutoHotKeyTrigger.ProfileManager
     using System.Collections.Generic;
     using System.Numerics;
     using AutoHotKeyTrigger;
-    using GameHelper;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.Utils;
     using ImGuiNET;
     using Newtonsoft.Json;
 

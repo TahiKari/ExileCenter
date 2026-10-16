@@ -15,12 +15,14 @@ param(
     [string]$MaxAutoUpdateVersion = "1.1.10",
     [switch]$LocalUpdate,
     [switch]$LegacyPackage,
+    [switch]$TransitionPackage,
+    [string]$MigrationSource,
     [string]$LocalSource,
     [string]$LocalDestination = (Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'ExileCenter\Maj ExileCenter'),
     [string]$LocalLabel
 )
 
-$DownloaderRemoteName = "GameHelperDownloader.exe"
+$DownloaderRemoteName = "ExileCenterDownloader.exe"
 $ErrorActionPreference = "Stop"
 $Root = Split-Path $PSScriptRoot -Parent
 
@@ -36,7 +38,7 @@ if ($LocalUpdate) {
         $destination.StartsWith($source + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
         throw 'The update folder must be outside the package source.'
     }
-    foreach ($required in @('GameHelper.exe','GameHelper.dll','GameHelper.deps.json','GameHelper.runtimeconfig.json')) {
+    foreach ($required in @('ExileCenter.exe','ExileCenter.dll','ExileCenter.deps.json','ExileCenter.runtimeconfig.json')) {
         if (-not (Test-Path -LiteralPath (Join-Path $source $required) -PathType Leaf)) { throw "Missing $required" }
     }
     [IO.Directory]::CreateDirectory($destination) | Out-Null
@@ -67,19 +69,29 @@ if ($LocalUpdate) {
         $segments = $relative.Split('/')
         if ($segments -icontains 'config' -or $segments -icontains 'configs' -or $file.Name -ieq 'settings.json') { continue }
         if ($segments.Count -eq 1) {
-            if ($file.Extension -ine '.dll' -and $relative -notin @('GameHelper.exe','GameHelper.deps.json','GameHelper.runtimeconfig.json')) { continue }
+            if ($relative -match '^GameHelper\.' -or ($file.Extension -ine '.dll' -and $relative -notin @('ExileCenter.exe','ExileCenter.deps.json','ExileCenter.runtimeconfig.json'))) { continue }
         } else {
             if ($segments[0] -notin @('Plugins','Localization','fonts') -or
                 $file.Extension -in @('.zip','.rar','.7z','.pdb','.log','.bak','.old','.exe') -or $file.Name -match '(?i)dump') { continue }
         }
         $files[$relative] = $file.FullName
     }
-    # Both entry points must load GameHelper.dll directly. Retaining an upstream
-    # GameHelper.App.exe would let existing shortcuts replace the personal build.
-    $files['GameHelper.App.exe'] = Join-Path $source 'GameHelper.exe'
-    if (-not $LegacyPackage) { $files['ExileCenter.exe'] = Join-Path $source 'GameHelper.exe' }
+    if ($TransitionPackage -or $LegacyPackage) {
+        if ([string]::IsNullOrWhiteSpace($MigrationSource)) { throw 'MigrationSource is required for a transition package.' }
+        foreach ($file in @('GameHelper.exe','GameHelper.dll','GameHelper.deps.json','GameHelper.runtimeconfig.json')) {
+            $path = Join-Path $MigrationSource $file
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing migration bridge: $file" }
+            $files[$file] = $path
+        }
+        $files['GameHelper.App.exe'] = Join-Path $MigrationSource 'GameHelper.exe'
+        foreach ($file in @('ExileCenter.exe','ExileCenter.deps.json','ExileCenter.runtimeconfig.json')) {
+            $files.Remove($file)
+            $name = if ($file -eq 'ExileCenter.exe') { 'ExileCenter.apphost' } else { $file }
+            $files['Localization/ExileCenterMigration/' + $name] = Join-Path $source $file
+        }
+    }
     foreach ($document in @('LICENSE','CREDITS.md','README.md','SECURITY.md')) {
-        if ($LegacyPackage -and $document -eq 'SECURITY.md') { continue }
+        if (($LegacyPackage -or $TransitionPackage) -and $document -eq 'SECURITY.md') { continue }
         $files[$document] = Join-Path $Root $document
     }
     $archive = [IO.Compression.ZipFile]::Open($temporaryPackage,[IO.Compression.ZipArchiveMode]::Create)
@@ -143,8 +155,8 @@ if (-not $SkipBuild) {
 $PublishDir = Join-Path $Root "publish"
 
 if ([string]::IsNullOrEmpty($Version)) {
-    $appExe = Join-Path $PublishDir "GameHelper.App.exe"
-    if (-not (Test-Path $appExe)) { $appExe = Join-Path $PublishDir "GameHelper.exe" }
+    $appExe = Join-Path $PublishDir "ExileCenter.App.exe"
+    if (-not (Test-Path $appExe)) { $appExe = Join-Path $PublishDir "ExileCenter.exe" }
     $vi = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($appExe)
     $Version = if ($vi.FileVersion) { ($vi.FileVersion -split '\.')[0..2] -join '.' } else { "1.0.0" }
 }
@@ -277,7 +289,7 @@ function New-PublishZip {
         [string]$OutputPath
     )
 
-    $zipRoot = Join-Path $env:TEMP "gamehelper-zip-$Version"
+    $zipRoot = Join-Path $env:TEMP "exilecenter-zip-$Version"
     if (Test-Path $zipRoot) { Remove-Item $zipRoot -Recurse -Force }
     New-Item -ItemType Directory -Path $zipRoot | Out-Null
 
@@ -305,15 +317,15 @@ Copy-Item (Join-Path $Root "changelog-history.json") (Join-Path $PublishDir "cha
 
 # Paket-Inhalt erst NACH changelog-history.json berechnen (sonst Hash-Mismatch).
 $publishFiles = @(Get-PublishManifestFiles -PublishDirectory $PublishDir -ExcludePatterns $excludePatterns)
-$zipName = "GameHelper-$Version-full.zip"
-$zipPath = Join-Path $env:TEMP "gamehelper-$zipName"
+$zipName = "ExileCenter-$Version-full.zip"
+$zipPath = Join-Path $env:TEMP "exilecenter-$zipName"
 Write-Host "  Erstelle ZIP-Paket ($zipName) ..." -ForegroundColor DarkGray
 New-PublishZip -Version $Version -PublishDirectory $PublishDir -FileEntries $publishFiles -OutputPath $zipPath
 $zipHash = (Get-FileHash $zipPath -Algorithm SHA256).Hash
 $zipSize = (Get-Item $zipPath).Length
 
 $migrationMessage = @(
-    "Auto-update works up to v$MaxAutoUpdateVersion. From v$MigrationTargetVersion onward, install manually via GameHelperDownloader.exe or the full ZIP from GitHub. || Auto-Update funktioniert bis v$MaxAutoUpdateVersion. Ab v$MigrationTargetVersion bitte manuell per GameHelperDownloader.exe oder ZIP von GitHub installieren."
+    "Auto-update works up to v$MaxAutoUpdateVersion. From v$MigrationTargetVersion onward, install manually via ExileCenterDownloader.exe or the full ZIP from GitHub. || Auto-Update funktioniert bis v$MaxAutoUpdateVersion. Ab v$MigrationTargetVersion bitte manuell per ExileCenterDownloader.exe oder ZIP von GitHub installieren."
 ) -join ''
 
 # Ordner, die beim Update aus bestehenden Installationen entfernt werden sollen.
@@ -370,7 +382,7 @@ else {
     }
 }
 $manifestJson = $manifest | ConvertTo-Json -Depth 5
-$manifestPath = Join-Path $env:TEMP "gamehelper-manifest.json"
+$manifestPath = Join-Path $env:TEMP "exilecenter-manifest.json"
 $manifestJson | Set-Content $manifestPath -Encoding UTF8
 
 Write-Host "  Signiere manifest.json ..." -ForegroundColor DarkGray
@@ -392,7 +404,7 @@ function Ensure-GithubRepository {
     gh repo view $Repo 1>$null 2>$null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  Erstelle oeffentliches GitHub-Repo $Repo ..." -ForegroundColor Yellow
-        gh repo create $Repo --public --description "GameHelper for Path of Exile 2" --confirm 1>$null 2>$null
+        gh repo create $Repo --public --description "ExileCenter for Path of Exile 2" --confirm 1>$null 2>$null
         if ($LASTEXITCODE -ne 0) {
             throw "GitHub-Repo $Repo konnte nicht erstellt werden (gh auth login / Berechtigung pruefen)."
         }
@@ -412,7 +424,7 @@ function Ensure-GithubRepository {
         $readme = $readme -replace 'github\.com/[^/]+/[^/\s\)]+', "github.com/$Repo"
     }
     else {
-        $readme = "# GameHelper`n`nPath of Exile 2 overlay.`n`n**Download:** https://github.com/$Repo/releases/latest/download/GameHelperDownloader.exe`n`nSee [Releases](https://github.com/$Repo/releases) for all files."
+        $readme = "# ExileCenter`n`nPath of Exile 2 overlay.`n`n**Download:** https://github.com/$Repo/releases/latest/download/ExileCenterDownloader.exe`n`nSee [Releases](https://github.com/$Repo/releases) for all files."
     }
     $contentB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($readme))
     $ErrorActionPreference = 'SilentlyContinue'
@@ -558,7 +570,7 @@ function Get-RemoteManifestContent {
 
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        $response = Invoke-WebRequest -Uri $Url -Headers @{ 'User-Agent' = 'GameHelper-Publish' } -UseBasicParsing -TimeoutSec 45
+        $response = Invoke-WebRequest -Uri $Url -Headers @{ 'User-Agent' = 'ExileCenter-Publish' } -UseBasicParsing -TimeoutSec 45
         if (-not [string]::IsNullOrWhiteSpace($response.Content)) {
             $content = $response.Content
             if ($content.Length -gt 0 -and $content[0] -eq [char]0xFEFF) {
@@ -569,7 +581,7 @@ function Get-RemoteManifestContent {
     }
     catch { }
 
-    $tmp = Join-Path $env:TEMP ("gamehelper-manifest-{0}.json" -f [guid]::NewGuid().ToString('N'))
+    $tmp = Join-Path $env:TEMP ("exilecenter-manifest-{0}.json" -f [guid]::NewGuid().ToString('N'))
     try {
         $prevEap = $ErrorActionPreference
         $ErrorActionPreference = 'SilentlyContinue'
@@ -885,7 +897,7 @@ function Test-StagedZipPackage {
 
 Ensure-GithubRepository -Repo $Repository -Root $Root
 
-$stageDir = Join-Path $env:TEMP "gamehelper-github-release-$tag"
+$stageDir = Join-Path $env:TEMP "exilecenter-github-release-$tag"
 if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
 New-Item -ItemType Directory -Path $stageDir | Out-Null
 
@@ -903,11 +915,11 @@ Copy-Item $manifestSigPath (Join-Path $stageDir "manifest.sig") -Force
 if (-not $SkipDownloader) {
     if ($IsWindows -or $env:OS -eq "Windows_NT") {
         Write-Host ""
-        Write-Host "=== GameHelperDownloader bauen ===" -ForegroundColor Cyan
+        Write-Host "=== ExileCenterDownloader bauen ===" -ForegroundColor Cyan
         & (Join-Path $PSScriptRoot "build-downloader.ps1") -Configuration $Configuration
         $downloaderExe = Join-Path $Root $DownloaderRemoteName
         if (-not (Test-Path $downloaderExe)) {
-            throw "GameHelperDownloader.exe fehlt nach dem Build."
+            throw "ExileCenterDownloader.exe fehlt nach dem Build."
         }
         Copy-Item $downloaderExe (Join-Path $stageDir $DownloaderRemoteName) -Force
     }
@@ -947,7 +959,7 @@ $notes = ($Changelog | ForEach-Object {
     if ($_ -match ' \|\| ') { $en = ($_ -split ' \|\| ', 2)[0].Trim() }
     "- $en"
 }) -join "`n"
-$notesPath = Join-Path $env:TEMP "gamehelper-github-notes-$tag.md"
+$notesPath = Join-Path $env:TEMP "exilecenter-github-notes-$tag.md"
 $notes | Set-Content $notesPath -Encoding UTF8
 
 $releaseExists = $false
@@ -959,12 +971,12 @@ $ErrorActionPreference = $prevEap
 
 if (-not $releaseExists) {
     Write-Host "  Erstelle Release $tag ..." -ForegroundColor Cyan
-    gh release create $tag --repo $Repository --title "GameHelper $tag" --notes-file $notesPath --latest
+    gh release create $tag --repo $Repository --title "ExileCenter $tag" --notes-file $notesPath --latest
     if ($LASTEXITCODE -ne 0) { throw "gh release create fehlgeschlagen" }
 }
 else {
     Write-Host "  Aktualisiere bestehendes Release $tag ..." -ForegroundColor Cyan
-    gh release edit $tag --repo $Repository --notes-file $notesPath --title "GameHelper $tag"
+    gh release edit $tag --repo $Repository --notes-file $notesPath --title "ExileCenter $tag"
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  Hinweis: Release Notes konnten nicht aktualisiert werden." -ForegroundColor Yellow
         Write-Host "  Bei 401 Unauthorized: gh auth refresh -s repo" -ForegroundColor DarkYellow
@@ -1071,7 +1083,7 @@ if (-not $SkipRepoDocSync) {
 }
 
 $downloaderUrl = "https://github.com/$Repository/releases/latest/download/$DownloaderRemoteName"
-$zipUrl = "https://github.com/$Repository/releases/latest/download/GameHelper-$Version-full.zip"
+$zipUrl = "https://github.com/$Repository/releases/latest/download/ExileCenter-$Version-full.zip"
 $releaseUrl = "https://github.com/$Repository/releases/tag/$tag"
 
 Write-Host ""
@@ -1089,7 +1101,7 @@ if ($LegacyManifest) {
 else {
     Write-Host "Hinweis: Release enthaelt nur ZIP + Downloader + Manifest (keine Einzel-DLLs mehr)." -ForegroundColor Cyan
 }
-Write-Host "Freunde: GameHelperDownloader.exe oder ZIP teilen (kein Token noetig)." -ForegroundColor Cyan
+Write-Host "Freunde: ExileCenterDownloader.exe oder ZIP teilen (kein Token noetig)." -ForegroundColor Cyan
 
 Clear-ReleaseNotes -Root $Root
 

@@ -4,9 +4,9 @@ using System.Linq;
 using System.Numerics;
 using KikiMeter.controllers;
 using AuraTracker.util;
-using GameHelper.Localization;
-using GameHelper.RemoteEnums;
-using GameHelper.Utils;
+using ExileCenter.Localization;
+using ExileCenter.RemoteEnums;
+using ExileCenter.Utils;
 using ImGuiNET;
 
 namespace KikiMeter.render;
@@ -53,7 +53,7 @@ internal sealed class DamageMeterRenderer
         try
         {
             style.WindowMenuButtonPosition = ImGuiDir.Right;
-            expanded = GameHelper.Ui.ImGuiTheme.BeginWindow(detached ? "##AuraTrackerDesktop" : text.Title("meter.title", "Damage meter (estimated)", "AuraTrackerDamageMeter"), flags);
+            expanded = ExileCenter.Ui.ImGuiTheme.BeginWindow(detached ? "##AuraTrackerDesktop" : text.Title("meter.title", "Damage meter (estimated)", "AuraTrackerDamageMeter"), flags);
         }
         finally { style.WindowMenuButtonPosition = previousButtonPosition; }
         if (!detached)
@@ -75,7 +75,7 @@ internal sealed class DamageMeterRenderer
         {
             if (expanded)
             {
-                if (detached) ImGui.TextColored(GameHelper.Ui.ImGuiTheme.Accent, text.T("meter.heading", "DAMAGE METER"));
+                if (detached) ImGui.TextColored(ExileCenter.Ui.ImGuiTheme.Accent, text.T("meter.heading", "DAMAGE METER"));
                 float rowRight = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
                 ImGui.TextColored(meter.InCombat ? new Vector4(0.45f, 0.85f, 0.65f, 1f) : new Vector4(0.65f, 0.69f, 0.76f, 1f),
                     text.T(meter.InCombat ? "meter.active" : "meter.idle", meter.InCombat ? "In combat" : "Waiting"));
@@ -232,7 +232,7 @@ internal sealed class DamageMeterRenderer
         {
             if (mode > 0) ImGui.SameLine();
             bool selected = comparisonMulti == (mode == 1);
-            if (selected) ImGui.PushStyleColor(ImGuiCol.Button, GameHelper.Ui.ImGuiTheme.AccentMuted);
+            if (selected) ImGui.PushStyleColor(ImGuiCol.Button, ExileCenter.Ui.ImGuiTheme.AccentMuted);
             if (ImGui.SmallButton(text.T(mode == 0 ? "meter.single" : "meter.multi", mode == 0 ? "Single-target" : "Multi-target") + "##compare" + mode))
                 comparisonMulti = mode == 1;
             if (selected) ImGui.PopStyleColor();
@@ -327,7 +327,7 @@ internal sealed class DamageMeterRenderer
                     mode == 0 ? "Map" : mode == 1 ? "Single" : "Multi");
             if (mode > 0 && ImGui.GetItemRectMax().X + ImGui.CalcTextSize(label).X +
                 ImGui.GetStyle().FramePadding.X * 2 + ImGui.GetStyle().ItemSpacing.X <= modeRight) ImGui.SameLine();
-            if (mapMode == mode) ImGui.PushStyleColor(ImGuiCol.Button, GameHelper.Ui.ImGuiTheme.AccentMuted);
+            if (mapMode == mode) ImGui.PushStyleColor(ImGuiCol.Button, ExileCenter.Ui.ImGuiTheme.AccentMuted);
             bool selected = mapMode == mode;
             if (ImGui.SmallButton(label + "##MapMode" + mode)) mapMode = mode;
             if (selected) ImGui.PopStyleColor();

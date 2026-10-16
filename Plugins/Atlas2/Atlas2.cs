@@ -1,11 +1,11 @@
 ﻿namespace Atlas2
 {
-    using GameHelper;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
-    using GameHelper.RemoteObjects.UiElement;
-    using GameHelper.Utils;
+    using ExileCenter;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.RemoteObjects.UiElement;
+    using ExileCenter.Utils;
     using GameOffsets.Natives;
     using ImGuiNET;
     using Newtonsoft.Json;
@@ -157,44 +157,44 @@
             this.DrawSettingsTabs("Atlas2Settings",
                 ("search", "Search", () =>
                 {
-                    ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.search_maps", "Search Maps", "Search Maps"));
-                    ImGui.InputTextWithHint(GameHelper.Localization.OverlayLocalization.Title("ui.labels.search_map", "Search Map", "Search Map"),
-                        GameHelper.Localization.OverlayLocalization.T("ui.labels.you_can_search_multiple_maps_at_once_using_a_comma_separator", "You can search multiple maps at once using a comma separator ','"), ref Settings.SearchQuery, 256);
+                    ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.search_maps", "Search Maps", "Search Maps"));
+                    ImGui.InputTextWithHint(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.search_map", "Search Map", "Search Map"),
+                        ExileCenter.Localization.OverlayLocalization.T("ui.labels.you_can_search_multiple_maps_at_once_using_a_comma_separator", "You can search multiple maps at once using a comma separator ','"), ref Settings.SearchQuery, 256);
                     ImGui.SameLine();
-                    if (ImGui.SmallButton(GameHelper.Localization.OverlayLocalization.Title("ui.labels.clear", "Clear", "Clear")))
+                    if (ImGui.SmallButton(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.clear", "Clear", "Clear")))
                         Settings.SearchQuery = string.Empty;
-                    ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_shortest_path_to", "Show shortest path to", "Show shortest path to"));
+                    ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.show_shortest_path_to", "Show shortest path to", "Show shortest path to"));
                     DrawUnifiedCategories();
                     
-                    ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.path_thickness", "Path Thickness", "Path Thickness"), ref Settings.PathLineThickness, 1.0f, 8.0f);
+                    ImGui.SliderFloat(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.path_thickness", "Path Thickness", "Path Thickness"), ref Settings.PathLineThickness, 1.0f, 8.0f);
                 }),
                 ("appearance", "Appearance", () =>
                 {
-                    ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.atlas_settings", "Atlas Settings", "Atlas Settings"));
-                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.hide_completed_maps", "Hide Completed Maps", "Hide Completed Maps"), ref Settings.HideCompletedMaps);
-                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.hide_not_accessible_maps", "Hide Not Accessible Maps", "Hide Not Accessible Maps"), ref Settings.HideNotAccessibleMaps);
-                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_map_counts", "Show Map Counts", "Show Map Counts"), ref Settings.ShowMapCounts);
-                    ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.draw_connected_node_and_badge_counts_under_each_map_label_on_the_atlas", "Draw connected-node and badge counts under each map label on the Atlas."));
-                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_content", "Show Content", "Show Content"), ref Settings.ShowContent);
-                    ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.draw_the_node_s_content_under_each_map_label_using_the_known_names", "Draw the node's content under each map label, using the known names."));
+                    ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.atlas_settings", "Atlas Settings", "Atlas Settings"));
+                    ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.hide_completed_maps", "Hide Completed Maps", "Hide Completed Maps"), ref Settings.HideCompletedMaps);
+                    ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.hide_not_accessible_maps", "Hide Not Accessible Maps", "Hide Not Accessible Maps"), ref Settings.HideNotAccessibleMaps);
+                    ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.show_map_counts", "Show Map Counts", "Show Map Counts"), ref Settings.ShowMapCounts);
+                    ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.draw_connected_node_and_badge_counts_under_each_map_label_on_the_atlas", "Draw connected-node and badge counts under each map label on the Atlas."));
+                    ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.show_content", "Show Content", "Show Content"), ref Settings.ShowContent);
+                    ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.draw_the_node_s_content_under_each_map_label_using_the_known_names", "Draw the node's content under each map label, using the known names."));
                     ImGui.SameLine();
-                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_node_index_debug_re", "Show Node Index (debug/RE)", "Show Node Index (debug/RE)"), ref Settings.ShowNodeIndex);
+                    ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.show_node_index_debug_re", "Show Node Index (debug/RE)", "Show Node Index (debug/RE)"), ref Settings.ShowNodeIndex);
                     if (Settings.ShowContent)
                     {
                         ImGui.Indent();
-                        ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_content_icons", "Show Content Icons", "Show Content Icons"), ref Settings.ShowContentIcons);
+                        ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.show_content_icons", "Show Content Icons", "Show Content Icons"), ref Settings.ShowContentIcons);
                         if (Settings.ShowContentIcons)
-                            ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.content_icon_size", "Content Icon Size", "Content Icon Size"), ref Settings.ContentIconSize, 16f, 64f);
-                        ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.debug_content", "Debug Content", "Debug Content"), ref Settings.ShowContentDebug);
-                        ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.also_show_unmapped_content_as_its_raw_0x_value_for_identifying_new_con", "Also show unmapped content as its raw 0x value (for identifying new content)."));
+                            ImGui.SliderFloat(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.content_icon_size", "Content Icon Size", "Content Icon Size"), ref Settings.ContentIconSize, 16f, 64f);
+                        ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.debug_content", "Debug Content", "Debug Content"), ref Settings.ShowContentDebug);
+                        ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.also_show_unmapped_content_as_its_raw_0x_value_for_identifying_new_con", "Also show unmapped content as its raw 0x value (for identifying new content)."));
                         ImGui.Unindent();
                     }
-                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_biome_border", "Show Biome Border", "Show Biome Border"), ref Settings.ShowBiomeBorder);
+                    ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.show_biome_border", "Show Biome Border", "Show Biome Border"), ref Settings.ShowBiomeBorder);
                     if (Settings.ShowBiomeBorder)
-                        if (ImGui.TreeNode(GameHelper.Localization.OverlayLocalization.Title("ui.labels.biome_settings", "Biome Settings", "Biome Settings")))
+                        if (ImGui.TreeNode(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.biome_settings", "Biome Settings", "Biome Settings")))
                         {
                             ImGui.SetNextItemWidth(180);
-                            ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.biome_border_thickness", "Biome Border Thickness", "Biome Border Thickness"), ref Settings.BiomeBorderThickness, 1.0f, 6.0f);
+                            ImGui.SliderFloat(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.biome_border_thickness", "Biome Border Thickness", "Biome Border Thickness"), ref Settings.BiomeBorderThickness, 1.0f, 6.0f);
                     
                             if (ImGui.BeginTable("split", 3))
                             {
@@ -236,56 +236,56 @@
                             ImGui.TreePop();
                         }
                     
-                    ImGui.SeparatorText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.layout_settings", "Layout Settings", "Layout Settings"));
+                    ImGui.SeparatorText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.layout_settings", "Layout Settings", "Layout Settings"));
                     var nudge = Settings.AnchorNudge;
-                    if (ImGui.SliderFloat2(GameHelper.Localization.OverlayLocalization.Title("ui.labels.layout_nudge_px", "Layout Nudge (px)", "Layout Nudge (px)"), ref nudge, -60f, 60f))
+                    if (ImGui.SliderFloat2(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.layout_nudge_px", "Layout Nudge (px)", "Layout Nudge (px)"), ref nudge, -60f, 60f))
                         Settings.AnchorNudge = nudge;
-                    ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.scale_multiplier", "Scale Multiplier", "Scale Multiplier"), ref Settings.ScaleMultiplier, 0.5f, 3.0f);
+                    ImGui.SliderFloat(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.scale_multiplier", "Scale Multiplier", "Scale Multiplier"), ref Settings.ScaleMultiplier, 0.5f, 3.0f);
                 }),
                 ("tools", "Tools", () =>
                 {
-                    ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_atlas_graph", "Show Atlas Graph", "Show Atlas Graph"), ref Settings.ShowAtlasGraph);
+                    ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.show_atlas_graph", "Show Atlas Graph", "Show Atlas Graph"), ref Settings.ShowAtlasGraph);
                     if (Settings.ShowAtlasGraph)
                     {
                         ImGui.SameLine();
                         ColorSwatch("##AtlasGraphLineColor", ref Settings.AtlasGraphLineColor);
-                        ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.graph_x_offset", "Graph X-Offset", "Graph X-Offset"), ref Settings.AtlasGraphOffsetX, -200f, 200f);
-                        ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.graph_y_offset", "Graph Y-Offset", "Graph Y-Offset"), ref Settings.AtlasGraphOffsetY, -200f, 200f);
+                        ImGui.SliderFloat(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.graph_x_offset", "Graph X-Offset", "Graph X-Offset"), ref Settings.AtlasGraphOffsetX, -200f, 200f);
+                        ImGui.SliderFloat(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.graph_y_offset", "Graph Y-Offset", "Graph Y-Offset"), ref Settings.AtlasGraphOffsetY, -200f, 200f);
                     }
                     
-                    if (ImGui.TreeNode(GameHelper.Localization.OverlayLocalization.Title("ui.labels.uncharted_waters", "Uncharted Waters", "Uncharted Waters")))
+                    if (ImGui.TreeNode(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.uncharted_waters", "Uncharted Waters", "Uncharted Waters")))
                     {
-                        ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.highlight_hovered_ship_leylines", "Highlight hovered ship leylines", "Highlight hovered ship leylines"), ref Settings.ShowUnchartedLeylines);
-                        ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.highlights_the_atlas_nodes_and_connections_revealed_by_the_hovered_unc", "Highlights the atlas nodes and connections revealed by the hovered Uncharted Waters ship."));
+                        ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.highlight_hovered_ship_leylines", "Highlight hovered ship leylines", "Highlight hovered ship leylines"), ref Settings.ShowUnchartedLeylines);
+                        ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.highlights_the_atlas_nodes_and_connections_revealed_by_the_hovered_unc", "Highlights the atlas nodes and connections revealed by the hovered Uncharted Waters ship."));
                         if (Settings.ShowUnchartedLeylines)
                         {
-                            ImGui.ColorEdit4(GameHelper.Localization.OverlayLocalization.Title("ui.labels.leyline_color", "Leyline Color", "Leyline Color"), ref Settings.UnchartedLeylineColor);
-                            ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.leyline_thickness", "Leyline Thickness", "Leyline Thickness"), ref Settings.UnchartedLeylineThickness, 1f, 12f);
+                            ImGui.ColorEdit4(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.leyline_color", "Leyline Color", "Leyline Color"), ref Settings.UnchartedLeylineColor);
+                            ImGui.SliderFloat(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.leyline_thickness", "Leyline Thickness", "Leyline Thickness"), ref Settings.UnchartedLeylineThickness, 1f, 12f);
                         }
                     
-                        ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.show_ships_in_fog", "Show ships in fog", "Show ships in fog"), ref Settings.ShowShipsInFog);
-                        ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.marks_uncharted_waters_ships_that_the_game_is_not_currently_rendering", "Marks Uncharted Waters ships that the game is not currently rendering."));
+                        ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.show_ships_in_fog", "Show ships in fog", "Show ships in fog"), ref Settings.ShowShipsInFog);
+                        ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.marks_uncharted_waters_ships_that_the_game_is_not_currently_rendering", "Marks Uncharted Waters ships that the game is not currently rendering."));
                         if (Settings.ShowShipsInFog)
-                            ImGui.SliderFloat(GameHelper.Localization.OverlayLocalization.Title("ui.labels.ship_icon_size", "Ship Icon Size", "Ship Icon Size"), ref Settings.ShipIconSize, 16f, 96f);
+                            ImGui.SliderFloat(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.ship_icon_size", "Ship Icon Size", "Ship Icon Size"), ref Settings.ShipIconSize, 16f, 96f);
                         ImGui.TreePop();
                     }
                     
-                    if (ImGui.TreeNode(GameHelper.Localization.OverlayLocalization.Title("ui.labels.ritual_atlas_line", "Ritual Atlas Line", "Ritual Atlas Line")))
+                    if (ImGui.TreeNode(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.ritual_atlas_line", "Ritual Atlas Line", "Ritual Atlas Line")))
                     {
-                        ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.predict_ritual_mods", "Predict Ritual mods", "Predict Ritual mods"), ref Settings.ShowRitualPrediction);
-                        ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.predicts_the_deterministic_rite_modifiers_for_eligible_ritual_line_rou", "Predicts the deterministic Rite modifiers for eligible Ritual-line routes."));
-                        ImGui.Checkbox(GameHelper.Localization.OverlayLocalization.Title("ui.labels.head_of_the_king_planner", "Head of the King planner", "Head of the King planner"), ref Settings.ShowRitualPlanner);
-                        ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.lists_and_highlights_ritual_routes_and_their_predicted_rewards_while_l", "Lists and highlights Ritual routes and their predicted rewards while line mode is active."));
+                        ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.predict_ritual_mods", "Predict Ritual mods", "Predict Ritual mods"), ref Settings.ShowRitualPrediction);
+                        ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.predicts_the_deterministic_rite_modifiers_for_eligible_ritual_line_rou", "Predicts the deterministic Rite modifiers for eligible Ritual-line routes."));
+                        ImGui.Checkbox(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.head_of_the_king_planner", "Head of the King planner", "Head of the King planner"), ref Settings.ShowRitualPlanner);
+                        ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.lists_and_highlights_ritual_routes_and_their_predicted_rewards_while_l", "Lists and highlights Ritual routes and their predicted rewards while line mode is active."));
                         if (Settings.ShowRitualPlanner)
                             DrawRewardWeightsTable();
                         ImGui.TreePop();
                     }
                     
-                    if (false && ImGui.TreeNode(GameHelper.Localization.OverlayLocalization.Title("ui.labels.legacy_map_groups", "Legacy Map Groups", "Legacy Map Groups")))
+                    if (false && ImGui.TreeNode(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.legacy_map_groups", "Legacy Map Groups", "Legacy Map Groups")))
                     {
-                        ImGui.InputTextWithHint("##MapGroupName", GameHelper.Localization.OverlayLocalization.T("ui.labels.group_name", "group name"), ref Settings.GroupNameInput, 256);
+                        ImGui.InputTextWithHint("##MapGroupName", ExileCenter.Localization.OverlayLocalization.T("ui.labels.group_name", "group name"), ref Settings.GroupNameInput, 256);
                         ImGui.SameLine();
-                        if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.add_new_map_group", "Add new map group", "Add new map group")))
+                        if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.add_new_map_group", "Add new map group", "Add new map group")))
                         {
                             Settings.MapGroups.Add(new MapGroupSettings(Settings.GroupNameInput, Settings.DefaultBackgroundColor, Settings.DefaultFontColor));
                             Settings.GroupNameInput = string.Empty;
@@ -320,15 +320,15 @@
                                 ImGui.SameLine();
                                 ColorSwatch($"##MapGroupBackgroundColor{i}", ref mapGroup.BackgroundColor);
                                 ImGui.SameLine();
-                                ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.background_color", "Background Color"));
+                                ImGui.TextUnformatted(ExileCenter.Localization.OverlayLocalization.T("ui.labels.background_color", "Background Color"));
                                 ImGui.SameLine();
                                 ColorSwatch($"##MapGroupFontColor{i}", ref mapGroup.FontColor);
-                                ImGui.SameLine(); ImGui.TextUnformatted(GameHelper.Localization.OverlayLocalization.T("ui.labels.font_color", "Font Color"));
+                                ImGui.SameLine(); ImGui.TextUnformatted(ExileCenter.Localization.OverlayLocalization.T("ui.labels.font_color", "Font Color"));
                     
                                 for (int j = 0; j < mapGroup.Maps.Count; j++)
                                 {
                                     var mapName = mapGroup.Maps[j];
-                                    if (ImGui.InputTextWithHint($"##MapName{i}-{j}", GameHelper.Localization.OverlayLocalization.T("ui.labels.map_name", "map name"), ref mapName, 256))
+                                    if (ImGui.InputTextWithHint($"##MapName{i}-{j}", ExileCenter.Localization.OverlayLocalization.T("ui.labels.map_name", "map name"), ref mapName, 256))
                                         mapGroup.Maps[j] = mapName;
                     
                                     ImGui.SameLine();
@@ -344,14 +344,14 @@
                     
                                 if (ImGui.BeginPopupModal($"RenamePopup##{i}", ImGuiWindowFlags.AlwaysAutoResize))
                                 {
-                                    ImGui.InputText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.new_name", "New Name", "New Name"), ref NewGroupName, 256);
-                                    if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.ok", "OK", "OK")))
+                                    ImGui.InputText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.new_name", "New Name", "New Name"), ref NewGroupName, 256);
+                                    if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.ok", "OK", "OK")))
                                     {
                                         mapGroup.Name = NewGroupName;
                                         ImGui.CloseCurrentPopup();
                                     }
                                     ImGui.SameLine();
-                                    if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.cancel", "Cancel", "Cancel")))
+                                    if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.cancel", "Cancel", "Cancel")))
                                     {
                                         ImGui.CloseCurrentPopup();
                                     }
@@ -370,8 +370,8 @@
         {
             var inventoryPanel = InventoryPanel();
 
-            var isGameHelperForeground = Process.GetCurrentProcess().MainWindowHandle == GetForegroundWindow();
-            if (!Core.Process.Foreground && !isGameHelperForeground)
+            var isExileCenterForeground = Process.GetCurrentProcess().MainWindowHandle == GetForegroundWindow();
+            if (!Core.Process.Foreground && !isExileCenterForeground)
                 return;
 
             var player = Core.States.InGameStateObject.CurrentAreaInstance.Player;
@@ -1512,7 +1512,7 @@
             ImGui.SameLine();
             ImGui.SetNextItemWidth(80);
             ImGui.SliderInt($"##{label}Hops", ref maxHops, 1, 200);
-            ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.maximum_path_length_in_maps_to_clear", "Maximum path length in maps to clear."));
+            ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.maximum_path_length_in_maps_to_clear", "Maximum path length in maps to clear."));
             ImGui.SameLine();
             ImGui.Text(label);
         }
@@ -1526,10 +1526,10 @@
                 ImGui.Checkbox("##route", ref category.DrawPath);
                 ImGui.SameLine();
                 ColorSwatch("##pathText", ref category.FontColor);
-                ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.node_text_color_the_path_automatically_uses_the_more_colorful_of_the_t", "Node-text color. The path automatically uses the more colorful of the text and background colors."));
+                ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.node_text_color_the_path_automatically_uses_the_more_colorful_of_the_t", "Node-text color. The path automatically uses the more colorful of the text and background colors."));
                 ImGui.SameLine();
                 ColorSwatch("##background", ref category.BackgroundColor);
-                ImGuiHelper.ToolTip(GameHelper.Localization.OverlayLocalization.T("ui.labels.node_background_color_the_path_automatically_uses_the_more_colorful_of", "Node background color. The path automatically uses the more colorful of the text and background colors."));
+                ImGuiHelper.ToolTip(ExileCenter.Localization.OverlayLocalization.T("ui.labels.node_background_color_the_path_automatically_uses_the_more_colorful_of", "Node background color. The path automatically uses the more colorful of the text and background colors."));
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(75);
                 ImGui.SliderInt("##hops", ref category.MaxHops, 1, 200);
@@ -1538,13 +1538,13 @@
                 if (open)
                 {
                     ImGui.Indent(16f);
-                    if (ImGui.SmallButton(GameHelper.Localization.OverlayLocalization.Title("ui.labels.up", "Up", "Up")) && i > 0) MoveMapGroup(i, -1);
+                    if (ImGui.SmallButton(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.up", "Up", "Up")) && i > 0) MoveMapGroup(i, -1);
                     ImGui.SameLine();
-                    if (ImGui.SmallButton(GameHelper.Localization.OverlayLocalization.Title("ui.labels.down", "Down", "Down")) && i + 1 < Settings.MapGroups.Count) MoveMapGroup(i, 1);
+                    if (ImGui.SmallButton(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.down", "Down", "Down")) && i + 1 < Settings.MapGroups.Count) MoveMapGroup(i, 1);
                     if (string.IsNullOrEmpty(category.BuiltInKey))
                     {
                         ImGui.SetNextItemWidth(260);
-                        ImGui.InputText(GameHelper.Localization.OverlayLocalization.Title("ui.labels.category_name", "Category name", "Category name"), ref category.Name, 256);
+                        ImGui.InputText(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.category_name", "Category name", "Category name"), ref category.Name, 256);
                     }
 
                     var targetNames = category.BuiltInTargets.Keys.ToList();
@@ -1558,16 +1558,16 @@
                     {
                         var map = category.Maps[j];
                         ImGui.SetNextItemWidth(260);
-                        if (ImGui.InputTextWithHint($"##map{j}", GameHelper.Localization.OverlayLocalization.T("ui.labels.map_name", "map name"), ref map, 256)) category.Maps[j] = map;
+                        if (ImGui.InputTextWithHint($"##map{j}", ExileCenter.Localization.OverlayLocalization.T("ui.labels.map_name", "map name"), ref map, 256)) category.Maps[j] = map;
                         ImGui.SameLine();
-                        if (ImGui.SmallButton(GameHelper.Localization.OverlayLocalization.T("ui.labels.remove", "Remove") + $"###RemoveMap{j}")) { category.Maps.RemoveAt(j); break; }
+                        if (ImGui.SmallButton(ExileCenter.Localization.OverlayLocalization.T("ui.labels.remove", "Remove") + $"###RemoveMap{j}")) { category.Maps.RemoveAt(j); break; }
                     }
-                    if (ImGui.SmallButton(GameHelper.Localization.OverlayLocalization.Title("ui.labels.add_map", "Add map", "Add map"))) category.Maps.Add(string.Empty);
+                    if (ImGui.SmallButton(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.add_map", "Add map", "Add map"))) category.Maps.Add(string.Empty);
 
                     if (string.IsNullOrEmpty(category.BuiltInKey))
                     {
                         ImGui.SameLine();
-                        if (ImGui.SmallButton(GameHelper.Localization.OverlayLocalization.Title("ui.labels.delete_category", "Delete category", "Delete category")))
+                        if (ImGui.SmallButton(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.delete_category", "Delete category", "Delete category")))
                         {
                             Settings.MapGroups.RemoveAt(i);
                             ImGui.Unindent(16f);
@@ -1582,9 +1582,9 @@
                 ImGui.PopID();
             }
 
-            ImGui.InputTextWithHint("##newCategory", GameHelper.Localization.OverlayLocalization.T("ui.labels.new_category_name", "new category name"), ref Settings.GroupNameInput, 256);
+            ImGui.InputTextWithHint("##newCategory", ExileCenter.Localization.OverlayLocalization.T("ui.labels.new_category_name", "new category name"), ref Settings.GroupNameInput, 256);
             ImGui.SameLine();
-            if (ImGui.Button(GameHelper.Localization.OverlayLocalization.Title("ui.labels.add_category", "Add category", "Add category")) && !string.IsNullOrWhiteSpace(Settings.GroupNameInput))
+            if (ImGui.Button(ExileCenter.Localization.OverlayLocalization.Title("ui.labels.add_category", "Add category", "Add category")) && !string.IsNullOrWhiteSpace(Settings.GroupNameInput))
             {
                 Settings.MapGroups.Add(new MapGroupSettings(Settings.GroupNameInput.Trim(), Settings.DefaultBackgroundColor, Settings.DefaultFontColor));
                 Settings.GroupNameInput = string.Empty;

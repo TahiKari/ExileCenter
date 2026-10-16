@@ -4,8 +4,8 @@ namespace SekhemaHelper
     using System;
     using System.Collections.Generic;
     using System.Numerics;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
 
     // Grid-space line walkability checker. Copied verbatim from Radar/LineWalker.cs (plugins can't
     // reference each other's assemblies) so the Death-crystal route can follow walkable terrain the

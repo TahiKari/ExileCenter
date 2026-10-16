@@ -7,7 +7,7 @@ echo.
 if %EXITCODE% neq 0 (
     echo Build fehlgeschlagen - Exit-Code %EXITCODE%
 ) else (
-    echo GameHelperDownloader.exe liegt im Projektordner (~1-2 MB, braucht .NET 10).
+    echo ExileCenterDownloader.exe liegt im Projektordner (~1-2 MB, braucht .NET 10).
     echo Fuer ~50 MB ohne .NET: build-downloader.bat -SelfContained
 )
 echo.

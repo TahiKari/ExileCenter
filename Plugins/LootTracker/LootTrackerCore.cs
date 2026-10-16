@@ -6,10 +6,10 @@ namespace LootTracker
     using System.Linq;
     using System.Runtime.InteropServices;
     using System.Text;
-    using GameHelper;
-    using GameHelper.Localization;
-    using GameHelper.Plugin;
-    using GameHelper.RemoteEnums;
+    using ExileCenter;
+    using ExileCenter.Localization;
+    using ExileCenter.Plugin;
+    using ExileCenter.RemoteEnums;
     using ImGuiNET;
     using Newtonsoft.Json;
 
@@ -847,7 +847,7 @@ namespace LootTracker
             }
 
             var sekhema = area.SekhemaRun;
-            bool isSekhema = GameHelper.RemoteObjects.States.InGameStateObjects.SekhemaRunTracker.FloorNumber(details.Id) > 0 || details.Id == "G2_13";
+            bool isSekhema = ExileCenter.RemoteObjects.States.InGameStateObjects.SekhemaRunTracker.FloorNumber(details.Id) > 0 || details.Id == "G2_13";
             if (isSekhema)
             {
                 if (sekhema.CanRestore)
@@ -896,10 +896,10 @@ namespace LootTracker
             "Abyss_Hub",   // The Well of Souls — safe staging hub (NOT Abyss_Pinnacle, which is a map)
         };
 
-        private static bool IsSafeZone(GameHelper.RemoteObjects.FilesStructures.WorldAreaDat details)
+        private static bool IsSafeZone(ExileCenter.RemoteObjects.FilesStructures.WorldAreaDat details)
             => SafeZoneIds.Contains(details.Id);
 
-        private void HandleSekhemaTransition(GameHelper.RemoteObjects.States.InGameStateObjects.AreaInstance area, string name, string inst)
+        private void HandleSekhemaTransition(ExileCenter.RemoteObjects.States.InGameStateObjects.AreaInstance area, string name, string inst)
         {
             var now = DateTime.UtcNow;
             this.BankActiveTime(now);
@@ -936,8 +936,8 @@ namespace LootTracker
             this.SaveActiveState();
         }
 
-        private void HandleZoneTransition(GameHelper.RemoteObjects.States.InGameStateObjects.AreaInstance area,
-            GameHelper.RemoteObjects.FilesStructures.WorldAreaDat details, string inst)
+        private void HandleZoneTransition(ExileCenter.RemoteObjects.States.InGameStateObjects.AreaInstance area,
+            ExileCenter.RemoteObjects.FilesStructures.WorldAreaDat details, string inst)
         {
             bool isMap = !details.IsHideout && !details.IsTown && !IsSafeZone(details);
             bool wasOnMap = this.onMapArea; // map-ness of the area we're leaving (before we overwrite it)

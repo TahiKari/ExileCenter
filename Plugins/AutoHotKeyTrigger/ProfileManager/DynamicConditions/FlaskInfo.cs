@@ -5,12 +5,12 @@
 namespace AutoHotKeyTrigger.ProfileManager.DynamicConditions
 {
     using System;
-    using GameHelper.RemoteObjects.Components;
-    using GameHelper.RemoteObjects.States;
-    using GameHelper.RemoteObjects.States.InGameStateObjects;
+    using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteObjects.States;
+    using ExileCenter.RemoteObjects.States.InGameStateObjects;
     using AutoHotKeyTrigger.ProfileManager.DynamicConditions.Interface;
     using System.Collections.Generic;
-    using GameHelper.RemoteEnums;
+    using ExileCenter.RemoteEnums;
 
     /// <summary>
     ///     The structure describing a flask state

@@ -1,4 +1,4 @@
-using GameHelper.RemoteObjects.Components;
+using ExileCenter.RemoteObjects.Components;
 using GameOffsets.Objects.Components;
 
 namespace Autopot

@@ -5,7 +5,7 @@
 namespace StashValue
 {
     using System.Numerics;
-    using GameHelper.Plugin;
+    using ExileCenter.Plugin;
 
     /// <summary>
     /// <see cref="StashValue"/> plugin settings.

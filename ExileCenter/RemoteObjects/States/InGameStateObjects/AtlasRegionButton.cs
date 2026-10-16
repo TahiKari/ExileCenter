@@ -3,7 +3,7 @@
 // Licensed under the GPL-3.0 license. See LICENSE file in the project root for full license information.
 // </copyright>
 
-namespace GameHelper.RemoteObjects.States.InGameStateObjects;
+namespace ExileCenter.RemoteObjects.States.InGameStateObjects;
 
 using GameOffsets.Natives;
 using System;

@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteObjects.States.InGameStateObjects
+namespace ExileCenter.RemoteObjects.States.InGameStateObjects
 {
     using System;
     using System.Collections.Generic;
@@ -13,8 +13,8 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
     using System.Threading.Tasks;
     using Coroutine;
     using CoroutineEvents;
-    using GameHelper.Cache;
-    using GameHelper.Utils;
+    using ExileCenter.Cache;
+    using ExileCenter.Utils;
     using GameOffsets.Natives;
     using GameOffsets.Objects.States.InGameState;
     using GameOffsets.Objects.UiElement;
@@ -1025,7 +1025,7 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
 
             foreach (var entity in currentArea.AwakeEntities.Values)
             {
-                if (entity.EntitySubtype == GameHelper.RemoteEnums.Entity.EntitySubtypes.PlayerOther)
+                if (entity.EntitySubtype == ExileCenter.RemoteEnums.Entity.EntitySubtypes.PlayerOther)
                 {
                     return true;
                 }
@@ -1164,7 +1164,7 @@ namespace GameHelper.RemoteObjects.States.InGameStateObjects
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.PerFrameDataUpdate);
+                yield return new Wait(ExileCenterEvents.PerFrameDataUpdate);
                 try
                 {
                     if (this.Address != IntPtr.Zero &&

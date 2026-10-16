@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Utils
+namespace ExileCenter.Utils
 {
     using System;
     using System.Collections.Generic;
@@ -10,7 +10,7 @@ namespace GameHelper.Utils
     using System.IO;
     using System.Linq;
     using System.Reflection;
-    using GameHelper.RemoteEnums;
+    using ExileCenter.RemoteEnums;
 
     /// <summary>
     ///     Maps a monster's metadata path (its <c>MonsterVarieties</c> Id, e.g.

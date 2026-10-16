@@ -5,12 +5,12 @@ using System.Numerics;
 using AuraTracker.controllers;
 using AuraTracker.render;
 using Coroutine;
-using GameHelper;
-using GameHelper.CoroutineEvents;
-using GameHelper.Plugin;
-using GameHelper.RemoteEnums;
-using GameHelper.RemoteObjects.States;
-using GameHelper.RemoteObjects.States.InGameStateObjects;
+using ExileCenter;
+using ExileCenter.CoroutineEvents;
+using ExileCenter.Plugin;
+using ExileCenter.RemoteEnums;
+using ExileCenter.RemoteObjects.States;
+using ExileCenter.RemoteObjects.States.InGameStateObjects;
 using Newtonsoft.Json;
 
 namespace AuraTracker

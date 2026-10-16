@@ -2,14 +2,14 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Ui
+namespace ExileCenter.Ui
 {
     using System;
     using System.Collections.Generic;
     using System.Numerics;
     using Coroutine;
     using CoroutineEvents;
-    using GameHelper.Cache;
+    using ExileCenter.Cache;
     using ImGuiNET;
     using RemoteEnums;
     using RemoteObjects.UiElement;
@@ -90,14 +90,14 @@ namespace GameHelper.Ui
         {
             while (true)
             {
-                yield return new Wait(GameHelperEvents.OnRender);
+                yield return new Wait(ExileCenterEvents.OnRender);
                 if (!Core.GHSettings.ShowGameUiExplorer)
                 {
                     continue;
                 }
 
                 Parents.UpdateAllParentsParallel();
-                if (GameHelper.Ui.ImGuiTheme.BeginWindow("Game UiExplorer", ref Core.GHSettings.ShowGameUiExplorer))
+                if (ExileCenter.Ui.ImGuiTheme.BeginWindow("Game UiExplorer", ref Core.GHSettings.ShowGameUiExplorer))
                 {
                     if (ImGui.TreeNode("NOTES"))
                     {

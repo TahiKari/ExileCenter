@@ -2,7 +2,7 @@
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.RemoteObjects.FilesStructures
+namespace ExileCenter.RemoteObjects.FilesStructures
 {
     using System;
     using GameOffsets.Objects.FilesStructures;

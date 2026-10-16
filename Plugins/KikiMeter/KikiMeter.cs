@@ -6,14 +6,14 @@ using System.Numerics;
 using KikiMeter.controllers;
 using KikiMeter.render;
 using Coroutine;
-using GameHelper;
-using GameHelper.CoroutineEvents;
-using GameHelper.Plugin;
-using GameHelper.RemoteEnums;
-using GameHelper.RemoteEnums.Entity;
-using GameHelper.RemoteObjects.Components;
-using GameHelper.RemoteObjects.States;
-using GameHelper.RemoteObjects.States.InGameStateObjects;
+using ExileCenter;
+using ExileCenter.CoroutineEvents;
+using ExileCenter.Plugin;
+using ExileCenter.RemoteEnums;
+using ExileCenter.RemoteEnums.Entity;
+using ExileCenter.RemoteObjects.Components;
+using ExileCenter.RemoteObjects.States;
+using ExileCenter.RemoteObjects.States.InGameStateObjects;
 using Newtonsoft.Json;
 using ImGuiNET;
 
@@ -220,7 +220,7 @@ namespace KikiMeter
             {
                 if (this.damageMeterDisplay == null && this.Settings.DamageMeterWindowVisible)
                 {
-                    var placement = new GameHelper.Settings.State
+                    var placement = new ExileCenter.Settings.State
                     {
                         SettingsWindowPositionSaved = this.Settings.DamageMeterWindowPositionSaved,
                         SettingsWindowX = this.Settings.DamageMeterWindowX, SettingsWindowY = this.Settings.DamageMeterWindowY,

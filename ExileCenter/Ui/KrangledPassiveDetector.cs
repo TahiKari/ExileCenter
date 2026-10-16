@@ -1,11 +1,11 @@
-﻿// <copyright file="KrangledPassiveDetector.cs" company="None">
+// <copyright file="KrangledPassiveDetector.cs" company="None">
 // Copyright (c) None. All rights reserved.
 // </copyright>
 
-namespace GameHelper.Ui
+namespace ExileCenter.Ui
 {
     using Coroutine;
-    using GameHelper.CoroutineEvents;
+    using ExileCenter.CoroutineEvents;
     using ImGuiNET;
     using Newtonsoft.Json.Linq;
     using System;
@@ -53,7 +53,7 @@ namespace GameHelper.Ui
 
                 var skillTreeNodes = Core.States.InGameStateObject.GameUi.SkillTreeNodesUiElements;
                 ImGui.SetNextWindowSize(size, ImGuiCond.FirstUseEver);
-                if (GameHelper.Ui.ImGuiTheme.BeginWindow("Krangled Passive Detector", ref Core.GHSettings.ShowKrangledPassiveDetector))
+                if (ExileCenter.Ui.ImGuiTheme.BeginWindow("Krangled Passive Detector", ref Core.GHSettings.ShowKrangledPassiveDetector))
                 {
                     if (ImGui.BeginPopup("KrangledPassiveDetectorPopUp"))
                     {

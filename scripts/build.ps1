@@ -156,7 +156,7 @@ function Seed-PluginDefaultConfigs {
     }
 }
 
-function Get-BlockingGameHelperProcesses {
+function Get-BlockingExileCenterProcesses {
     param([string]$DeployDir)
 
     if (-not (Test-Path $DeployDir)) {
@@ -164,7 +164,7 @@ function Get-BlockingGameHelperProcesses {
     }
 
     $deployRoot = [System.IO.Path]::GetFullPath($DeployDir).TrimEnd('\')
-    $processNames = @('GameHelper', 'GameHelper.App')
+    $processNames = @('ExileCenter', 'ExileCenter.App')
     $blocking = @()
 
     foreach ($proc in Get-Process -ErrorAction SilentlyContinue) {
@@ -195,12 +195,12 @@ function Get-BlockingGameHelperProcesses {
 function Remove-DeployDirectory {
     param([string]$TargetDir)
 
-    $blockers = Get-BlockingGameHelperProcesses -DeployDir $TargetDir
+    $blockers = Get-BlockingExileCenterProcesses -DeployDir $TargetDir
     if ($blockers.Count -gt 0) {
         $details = ($blockers | ForEach-Object { "$($_.ProcessName).exe (PID $($_.Id))" }) -join ', '
         throw @"
-Deploy nach '$TargetDir' blockiert: GameHelper laeuft noch aus diesem Ordner ($details).
-Bitte GameHelper schliessen und rebuild-test erneut ausfuehren.
+Deploy nach '$TargetDir' blockiert: ExileCenter laeuft noch aus diesem Ordner ($details).
+Bitte ExileCenter schliessen und rebuild-test erneut ausfuehren.
 "@
     }
 
@@ -213,8 +213,8 @@ Bitte GameHelper schliessen und rebuild-test erneut ausfuehren.
     }
     catch {
         throw @"
-Ordner '$TargetDir' konnte nicht geleert werden. Meist blockiert ein noch laufender GameHelper oder Antivirus die DLLs.
-Bitte GameHelper schliessen, ggf. PoE beenden, und rebuild-test erneut starten.
+Ordner '$TargetDir' konnte nicht geleert werden. Meist blockiert ein noch laufender ExileCenter oder Antivirus die DLLs.
+Bitte ExileCenter schliessen, ggf. PoE beenden, und rebuild-test erneut starten.
 Details: $($_.Exception.Message)
 "@
     }
@@ -224,7 +224,7 @@ function Test-LauncherDeploy {
     param([string]$TargetPublishDir)
 
     $required = @(
-        "GameHelper.exe",
+        "ExileCenter.exe",
         "AsmResolver.dll",
         "AsmResolver.PE.dll",
         "AsmResolver.PE.File.dll",
@@ -429,8 +429,8 @@ try {
 
     # update.config.json wird nicht mehr benoetigt (oeffentliche GitHub Releases).
 
-    $appExe = Join-Path $PublishDir "GameHelper.App.exe"
-    if (-not (Test-Path $appExe)) { $appExe = Join-Path $PublishDir "GameHelper.exe" }
+    $appExe = Join-Path $PublishDir "ExileCenter.App.exe"
+    if (-not (Test-Path $appExe)) { $appExe = Join-Path $PublishDir "ExileCenter.exe" }
     $vi = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($appExe)
     $buildVersion = if (-not [string]::IsNullOrEmpty($Version)) {
         $Version
@@ -461,7 +461,7 @@ try {
 
     Write-Host ""
     Write-Host "Build erfolgreich: $PublishDir" -ForegroundColor Green
-    Write-Host "Starten mit: $PublishDir\GameHelper.exe" -ForegroundColor Green
+    Write-Host "Starten mit: $PublishDir\ExileCenter.exe" -ForegroundColor Green
 }
 finally {
     Pop-Location
