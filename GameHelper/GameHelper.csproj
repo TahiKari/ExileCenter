@@ -8,10 +8,10 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Authors>Arsenic</Authors>
     <Product>ExileCenter</Product>
-    <Title>ExileCenter</Title>
+    <AssemblyTitle>ExileCenter</AssemblyTitle>
     <Description>Compagnon modulaire pour Path of Exile 2 : butin, dégâts, cartes et outils de jeu.</Description>
     <Version>1.5.11</Version>
-    <GameHelperReleaseTag Condition="'$(GameHelperReleaseTag)' == ''">v1.5.11-personnalise.34</GameHelperReleaseTag>
+    <GameHelperReleaseTag Condition="'$(GameHelperReleaseTag)' == ''">v1.5.11-personnalise.35</GameHelperReleaseTag>
     <AssemblyVersion>1.5.11.0</AssemblyVersion>
     <FileVersion>1.5.11.0</FileVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
