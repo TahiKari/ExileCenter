@@ -30,7 +30,7 @@ Also bundled in [MordWraith/Gamehelper](https://github.com/MordWraith/Gamehelper
 git clone https://github.com/Gordin/GameHelper2.git
 cd GameHelper2
 git clone https://github.com/MordWraith/Hiveblood.git Plugins/Hiveblood
-dotnet build GameHelper/GameHelper.csproj -c Release
+dotnet build ExileCenter/ExileCenter.csproj -c Release
 dotnet build Plugins/Hiveblood/Hiveblood.csproj -c Release
 ```
 

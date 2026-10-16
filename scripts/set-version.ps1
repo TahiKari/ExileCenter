@@ -3,7 +3,7 @@
 function Get-ProjectVersion {
     param([string]$Root)
 
-    $csproj = Join-Path $Root "GameHelper\GameHelper.csproj"
+    $csproj = Join-Path $Root "ExileCenter\ExileCenter.csproj"
     if (-not (Test-Path $csproj)) {
         return "1.0.0"
     }
@@ -63,7 +63,7 @@ function Set-ProjectVersion {
     $fileVersion = $assemblyVersion
 
     $projects = @(
-        (Join-Path $Root "GameHelper\GameHelper.csproj"),
+        (Join-Path $Root "ExileCenter\ExileCenter.csproj"),
         (Join-Path $Root "Launcher\Launcher.csproj")
     )
 

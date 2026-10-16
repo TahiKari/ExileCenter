@@ -20,7 +20,7 @@ Drop this repo into the GameHelper2 `Plugins` directory so the layout is:
 
 ```
 <GameHelper2>/
-  GameHelper/GameHelper.csproj
+  ExileCenter/ExileCenter.csproj
   Plugins/
     Atlas/               ← contents of this repo
       Atlas.csproj
@@ -28,7 +28,7 @@ Drop this repo into the GameHelper2 `Plugins` directory so the layout is:
       ...
 ```
 
-The `.csproj` expects `..\..\GameHelper\GameHelper.csproj` and, on build, copies `Atlas.dll` plus
+The `.csproj` expects `..\..\ExileCenter\ExileCenter.csproj` and, on build, copies `Atlas.dll` plus
 the `json/` data into `GameHelper/<OutDir>/Plugins/Atlas/`. Build, then enable **Atlas** in
 GameHelper's plugin list and open the in-game Atlas (World) screen.
 

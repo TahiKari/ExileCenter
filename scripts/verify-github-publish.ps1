@@ -73,7 +73,7 @@ else {
 
 # Source tree on main
 $requiredPaths = @(
-    "GameHelper/GameHelper.csproj",
+    "ExileCenter/ExileCenter.csproj",
     "Launcher",
     "scripts/build.ps1",
     "CREDITS.md",
@@ -126,7 +126,7 @@ foreach ($plugin in ($knownPlugins | Sort-Object)) {
 
 $prevEap = $ErrorActionPreference
 $ErrorActionPreference = "SilentlyContinue"
-$csprojB64 = gh api "repos/$Repository/contents/GameHelper/GameHelper.csproj?ref=$Branch" --jq ".content" 2>$null
+$csprojB64 = gh api "repos/$Repository/contents/ExileCenter/ExileCenter.csproj?ref=$Branch" --jq ".content" 2>$null
 $csprojOk = ($LASTEXITCODE -eq 0)
 $ErrorActionPreference = $prevEap
 if ($csprojOk -and $csprojB64) {

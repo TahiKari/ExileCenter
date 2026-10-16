@@ -43,4 +43,4 @@ Plugins own their translations. A plugin that opts into localization should keep
 
 Use `new PluginLocalization(this.DllDirectory)` from the plugin, and copy the plugin's
 `Localization/*.json` files to the deployed plugin directory in that plugin's `.csproj`.
-Do not put plugin UI keys in the main `GameHelper/Localization/*.json` files.
+Do not put plugin UI keys in the main `ExileCenter/Localization/*.json` files.

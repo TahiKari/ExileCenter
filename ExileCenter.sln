@@ -11,7 +11,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Atlas2", "Plugins\Atlas2\At
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PickupHelper", "Plugins\PickupHelper\PickupHelper.csproj", "{CA68F82C-9BA3-419C-9F99-A4CBAC224060}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GameHelper", "GameHelper\GameHelper.csproj", "{F91E45A5-0DEE-4D4C-A89C-69B18F38134E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExileCenter", "ExileCenter\ExileCenter.csproj", "{F91E45A5-0DEE-4D4C-A89C-69B18F38134E}"
 	ProjectSection(ProjectDependencies) = postProject
 		{95B261DD-906E-4634-81D4-0A5A8C1D9398} = {95B261DD-906E-4634-81D4-0A5A8C1D9398}
 	EndProjectSection

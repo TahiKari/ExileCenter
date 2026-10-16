@@ -8,10 +8,10 @@
     <NoWarn>1701;1702;1591</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\GameHelper\GameHelper.csproj" Private="false" CopyLocalSatelliteAssemblies="false" />
+    <ProjectReference Include="..\..\ExileCenter\ExileCenter.csproj" Private="false" CopyLocalSatelliteAssemblies="false" />
     <Compile Include="..\AuraTracker\util\NumberFormatter.cs" Link="util\NumberFormatter.cs" />
   </ItemGroup>
   <Target Name="CopyFiles" AfterTargets="Build">
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\KikiMeter" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\KikiMeter" SkipUnchangedFiles="true" />
   </Target>
 </Project>

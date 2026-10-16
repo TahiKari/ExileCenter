@@ -59,16 +59,16 @@ jobs:
           if ((Get-FileHash $offsets -Algorithm SHA256).Hash -ne $expected) { throw 'GameOffsets.dll a changé.' }
           $targets = Join-Path $PWD '.github/ci/PreserveOffsets.targets'
           $properties = @("-p:DirectoryBuildTargetsPath=$targets", "-p:PinnedGameOffsetsPath=$offsets", "-p:GameHelperReleaseTag=$env:RELEASE_TAG")
-          $plugins = [regex]::Matches((Get-Content GameOverlay.sln -Raw), '"(Plugins\\[^"\r\n]+\.csproj)"') |
+          $plugins = [regex]::Matches((Get-Content ExileCenter.sln -Raw), '"(Plugins\\[^"\r\n]+\.csproj)"') |
             ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
           if (!$plugins) { throw 'Aucun plugin dans la solution.' }
-          foreach ($project in @('GameHelper/GameHelper.csproj') + @($plugins)) {
+          foreach ($project in @('ExileCenter/ExileCenter.csproj') + @($plugins)) {
             & dotnet restore $project --source https://api.nuget.org/v3/index.json @properties
             if ($LASTEXITCODE -ne 0) { throw "Échec de restauration : $project" }
             & dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false @properties
             if ($LASTEXITCODE -ne 0) { throw "Échec de compilation : $project" }
           }
-          $runtime = Join-Path $PWD 'GameHelper/bin/Release/net10.0-windows/win-x64'
+          $runtime = Join-Path $PWD 'ExileCenter/bin/Release/net10.0-windows/win-x64'
           # Some older plugin projects do not deploy their localization files.
           $localizations = @(git ls-files -- 'Plugins/*/Localization/*.json')
           if ($LASTEXITCODE -ne 0 -or !$localizations) { throw 'Liste des traductions indisponible.' }
@@ -92,14 +92,14 @@ jobs:
       - name: Préparer et vérifier le ZIP complet
         run: |
           $ErrorActionPreference = 'Stop'
-          $runtime = Join-Path $PWD 'GameHelper/bin/Release/net10.0-windows/win-x64'
+          $runtime = Join-Path $PWD 'ExileCenter/bin/Release/net10.0-windows/win-x64'
           $output = Join-Path $env:RUNNER_TEMP 'gamehelper-release'
           $version = $env:RELEASE_TAG.TrimStart('v')
           if ($env:RELEASE_TAG -match '-personnalise\.(\d+)$') { $version = '1.' + [Math]::Max(0, [int]$Matches[1] - 5) }
           $releaseName = "ExileCenter P-V$version"
           "RELEASE_NAME=$releaseName" >> $env:GITHUB_ENV
           & ./scripts/publish.ps1 -LocalUpdate -SkipBuild -LocalSource $runtime -LocalDestination $output -LocalLabel $releaseName -Version $env:RELEASE_TAG -Changelog 'ExileCenter : consulter les notes de cette Release.'
-          $manifest = Get-Content "$output/GameHelper-Maj.json" -Raw | ConvertFrom-Json
+          $manifest = Get-Content "$output/ExileCenter-Maj.json" -Raw | ConvertFrom-Json
           $archive = Join-Path $output $manifest.PackageFile
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = [IO.Compression.ZipFile]::OpenRead($archive)
@@ -119,7 +119,7 @@ jobs:
           "$hash  ExileCenter-win-x64.zip" | Set-Content "$download.sha256" -Encoding utf8NoBOM
           # Old installers only accept their historical executable/document names.
           & ./scripts/publish.ps1 -LocalUpdate -SkipBuild -LegacyPackage -LocalSource $runtime -LocalDestination $output -LocalLabel $releaseName -Version $env:RELEASE_TAG -Changelog 'Migration vers ExileCenter et son dépôt autonome.'
-          $legacyManifest = Get-Content "$output/GameHelper-Maj.json" -Raw | ConvertFrom-Json
+          $legacyManifest = Get-Content "$output/ExileCenter-Maj.json" -Raw | ConvertFrom-Json
           $legacy = Join-Path $output 'GameHelper-Personnalise-win-x64.zip'
           Move-Item -LiteralPath (Join-Path $output $legacyManifest.PackageFile) -Destination $legacy
           $legacyHash = (Get-FileHash $legacy -Algorithm SHA256).Hash.ToLowerInvariant()

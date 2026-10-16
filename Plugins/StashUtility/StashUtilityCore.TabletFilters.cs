@@ -25,6 +25,110 @@ namespace StashUtility
         private static TabletFilterProfile ActiveMetaProfile(TabletProfile settings)
             => settings.MetaProfiles?.FirstOrDefault(p => p != null && p.Id == settings.ActiveMetaProfileId);
 
+        private static Dictionary<string, TabletProfile> CopyTabletProfiles(Dictionary<string, TabletProfile> profiles) =>
+            Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, TabletProfile>>(
+                Newtonsoft.Json.JsonConvert.SerializeObject(profiles ?? new()),
+                new Newtonsoft.Json.JsonSerializerSettings { MaxDepth = TabletFilterEngine.MaximumDepth * 3 + 32 });
+
+        private void EnsureTabletPresetSlots()
+        {
+            if (Settings.TabletPresets == null) Settings.TabletPresets = new TabletPreset[5];
+            else if (Settings.TabletPresets.Length != 5) Array.Resize(ref Settings.TabletPresets, 5);
+            Settings.ActiveTabletPreset = Math.Clamp(Settings.ActiveTabletPreset, 0, 4);
+        }
+
+        private bool SaveTabletPreset(int slot)
+        {
+            if (slot is < 0 or >= 5) return false;
+            EnsureTabletPresetSlots();
+            Settings.TabletPresets[slot] = new TabletPreset
+            {
+                Profiles = CopyTabletProfiles(Settings.TabletProfiles),
+                FilterGreat = Settings.FilterTabletGreat,
+                MinimumGoodMods = Settings.MinTabletGoodMods,
+                MinimumHighlightedMods = Settings.MinTabletGoodModsToHighlight,
+                MinimumGoodModsToIgnoreBad = Settings.MinGoodModsToIgnoreBad
+            };
+            Settings.ActiveTabletPreset = slot;
+            SaveSettings();
+            return true;
+        }
+
+        private bool LoadTabletPreset(int slot)
+        {
+            if (slot is < 0 or >= 5) return false;
+            EnsureTabletPresetSlots();
+            var preset = Settings.TabletPresets[slot];
+            if (preset == null) return false;
+            var profiles = CopyTabletProfiles(preset.Profiles);
+            Settings.TabletProfiles = profiles ?? new();
+            Settings.FilterTabletGreat = preset.FilterGreat;
+            Settings.MinTabletGoodMods = preset.MinimumGoodMods;
+            Settings.MinTabletGoodModsToHighlight = preset.MinimumHighlightedMods;
+            Settings.MinGoodModsToIgnoreBad = preset.MinimumGoodModsToIgnoreBad;
+            Settings.ActiveTabletPreset = slot;
+            lastMetaObservation = null;
+            SaveSettings();
+            return true;
+        }
+
+        private void DrawTabletPresets()
+        {
+            EnsureTabletPresetSlots();
+            string label = MT("preset", "Preset") + " " + (Settings.ActiveTabletPreset + 1);
+            ImGui.SetNextItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X - 76, 100, 240));
+            if (ImGui.BeginCombo("##TabletPresetSlot", label))
+            {
+                for (int i = 0; i < 5; i++)
+                {
+                    string name = MT("preset", "Preset") + " " + (i + 1) + " · " +
+                        MT(Settings.TabletPresets[i] == null ? "preset_empty" : "preset_saved", Settings.TabletPresets[i] == null ? "Empty" : "Saved");
+                    if (ImGui.Selectable(name, i == Settings.ActiveTabletPreset)) { Settings.ActiveTabletPreset = i; SaveSettings(); }
+                }
+                ImGui.EndCombo();
+            }
+            ImGui.SameLine();
+            if (TabletPresetIcon("SaveTabletPreset", true, true))
+            {
+                SaveTabletPreset(Settings.ActiveTabletPreset);
+                tabletProfileMessage = label + " · " + MT("preset_saved", "Saved");
+            }
+            ImGuiHelper.ToolTip(MT("preset_save", "Save ranks, minimum rolls and AND / OR rules for all eight tablet types in this slot."));
+            ImGui.SameLine();
+            if (TabletPresetIcon("LoadTabletPreset", false, Settings.TabletPresets[Settings.ActiveTabletPreset] != null))
+            {
+                LoadTabletPreset(Settings.ActiveTabletPreset);
+                tabletProfileMessage = label + " · " + MT("preset_loaded", "Loaded");
+            }
+            ImGuiHelper.ToolTip(MT("preset_load", "Load this slot and apply its saved tablet choices. Empty slots cannot be loaded."));
+        }
+
+        private static bool TabletPresetIcon(string id, bool save, bool enabled)
+        {
+            ImGui.BeginDisabled(!enabled);
+            float side = ImGui.GetFrameHeight();
+            var pos = ImGui.GetCursorScreenPos();
+            bool clicked = ImGui.InvisibleButton(id, new Vector2(side));
+            var draw = ImGui.GetWindowDrawList();
+            uint ink = ImGui.GetColorU32(ImGuiCol.Text);
+            draw.AddRectFilled(pos, pos + new Vector2(side), ImGui.GetColorU32(ImGui.IsItemHovered() ? ImGuiCol.ButtonHovered : ImGuiCol.Button), 4);
+            Vector2 P(float x, float y) => pos + new Vector2(x, y) * side;
+            draw.AddRect(P(.22f, .2f), P(.78f, .8f), ink, 1, ImDrawFlags.None, 1.4f);
+            if (save)
+            {
+                draw.AddRect(P(.34f, .2f), P(.65f, .43f), ink);
+                draw.AddRect(P(.34f, .58f), P(.65f, .8f), ink);
+            }
+            else
+            {
+                draw.AddLine(P(.5f, .28f), P(.5f, .65f), ink, 1.8f);
+                draw.AddLine(P(.34f, .49f), P(.5f, .65f), ink, 1.8f);
+                draw.AddLine(P(.66f, .49f), P(.5f, .65f), ink, 1.8f);
+            }
+            ImGui.EndDisabled();
+            return clicked;
+        }
+
         private void TabletHelp(string text)
         {
             if (!Settings.TabletHelpTooltips || !ImGuiHelper.HelpTooltipsEnabled) return;
@@ -39,7 +143,7 @@ namespace StashUtility
             ImGui.TextDisabled(TabletTypeLabel(type));
             bool changedMode = ImGui.Checkbox(MT("enable", "Use workbook AND / OR filters for this type"), ref settings.UseMetaFilters);
             if (changedMode) SaveSettings();
-            TabletHelp(MT("rank_and_rules", "The tablet keeps its rank. AND / OR rules choose the combinations to highlight."));
+            TabletHelp(MT("rank_and_rules", "The best matching rank sets the color. AND / OR rules choose accepted combinations; their status remains visible beside the subrank."));
             if (settings.UseMetaFilters)
                 ImGui.TextDisabled(MT("active_profile", "Active profile") + " : " + (ActiveMetaProfile(settings)?.Name ?? MT("none", "None")));
             if (changedMode && settings.UseMetaFilters) ImGui.SetNextItemOpen(true);
@@ -426,11 +530,12 @@ namespace StashUtility
             if (hovered && !occluded) { lastMetaObservation = result.Observation; lastMetaItemName = name; lastMetaObservedUtc = DateTime.UtcNow; }
             if (TabletHighlightsSuppressed() || occluded || (Settings.HideTabletHighlightsOnItemHover && hovered)) return;
             if (result.Action == TabletFilterAction.Ignore || (result.State == TabletFilterState.Rejected && Settings.DisableBadTabletHighlight)) return;
-            var color = result.Action == TabletFilterAction.Signal ? new Vector4(1, .73f, .3f, 1) : MetaResultColor(result); float scale = size.X / 52f;
-            if (Settings.ShowTabletModBorder) ImGui.GetBackgroundDrawList().AddRect(pos + Vector2.One, pos + size - Vector2.One, ImGuiHelper.Color(color), 3, ImDrawFlags.RoundCornersAll, Math.Clamp(scale, 1, 2));
-            if (Settings.ShowRarityBorder && mods != null) DrawItemRarityMarker(pos, size, scale, Settings.ShowTabletModBorder ? Math.Clamp(scale, 1, 2) : 0, mods.Rarity);
             Settings.TabletProfiles.TryGetValue(type, out var settings);
             var classification = ClassifyTabletMods(mods, settings, type);
+            var color = classification.IsRanked ? classification.RankColor : MetaResultColor(result);
+            float scale = size.X / 52f;
+            if (Settings.ShowTabletModBorder) ImGui.GetBackgroundDrawList().AddRect(pos + Vector2.One, pos + size - Vector2.One, ImGuiHelper.Color(color), 3, ImDrawFlags.RoundCornersAll, Math.Clamp(scale, 1, 2));
+            if (Settings.ShowRarityBorder && mods != null) DrawItemRarityMarker(pos, size, scale, Settings.ShowTabletModBorder ? Math.Clamp(scale, 1, 2) : 0, mods.Rarity);
             string status = result.State is TabletFilterState.Uncertain or TabletFilterState.Invalid ? "?" :
                 result.Action == TabletFilterAction.Signal ? "!" : result.State == TabletFilterState.Accepted ? "OK" : "NON";
             string badge = (classification.IsRanked ? classification.RankLabel : PluginText.T("stashutility.filters.tablet_unclassified", "N/C")) + " · " + status;

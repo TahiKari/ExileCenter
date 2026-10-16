@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Library</OutputType>
@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\GameHelper\GameHelper.csproj">
+    <ProjectReference Include="..\..\ExileCenter\ExileCenter.csproj">
       <Private>false</Private>
       <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
     </ProjectReference>
@@ -36,13 +36,13 @@
   </ItemGroup>
 
   <Target Name="CopyFiles" AfterTargets="Build">
-    <Copy SourceFiles="$(OutDir)$(TargetName)$(TargetExt); $(OutDir)$(TargetName).pdb;" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(OutDir)$(TargetName)$(TargetExt); $(OutDir)$(TargetName).pdb;" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)" SkipUnchangedFiles="true" />
   </Target>
 
   <Target Name="CopyTextures" AfterTargets="Build">
 	<ItemGroup>
 		<Textures Include="Textures\*.*" />
 	</ItemGroup>
-    <Copy SourceFiles="@(Textures)" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)\Textures" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(Textures)" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)\Textures" SkipUnchangedFiles="true" />
   </Target>
 </Project>

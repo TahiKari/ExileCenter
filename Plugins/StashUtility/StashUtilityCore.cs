@@ -870,6 +870,7 @@ namespace StashUtility
             using var help = ImGuiHelper.UseHelpTooltips(Settings.TabletHelpTooltips);
             if (!Settings.EnableTabletManager) return;
             DrawTabletVisibilityButton(false);
+            DrawTabletPresets();
             TabletProfile SelectedProfile(string selectedType)
             {
                 if (!Settings.TabletProfiles.TryGetValue(selectedType, out var selected) || selected == null)
@@ -895,11 +896,11 @@ namespace StashUtility
             if (ImGui.CollapsingHeader(PluginText.T("stashutility.filters.highlight_rules", "Highlight rules")))
             {
                 DrawFilterThreshold("stashutility.filter_tablet_great", "Excellent highlight", "tabletGreat", ref Settings.FilterTabletGreat, ref Settings.MinTabletGoodMods, 4);
-                TabletHelp(PluginText.T("stashutility.filters.tablet_rank_conditions", "Four known explicit modifiers determine the rank. Unknown or incomplete data stays unclassified."));
+                TabletHelp(PluginText.T("stashutility.filters.tablet_rank_conditions", "The best matching modifier sets the rank color. One is enough; numbered subranks are preserved."));
             }
             ImGui.Separator();
             ImGui.TextColored(ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark], MT("rank_settings", "Modifier ranks S to F"));
-            TabletHelp(PluginText.T("stashutility.filters.rank_help", "Choose S to F for each modifier. AND / OR conditions control highlighting; the tablet keeps its combination rank."));
+            TabletHelp(PluginText.T("stashutility.filters.rank_help", "Choose S to F for each modifier. Unchecked modifiers and rolls below their minimum do not contribute to the classification."));
             DrawTabletTypeSelector();
             type = StashUtilitySettings.TabletTypes[tabletFilterType];
             profile = SelectedProfile(type);
@@ -6891,9 +6892,10 @@ namespace StashUtility
 
         private static readonly Vector4[] TabletModRankColors =
         {
-            new(1f, .8f, .3f, 1f),
-            new(.78f, .6f, 1f, 1f), new(.4f, .7f, 1f, 1f), new(.35f, .85f, .65f, 1f),
-            new(1f, 1f, 1f, 1f), new(1f, .65f, .3f, 1f), new(.95f, .4f, .4f, 1f)
+            new(.92f, .76f, .32f, 1f), new(.84f, .25f, .28f, 1f),
+            new(.66f, .43f, .84f, 1f), new(.27f, .58f, .86f, 1f),
+            new(.27f, .69f, .43f, 1f), new(.93f, .47f, .19f, 1f),
+            new(.95f, .95f, .95f, 1f)
         };
 
         private static string NormalizeTabletModRank(string rank) => rank switch
@@ -6937,15 +6939,22 @@ namespace StashUtility
 
         public static Models.TabletClassification ClassifyTabletRanks(IReadOnlyList<string> ranks)
         {
-            if (ranks == null || ranks.Count != 4) return UnclassifiedTablet;
+            if (ranks == null || ranks.Count is < 1 or > 4) return UnclassifiedTablet;
             Span<int> counts = stackalloc int[TabletModRanks.Length];
             counts.Clear();
+            int selected = 0;
             foreach (var rank in ranks)
             {
+                if (string.IsNullOrEmpty(rank)) continue;
                 int index = Array.IndexOf(TabletModRanks, rank);
                 if (index < 0) return UnclassifiedTablet;
                 counts[index]++;
+                selected++;
             }
+            if (selected == 0) return UnclassifiedTablet;
+            // Missing/unselected ranks occupy the lowest sorting bucket. Preserve
+            // all existing four-modifier subrank numbers and the best selected color.
+            counts[^1] += 4 - selected;
             int key = 0;
             foreach (int count in counts) key = key * 5 + count;
             return TabletRankLookup.TryGetValue(key, out var result) ? result : UnclassifiedTablet;
@@ -6953,18 +6962,20 @@ namespace StashUtility
 
         private static Models.TabletClassification ClassifyTabletMods(Mods mods, TabletProfile profile, string type)
         {
-            if (mods?.ExplicitMods?.Count != 4 || profile?.ModRanks == null || type == null) return UnclassifiedTablet;
-            var ranks = new string[4];
-            for (int i = 0; i < ranks.Length; i++)
+            if (mods?.ExplicitMods?.Count is not (>= 1 and <= 4) || profile == null || type == null) return UnclassifiedTablet;
+            var ranks = new List<string>(4);
+            foreach (var raw in mods.ExplicitMods)
             {
-                var raw = mods.ExplicitMods[i];
-                if (string.IsNullOrEmpty(raw.name)) return UnclassifiedTablet;
+                if (string.IsNullOrEmpty(raw.name)) continue;
                 var definition = TabletRankingDefinitions.FirstOrDefault(mod =>
                     mod.TabletTypes.Contains(type) && MatchesModId(raw.name, mod.Id));
-                if (definition != null && profile.ModRanks.TryGetValue(definition.Id, out var configured))
-                    ranks[i] = NormalizeTabletModRank(configured);
-                else
-                    ranks[i] = Data.ModDatabase.TabletMeta.Recognize(type, new[] { raw.name }).Mods[0].Modifier?.Rank ?? "";
+                if (definition == null) continue;
+                string rank = GetTabletModRank(definition.Id, profile.ModRanks, profile.GoodModPatterns, profile.BadModPatterns, profile.GodModPatterns);
+                if (rank.Length == 0) continue;
+                float minimum = profile.ModRequiredMinRolls?.TryGetValue(definition.Id, out float saved) == true ? saved : definition.MinRoll;
+                if (definition.MinRoll != definition.MaxRoll &&
+                    !PassesModRoll(raw.values.value0, raw.values.value1, definition.RollValueIndex, minimum, definition.RollDivisor)) continue;
+                ranks.Add(rank);
             }
             return ClassifyTabletRanks(ranks);
         }
@@ -7030,10 +7041,9 @@ namespace StashUtility
 
         private static string GetTabletModRank(string id, Dictionary<string, string> ranks, List<string> good, List<string> bad, List<string> priority)
         {
+            // The saved S-to-F choice is authoritative; old three-state lists are a migration fallback.
+            if (ranks?.TryGetValue(id, out var rank) == true) return NormalizeTabletModRank(rank);
             int rule = GetModRule(id, good, bad, priority);
-            if (rule == 0) return "";
-            if (ranks?.TryGetValue(id, out var rank) == true && NormalizeTabletModRank(rank) is { Length: > 0 } normalized &&
-                (TabletRankRule(normalized) == rule || (rule == 2 && normalized == "D"))) return normalized;
             return rule switch { 3 => "S", 1 => "A", 2 => "D", _ => "" };
         }
 

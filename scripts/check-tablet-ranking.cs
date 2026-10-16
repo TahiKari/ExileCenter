@@ -39,7 +39,8 @@ internal static class TabletRankingCheck
                 return File.Exists(file) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(file) : null;
             };
             Run();
-            RunMetaFilters(args.Length > 1 ? args[1] : null);
+            CheckTabletPresets();
+            RunMetaFilters(args.Length > 1 && args[1] != "none" ? args[1] : null);
             CheckWorkbookPreset();
             CheckTooltipGeometry(root);
             CheckTabletSettingsUi(root, args.Length > 2 ? args[2] : null);
@@ -47,6 +48,58 @@ internal static class TabletRankingCheck
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void CheckTabletPresets()
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var plugin = new StashUtilityCore { DllDirectory = Path.Combine(Path.GetTempPath(), "TabletPresets-" + Guid.NewGuid().ToString("N")) };
+        var save = typeof(StashUtilityCore).GetMethod("SaveTabletPreset", flags);
+        var load = typeof(StashUtilityCore).GetMethod("LoadTabletPreset", flags);
+        Check(plugin.Settings.TabletPresets.Length == 5 && plugin.Settings.TabletPresets.All(p => p == null), "Five initially empty preset slots");
+        string original = JsonConvert.SerializeObject(plugin.Settings);
+        Check(!(bool)load.Invoke(plugin, new object[] { 0 }) && JsonConvert.SerializeObject(plugin.Settings) == original, "An empty preset never replaces current choices");
+        string[] expected = new string[5];
+        string[] grades = { "S", "A", "B", "C", "D" };
+        for (int slot = 0; slot < 5; slot++)
+        {
+            plugin.Settings.TabletProfiles = new();
+            foreach (string type in StashUtilitySettings.TabletTypes)
+            {
+                string id = ModDatabase.AllTabletMods.First(m => m.TabletTypes.Contains(type)).Id;
+                plugin.Settings.TabletProfiles[type] = new()
+                {
+                    ModRanks = new() { [id] = grades[slot] }, GoodModPatterns = new() { id },
+                    ModRequiredMinRolls = new() { [id] = slot + 12 }, UseMetaFilters = slot % 2 == 0,
+                    ActiveMetaProfileId = "custom-" + slot,
+                    MetaProfiles = new() { new() { Id = "custom-" + slot, Name = "Custom " + slot, TabletType = type,
+                        Rule = new() { Kind = TabletRuleKind.All, Children = new() {
+                            new() { Kind = TabletRuleKind.MinimumCount, Rank = "B", Minimum = 1 } } } } }
+                };
+            }
+            plugin.Settings.MinTabletGoodMods = slot % 4 + 1;
+            plugin.Settings.FilterTabletGreat = slot % 2 == 0;
+            Check((bool)save.Invoke(plugin, new object[] { slot }), "Save preset " + (slot + 1));
+            expected[slot] = JsonConvert.SerializeObject(plugin.Settings.TabletProfiles);
+        }
+        plugin.Settings = JsonConvert.DeserializeObject<StashUtilitySettings>(JsonConvert.SerializeObject(plugin.Settings));
+        plugin.Settings.ProtectedInventoryCells.Add(17);
+        Check(plugin.Settings.TabletPresets.Count(p => p != null) == 5, "All five presets survive settings serialization");
+        for (int slot = 0; slot < 5; slot++)
+        {
+            Check((bool)load.Invoke(plugin, new object[] { slot }) && JsonConvert.SerializeObject(plugin.Settings.TabletProfiles) == expected[slot], "Restore all eight tablet types, ranks, minimums and nested rules from slot " + (slot + 1));
+            Check(plugin.Settings.MinTabletGoodMods == slot % 4 + 1 && plugin.Settings.FilterTabletGreat == (slot % 2 == 0), "Restore tablet highlight thresholds from slot " + (slot + 1));
+            plugin.Settings.TabletProfiles.Values.First().ModRanks.Clear();
+            load.Invoke(plugin, new object[] { slot });
+            Check(JsonConvert.SerializeObject(plugin.Settings.TabletProfiles) == expected[slot], "Editing active rules never mutates the saved preset " + (slot + 1));
+            Check(plugin.Settings.ProtectedInventoryCells.Contains(17), "Loading presets preserves inventory protections " + (slot + 1));
+        }
+        Check(!(bool)save.Invoke(plugin, new object[] { -1 }) && !(bool)load.Invoke(plugin, new object[] { 5 }), "Out-of-range preset requests are harmless");
+        Check(JsonConvert.DeserializeObject<StashUtilitySettings>("{}").TabletPresets.Length == 5, "Old settings gain five slots without losing their choices");
+        var legacy = new TabletProfile { ModRanks = new() { ["fixture"] = "S" }, GoodModPatterns = new() { "fixture" } };
+        typeof(StashUtilityCore).GetMethod("MigrateTabletModRanks", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, new object[] { legacy });
+        Check(legacy.ModRanks["fixture"] == "S" && legacy.GodModPatterns.Contains("fixture") && !legacy.GoodModPatterns.Contains("fixture"), "Legacy bookkeeping never downgrades an explicit saved S choice");
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -359,8 +412,14 @@ internal static class TabletRankingCheck
             Check(persisted.TabletProfiles["Irradiated Tablet"].ModRanks["TowerMonsterEffectiveness"] == "F", "UI F selection persists to disk");
             var badgeMods = new Mods(IntPtr.Zero);
             foreach (string label in new[] { "E1", "E2", "E3", "F1" })
-                badgeMods.ExplicitMods.Add((ModDatabase.TabletMeta.FindSubRank("Irradiated Tablet", label).GameModIds[0], (10f, 0f)));
+                badgeMods.ExplicitMods.Add((ModDatabase.TabletMeta.FindSubRank("Irradiated Tablet", label).GameModIds[0], (10000f, 10000f)));
             uiProfile.ModRanks.Clear();
+            uiProfile.GoodModPatterns.Clear(); uiProfile.GodModPatterns.Clear();
+            foreach (string label in new[] { "E1", "E2", "E3", "F1" })
+            {
+                string id = ModDatabase.TabletMeta.FindSubRank("Irradiated Tablet", label).GameModIds[0];
+                uiProfile.ModRanks[id] = label[..1]; uiProfile.GoodModPatterns.Add(id);
+            }
             var badgeProfile = new TabletFilterProfile { TabletType = "Irradiated Tablet", Rule = new() { Kind = TabletRuleKind.RankExact, Rank = "E" } };
             uiProfile.UseMetaFilters = true; uiProfile.ActiveMetaProfileId = badgeProfile.Id; uiProfile.MetaProfiles.Add(badgeProfile);
             uiPlugin.Settings.ShowTabletModBorder = false; uiPlugin.Settings.ShowRarityBorder = false; uiPlugin.Settings.HideTabletHighlightsOnItemHover = false;
@@ -374,6 +433,14 @@ internal static class TabletRankingCheck
             vertices = ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
             var expectedBadge = Enumerable.Range(0, vertices.Size).Select(i => (vertices[i].pos, vertices[i].uv, vertices[i].col)).ToArray();
             Check(actualBadge.Length > 0 && actualBadge.SequenceEqual(expectedBadge), "AND / OR overlay actually renders E2 alongside OK");
+            ImGuiNET.ImGui.EndFrame();
+            uiProfile.ModRanks[badgeMods.ExplicitMods[0].name] = "S";
+            uiPlugin.Settings.ShowTabletModBorder = true;
+            ImGuiNET.ImGui.NewFrame();
+            typeof(StashUtilityCore).GetMethod("DrawMetaTabletHighlight", flags).Invoke(uiPlugin, new object[] { "Fixture", "Irradiated Tablet", new Vector2(200,40), new Vector2(52), badgeMods });
+            vertices = ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
+            uint gold = GameHelper.Utils.ImGuiHelper.Color(new Vector4(.92f, .76f, .32f, 1));
+            Check(Enumerable.Range(0, vertices.Size).Any(i => vertices[i].col == gold), "AND / OR border uses the best user rank rather than a yellow status override");
             ImGuiNET.ImGui.EndFrame();
             var parentData = new GameOffsets.Objects.UiElement.UiElementBaseOffset
             {
@@ -596,7 +663,7 @@ internal static class TabletRankingCheck
                 using (GameHelper.Ui.ImGuiTheme.UsePluginTheme("StashUtility/tablets"))
                 {
                     ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16)); ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width, 900));
-                    ImGuiNET.ImGui.Begin("Tablettes · GameHelper", ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                    ImGuiNET.ImGui.Begin("Tablettes · ExileCenter", ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
                     helpCenter = ImGuiNET.ImGui.GetCursorScreenPos() + new Vector2(70, ImGuiNET.ImGui.GetFrameHeight() + ImGuiNET.ImGui.GetStyle().ItemSpacing.Y + ImGuiNET.ImGui.GetFontSize() / 2);
                     draw.Invoke(plugin, null);
                     if (previousPaneWidth == width)
@@ -622,6 +689,26 @@ internal static class TabletRankingCheck
             Pane(460, "tablets-help-off.png", helpCenter, true); Pane(460, "tablets-help-on.png", helpCenter);
             Check(plugin.Settings.TabletHelpTooltips, "Actual help button re-enables tablet tooltips in one click");
             Check(JsonConvert.DeserializeObject<StashUtilitySettings>("{}").TabletHelpTooltips, "Existing configurations retain available tooltips");
+            var presetBar = typeof(StashUtilityCore).GetMethod("DrawTabletPresets", flags);
+            Vector2 PresetFrame(Vector2 mouse, bool down)
+            {
+                io.AddMousePosEvent(mouse.X, mouse.Y); io.AddMouseButtonEvent(0, down);
+                ImGuiNET.ImGui.NewFrame();
+                ImGuiNET.ImGui.SetNextWindowPos(new Vector2(40)); ImGuiNET.ImGui.SetNextWindowSize(new Vector2(420, 180));
+                ImGuiNET.ImGui.Begin("preset fixture"); presetBar.Invoke(plugin, null);
+                var center = (ImGuiNET.ImGui.GetItemRectMin() + ImGuiNET.ImGui.GetItemRectMax()) / 2;
+                ImGuiNET.ImGui.End(); ImGuiNET.ImGui.Render(); return center;
+            }
+            var loadCenter = PresetFrame(new Vector2(-100), false);
+            var saveCenter = loadCenter - new Vector2(ImGuiNET.ImGui.GetFrameHeight() + ImGuiNET.ImGui.GetStyle().ItemSpacing.X, 0);
+            string choices = JsonConvert.SerializeObject(plugin.Settings.TabletProfiles);
+            PresetFrame(saveCenter, false); PresetFrame(saveCenter, true); PresetFrame(saveCenter, false);
+            Check(plugin.Settings.TabletPresets[0] != null, "Actual floppy icon saves the selected slot");
+            plugin.Settings.TabletProfiles.Clear();
+            PresetFrame(loadCenter, false); PresetFrame(loadCenter, true); PresetFrame(loadCenter, false);
+            Check(JsonConvert.SerializeObject(plugin.Settings.TabletProfiles) == choices, "Actual load icon restores the selected slot");
+            var savedPresets = JsonConvert.DeserializeObject<StashUtilitySettings>(File.ReadAllText(Path.Combine(isolated, "config", "settings.txt")));
+            Check(savedPresets.TabletPresets.Length == 5 && savedPresets.TabletPresets[0] != null, "Icon-saved presets are persisted on disk");
         }
         finally
         {
@@ -721,9 +808,9 @@ internal static class TabletRankingCheck
         }
         Check(numbers.SequenceEqual(new[] { 84, 56, 35, 20, 10, 4, 1 }), "84 / 56 / 35 / 20 / 10 / 4 / 1 categories");
         var results = new Dictionary<string, TabletClassification>();
-        var colors = new[] { new Vector4(1f, .8f, .3f, 1f), new Vector4(.78f, .6f, 1f, 1f),
-            new Vector4(.4f, .7f, 1f, 1f), new Vector4(.35f, .85f, .65f, 1f), Vector4.One,
-            new Vector4(1f, .65f, .3f, 1f), new Vector4(.95f, .4f, .4f, 1f) };
+        var colors = new[] { new Vector4(.92f, .76f, .32f, 1f), new Vector4(.84f, .25f, .28f, 1f),
+            new Vector4(.66f, .43f, .84f, 1f), new Vector4(.27f, .58f, .86f, 1f),
+            new Vector4(.27f, .69f, .43f, 1f), new Vector4(.93f, .47f, .19f, 1f), new Vector4(.95f, .95f, .95f, 1f) };
         foreach (var input in inputs)
         {
             string canonical = Canonical(input);
@@ -742,8 +829,15 @@ internal static class TabletRankingCheck
         for (int i = 0; i < bTable.Length; i++) Check(StashUtilityCore.ClassifyTabletRanks(bTable[i].Select(c => c.ToString()).ToArray()).RankLabel == expected[Canonical(bTable[i].Select(c => c.ToString()).ToArray())], "Extended B table " + bTable[i]);
         string[] cTable = { "CCCC", "CCCD", "CCDD", "CDDD" };
         for (int i = 0; i < cTable.Length; i++) Check(StashUtilityCore.ClassifyTabletRanks(cTable[i].Select(c => c.ToString()).ToArray()).RankLabel == expected[Canonical(cTable[i].Select(c => c.ToString()).ToArray())], "Extended C table " + cTable[i]);
-        foreach (var invalid in new string[][] { null, Array.Empty<string>(), new[] { "S" }, new[] { "S", "A", "B" }, new[] { "S", "A", "B", "C", "D" },
-            new[] { "S", "A", "B", (string)null }, new[] { "S", "A", "B", "" }, new[] { "S", "A", "B", "Z" },
+        foreach (string grade in grades)
+        {
+            var single = StashUtilityCore.ClassifyTabletRanks(new[] { grade });
+            Check(single.IsRanked && single.Rank == grade && single.RankColor == colors[Array.IndexOf(grades, grade)], "One selected modifier is enough for every rank " + grade);
+            Check(StashUtilityCore.ClassifyTabletRanks(new[] { "", grade, null, "" }) == single, "Unchecked modifiers cannot suppress the best chosen rank " + grade);
+            Check(single.RankLabel == single.Rank + single.RankIndex && single.RankIndex > 0, "Partial tablets retain numbered subranks " + grade);
+        }
+        Check(!StashUtilityCore.ClassifyTabletRanks(new[] { "", null, "", "" }).IsRanked, "No chosen modifier stays unclassified");
+        foreach (var invalid in new string[][] { null, Array.Empty<string>(), new[] { "S", "A", "B", "C", "D" }, new[] { "S", "A", "B", "Z" },
             new[] { "S", "A", "B", "S+++" }, new[] { "S", "A", "B", "d" }, new[] { "S", "A", "B", " D " } })
         {
             var result = StashUtilityCore.ClassifyTabletRanks(invalid);
@@ -766,8 +860,8 @@ internal static class TabletRankingCheck
             {
                 profile.ModRanks[definitions[i].Id] = grades[i + 1];
                 profile.GoodModPatterns.Add(definitions[i].Id);
-                profile.ModRequiredMinRolls[definitions[i].Id] = definitions[i].MaxRoll;
-                mods.ExplicitMods.Add((definitions[i].Id, (definitions[i].MinRoll, definitions[i].MinRoll)));
+                profile.ModRequiredMinRolls[definitions[i].Id] = definitions[i].MinRoll;
+                mods.ExplicitMods.Add((definitions[i].Id, (definitions[i].MinRoll * definitions[i].RollDivisor, definitions[i].MinRoll * definitions[i].RollDivisor)));
             }
             // A+B+C+D = A15, by the independent composition oracle.
             string expectedCode = expected[Canonical(grades.Skip(1).Take(4).ToArray())];
@@ -783,13 +877,29 @@ internal static class TabletRankingCheck
             var reloaded = JsonConvert.DeserializeObject<TabletProfile>(saved);
             Check(Analyze(mods, reloaded, tabletType) == result, "Save and reload " + tabletType);
             profile.ModRanks[definitions[0].Id] = "unknown";
-            Check(!Analyze(mods, profile, tabletType).IsRanked, "Invalid stored rank " + tabletType);
+            Check(Analyze(mods, profile, tabletType).Rank == "B", "Invalid rank cannot suppress another matching rank " + tabletType);
             profile.ModRanks.Remove(definitions[0].Id);
-            Check(Analyze(mods, profile, tabletType).IsRanked == (ModDatabase.TabletMeta.Recognize(tabletType, new[] { definitions[0].Id }).Mods[0].Modifier != null), "Missing stored rank uses only a known workbook modifier " + tabletType);
+            Check(Analyze(mods, profile, tabletType).Rank == "A", "Legacy selected modifiers remain readable " + tabletType);
+            profile.GoodModPatterns.Remove(definitions[0].Id);
+            Check(Analyze(mods, profile, tabletType).Rank == "B", "Unchecked modifier never falls back to a reference rank " + tabletType);
             profile.ModRanks[definitions[0].Id] = "S";
             Check(Analyze(mods, profile, tabletType).Rank == "S", "Rank edit immediately recomputed " + tabletType);
             mods.ExplicitMods.RemoveAt(0);
-            Check(!Analyze(mods, profile, tabletType).IsRanked, "Missing explicit affix " + tabletType);
+            Check(Analyze(mods, profile, tabletType).Rank == "S", "Three explicit affixes still keep their best selected rank " + tabletType);
+            var variable = definitions.FirstOrDefault(d => d.MinRoll != d.MaxRoll);
+            if (variable != null)
+            {
+                var partial = new Mods(IntPtr.Zero);
+                partial.ExplicitMods.Add((variable.Id, (variable.MinRoll * variable.RollDivisor, variable.MinRoll * variable.RollDivisor)));
+                partial.ExplicitMods.Add(("UnknownExplicit", (0f, 0f)));
+                var choice = new TabletProfile(); choice.ModRanks[variable.Id] = "S";
+                choice.ModRequiredMinRolls[variable.Id] = variable.MaxRoll;
+                Check(!Analyze(partial, choice, tabletType).IsRanked, "Below-minimum S does not color a tablet " + tabletType);
+                choice.ModRequiredMinRolls[variable.Id] = variable.MinRoll;
+                Check(Analyze(partial, choice, tabletType).Rank == "S", "One qualifying S wins despite unrelated unknown modifiers " + tabletType);
+                choice.ModRanks.Remove(variable.Id);
+                Check(!Analyze(partial, choice, tabletType).IsRanked, "Unchecking the only ranked modifier removes its color " + tabletType);
+            }
         }
 
         // Exercise the actual existing grid planner; no input is sent to the game.

@@ -8,7 +8,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path $PSScriptRoot -Parent
-$Solution = Join-Path $Root "GameOverlay.sln"
+$Solution = Join-Path $Root "ExileCenter.sln"
 $PublishDir = if ([System.IO.Path]::IsPathRooted($OutputDir)) {
     $OutputDir
 }
@@ -355,7 +355,7 @@ try {
     dotnet build $Solution -c $Configuration --no-restore
     if ($LASTEXITCODE -ne 0) { throw "dotnet build fehlgeschlagen" }
 
-    $outDir = Join-Path $Root "GameHelper\bin\$Configuration\net10.0-windows\win-x64"
+    $outDir = Join-Path $Root "ExileCenter\bin\$Configuration\net10.0-windows\win-x64"
     if (-not (Test-Path $outDir)) {
         throw "Build-Ausgabe nicht gefunden: $outDir"
     }

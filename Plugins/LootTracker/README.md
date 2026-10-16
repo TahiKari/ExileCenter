@@ -64,7 +64,7 @@ copies its build output into GameHelper's `Plugins` folder.
          ...
    ```
 
-   The `.csproj` expects `..\..\GameHelper\GameHelper.csproj` to exist relative to itself.
+   The `.csproj` expects `..\..\ExileCenter\ExileCenter.csproj` to exist relative to itself.
 
 2. Build:
 

@@ -22,7 +22,7 @@ Tracks **Abyss / Amanamu void** mechanics: Lightless monsters, inside/outside vo
 git clone https://github.com/Gordin/GameHelper2.git
 cd GameHelper2
 git clone https://github.com/MordWraith/AmanamuVoidAlert.git Plugins/AmanamuVoidAlert
-dotnet build GameHelper/GameHelper.csproj -c Release
+dotnet build ExileCenter/ExileCenter.csproj -c Release
 dotnet build Plugins/AmanamuVoidAlert/AmanamuVoidAlert.csproj -c Release
 ```
 

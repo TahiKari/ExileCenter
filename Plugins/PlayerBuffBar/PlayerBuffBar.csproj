@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 
 
@@ -58,7 +58,7 @@
 
   <ItemGroup>
 
-    <ProjectReference Include="..\..\GameHelper\GameHelper.csproj">
+    <ProjectReference Include="..\..\ExileCenter\ExileCenter.csproj">
 
       <Private>false</Private>
 
@@ -77,7 +77,7 @@
     <Version>1.0.3</Version>
     <AssemblyVersion>1.0.3.0</AssemblyVersion>
     <FileVersion>1.0.3.0</FileVersion>
-<PluginDest>..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)</PluginDest>
+<PluginDest>..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)</PluginDest>
     </PropertyGroup>
 
     <Copy SourceFiles="$(OutDir)$(TargetName)$(TargetExt);$(OutDir)$(TargetName).pdb"

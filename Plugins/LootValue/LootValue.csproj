@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\GameHelper\GameHelper.csproj">
+    <ProjectReference Include="..\..\ExileCenter\ExileCenter.csproj">
       <Private>false</Private>
       <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
     </ProjectReference>
@@ -21,7 +21,7 @@
       <_LootValueDeployFiles Include="$(OutDir)$(TargetName)$(TargetExt)" />
     </ItemGroup>
     <Copy SourceFiles="@(_LootValueDeployFiles)"
-          DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)"
+          DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)"
           SkipUnchangedFiles="true" />
   </Target>
 

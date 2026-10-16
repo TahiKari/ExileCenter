@@ -21,7 +21,7 @@ if (Test-Path $upstream) { Remove-Item $upstream -Recurse -Force }
 git clone --depth 1 --progress https://github.com/Gordin/GameHelper2.git $upstream
 
 # Eigene Version vor dem Sync merken
-$csprojPath   = Join-Path $TargetRoot "GameHelper\GameHelper.csproj"
+$csprojPath   = Join-Path $TargetRoot "ExileCenter\ExileCenter.csproj"
 $overridePath = Join-Path $TargetRoot ".version-override"
 $savedVersion = $null
 if (Test-Path $overridePath) {
@@ -75,7 +75,7 @@ if ($Mode -eq "AllGordinPlugins") {
 }
 
 if ($Mode -eq "Plugins" -or $Mode -eq "AllGordinPlugins") {
-    $slnPath    = Join-Path $TargetRoot "GameOverlay.sln"
+    $slnPath    = Join-Path $TargetRoot "ExileCenter.sln"
     $pluginsVF  = "{9FA3D6BD-1EC1-3BA5-80CB-CE02773A58D5}"
     $projType   = "{9A19103F-16F7-4668-BE54-9A1E7A4F7556}"
 

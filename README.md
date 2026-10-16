@@ -77,7 +77,13 @@ ExileCenter poursuit cette version personnalisée avec un nouveau nom et un dép
 
 Les anciennes installations peuvent recevoir la Release de transition depuis [l'ancien dépôt](https://github.com/TahiKari/Gamehelper2/releases). Une fois cette mise à jour installée, les versions suivantes sont recherchées dans **TahiKari/ExileCenter**. Le ZIP de compatibilité `GameHelper-Personnalise-win-x64.zip` garde les noms autorisés par l'ancien installateur : continuer à lancer son raccourci habituel. Le ZIP complet ExileCenter comprend aussi `ExileCenter.exe` et `SECURITY.md` ; ces deux fichiers supplémentaires arriveront avec une prochaine mise à jour complète, ou peuvent être obtenus par une installation manuelle.
 
-Pour l'installation personnelle de TahiKari, le dossier local `Bureau\Gamehelpers\Maj GameHelper` reste prioritaire : il conserve son nom pour rester compatible avec les installations précédentes.
+Pour l'installation personnelle de TahiKari, le dossier local `Bureau\ExileCenter\Maj ExileCenter` reste prioritaire. Les archives et le manifeste portent le préfixe `ExileCenter-Maj`. Chaque publication conserve uniquement le nouveau paquet et son prédécesseur, après vérification du paquet et publication du manifeste ; les autres fichiers du dossier ne sont pas supprimés. Les anciens chemins et manifestes restent lisibles pour la migration.
+
+### Tablettes : couleurs et presets
+
+Les rangs utilisent une palette commune à la grille, aux cadres et aux badges : **S doré, A rouge, B violet, C bleu, D vert, E orange cuivré, F blanc**. La couleur suit le meilleur modificateur sélectionné qui satisfait son minimum ; un seul suffit, sans exiger quatre choix. Les sous-rangs numérotés restent affichés et permettent de trier les combinaisons. Un modificateur décoché n'est pas réactivé par le catalogue de référence.
+
+Dans **Coffre et inventaire → Filtres → Tablettes**, cinq presets permettent de sauvegarder puis de charger les rangs, minimums et règles ET / OU des huit types de tablettes. Choisir un emplacement, utiliser l'icône disquette pour le sauvegarder et l'icône de chargement pour le rappeler. Charger un emplacement vide est désactivé. Les presets font partie des réglages personnels et sont conservés lors des mises à jour.
 
 ## Résoudre les problèmes courants
 
@@ -99,15 +105,15 @@ cd ExileCenter
 $targets = Join-Path $PWD '.github/ci/PreserveOffsets.targets'
 $offsets = Join-Path $PWD '.github/ci/GameOffsets.dll'
 $properties = @("-p:DirectoryBuildTargetsPath=$targets", "-p:PinnedGameOffsetsPath=$offsets")
-$plugins = [regex]::Matches((Get-Content GameOverlay.sln -Raw), '"(Plugins\\[^"\r\n]+\.csproj)"') |
+$plugins = [regex]::Matches((Get-Content ExileCenter.sln -Raw), '"(Plugins\\[^"\r\n]+\.csproj)"') |
     ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
-foreach ($project in @('GameHelper/GameHelper.csproj') + @($plugins)) {
+foreach ($project in @('ExileCenter/ExileCenter.csproj') + @($plugins)) {
     dotnet restore $project @properties
     if ($LASTEXITCODE -ne 0) { throw "Restauration échouée : $project" }
     dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false @properties
     if ($LASTEXITCODE -ne 0) { throw "Compilation échouée : $project" }
 }
-$runtime = Join-Path $PWD 'GameHelper/bin/Release/net10.0-windows/win-x64'
+$runtime = Join-Path $PWD 'ExileCenter/bin/Release/net10.0-windows/win-x64'
 foreach ($path in @(git ls-files -- 'Plugins/*/Localization/*.json')) {
     $destination = Join-Path $runtime $path
     [void][IO.Directory]::CreateDirectory((Split-Path $destination -Parent))
@@ -119,7 +125,7 @@ if (Test-Path $native) {
 }
 ```
 
-Les sorties sont dans `GameHelper\bin\Release\net10.0-windows\win-x64`. Pour préparer un ZIP de test isolé :
+Les sorties sont dans `ExileCenter\bin\Release\net10.0-windows\win-x64`. Pour préparer un ZIP de test isolé :
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish.ps1 -LocalUpdate -SkipBuild -LocalDestination "$PWD\LocalUpdateRelease\test" -LocalLabel "ExileCenter — test local"

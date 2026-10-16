@@ -19,7 +19,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\GameHelper\GameHelper.csproj">
+    <ProjectReference Include="..\..\ExileCenter\ExileCenter.csproj">
       <Private>false</Private>
       <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
     </ProjectReference>
@@ -31,11 +31,11 @@
   </ItemGroup>
 
   <Target Name="CopyFiles" AfterTargets="Build">
-    <Copy SourceFiles="$(OutDir)$(TargetName)$(TargetExt);$(OutDir)$(TargetName).pdb;" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(OutDir)$(TargetName)$(TargetExt);$(OutDir)$(TargetName).pdb;" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)" SkipUnchangedFiles="true" />
     <ItemGroup>
       <LocalizationFiles Include="$(OutDir)Localization\*.json" />
     </ItemGroup>
-    <Copy SourceFiles="@(LocalizationFiles)" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)\Localization" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(LocalizationFiles)" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)\Localization" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

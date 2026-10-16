@@ -33,7 +33,7 @@ Read-only overlay — no input automation.
 3. If `Textures/` is empty, copy bar PNGs from [Reynbow/simplebars](https://github.com/Reynbow/simplebars/tree/main/Textures)
 4. Build:
    ```
-   dotnet build GameHelper/GameHelper.csproj -c Release
+   dotnet build ExileCenter/ExileCenter.csproj -c Release
    dotnet build Plugins/SimpleBars/SimpleBars.csproj -c Release
    ```
 5. Enable **SimpleBars** in GameHelper → Plugins

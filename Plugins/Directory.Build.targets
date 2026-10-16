@@ -11,7 +11,7 @@
           SkipUnchangedFiles="true"
           Condition="'@(_PluginLocalizationFiles)' != ''" />
     <Copy SourceFiles="@(_PluginLocalizationFiles)"
-          DestinationFolder="$(MSBuildProjectDirectory)\..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)\Localization"
+          DestinationFolder="$(MSBuildProjectDirectory)\..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)\Localization"
           SkipUnchangedFiles="true"
           Condition="'@(_PluginLocalizationFiles)' != ''" />
   </Target>

@@ -22,7 +22,7 @@
         <AssemblyName>StashValueByZx0-Legacy</AssemblyName>
       </PropertyGroup>
       <ItemGroup>
-        <ProjectReference Include="..\..\sources\GameHelper-MordWraith\GameHelper\GameHelper.csproj">
+        <ProjectReference Include="..\..\sources\GameHelper-MordWraith\ExileCenter\ExileCenter.csproj">
           <Private>false</Private>
           <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
         </ProjectReference>
@@ -34,7 +34,7 @@
     </When>
     <Otherwise>
       <ItemGroup>
-        <ProjectReference Include="..\..\GameHelper\GameHelper.csproj">
+        <ProjectReference Include="..\..\ExileCenter\ExileCenter.csproj">
           <Private>false</Private>
           <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
         </ProjectReference>
@@ -51,8 +51,8 @@
       <_StashValueDeployFiles Include="$(OutDir)$(TargetName)$(TargetExt)" />
     </ItemGroup>
     <Copy SourceFiles="@(_StashValueDeployFiles)"
-          DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(AssemblyName)"
-          Condition="Exists('..\..\GameHelper\$(OutDir)')"
+          DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(AssemblyName)"
+          Condition="Exists('..\..\ExileCenter\$(OutDir)')"
           SkipUnchangedFiles="true" />
   </Target>
 

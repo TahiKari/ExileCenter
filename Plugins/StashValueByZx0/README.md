@@ -44,7 +44,7 @@ If you prefer to compile the plugin yourself:
        StashValue\           ← Clone this repository here
          StashValue.csproj
    ```
-2. Open the main GameHelper solution (`GameOverlay.sln`) in Visual Studio, Rider, or compile via .NET CLI:
+2. Open the main GameHelper solution (`ExileCenter.sln`) in Visual Studio, Rider, or compile via .NET CLI:
    ```powershell
    dotnet build -c Release
    ```

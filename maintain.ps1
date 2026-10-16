@@ -29,7 +29,7 @@ $Scripts = Join-Path $Root "scripts"
 # Helpers
 # ---------------------------------------------------------------------------
 function Get-ProjectVersion {
-    $csproj = Join-Path $Root "GameHelper\GameHelper.csproj"
+    $csproj = Join-Path $Root "ExileCenter\ExileCenter.csproj"
     if (-not (Test-Path $csproj)) { return "?" }
     $xml = Get-Content $csproj -Raw
     if ($xml -match '<Version>([^<]+)</Version>') { return $Matches[1].Trim() }
@@ -127,7 +127,7 @@ function Invoke-MaintainAction {
             $savedVer = if (Test-Path $overridePath) { (Get-Content $overridePath -Raw).Trim() } else { "" }
             if ($script:Version -ne $savedVer) {
                 $script:Version | Set-Content $overridePath -Encoding ASCII
-                $csprojPath = Join-Path $Root "GameHelper\GameHelper.csproj"
+                $csprojPath = Join-Path $Root "ExileCenter\ExileCenter.csproj"
                 if (Test-Path $csprojPath) {
                     try {
                         $xml = [xml](Get-Content $csprojPath -Raw)
@@ -475,7 +475,7 @@ function Show-AddPluginDialog {
         }
         $json.$category | Add-Member -NotePropertyName $folder -NotePropertyValue $repo -Force
         $json | ConvertTo-Json -Depth 5 | Set-Content $sourcesPath -Encoding UTF8
-        $slnPath = Join-Path $g.Root "GameOverlay.sln"
+        $slnPath = Join-Path $g.Root "ExileCenter.sln"
         Add-PluginToSln -SlnPath $slnPath -Folder $folder
         $script:MaintainGui.Log.AppendText("Plugin eingetragen: $folder <- $repo ($category)`r`n")
     } catch {
@@ -495,7 +495,7 @@ function Show-AddPluginDialog {
 function Show-RemovePluginDialog {
     $g           = $script:MaintainGui
     $sourcesPath = Join-Path $g.Root "scripts\plugins-sources.json"
-    $slnPath     = Join-Path $g.Root "GameOverlay.sln"
+    $slnPath     = Join-Path $g.Root "ExileCenter.sln"
 
     $json = Get-Content $sourcesPath -Raw | ConvertFrom-Json
     $allPlugins = [System.Collections.Generic.List[string]]@()
@@ -547,7 +547,7 @@ function Show-RemovePluginDialog {
     $folder = $list.SelectedItem
 
     $confirm = [System.Windows.Forms.MessageBox]::Show(
-        "'$folder' komplett entfernen?`n(plugins-sources.json, GameOverlay.sln, Plugins\$folder\)",
+        "'$folder' komplett entfernen?`n(plugins-sources.json, ExileCenter.sln, Plugins\$folder\)",
         "Bestaetigung", [System.Windows.Forms.MessageBoxButtons]::YesNo,
         [System.Windows.Forms.MessageBoxIcon]::Warning)
     if ($confirm -ne [System.Windows.Forms.DialogResult]::Yes) { return }
@@ -576,7 +576,7 @@ function Show-RemovePluginDialog {
 # ---------------------------------------------------------------------------
 function Show-AddExistingToSlnDialog {
     $g       = $script:MaintainGui
-    $slnPath = Join-Path $g.Root "GameOverlay.sln"
+    $slnPath = Join-Path $g.Root "ExileCenter.sln"
 
     $slnContent  = [System.IO.File]::ReadAllText($slnPath)
     $pluginsBase = Join-Path $g.Root "Plugins"
@@ -613,7 +613,7 @@ function Show-AddExistingToSlnDialog {
     $cTxt = [System.Drawing.Color]::FromArgb(235, 237, 245)
 
     $lbl = New-Object System.Windows.Forms.Label
-    $lbl.Text     = "Plugin-Ordner auswaehlen (noch nicht in GameOverlay.sln):"
+    $lbl.Text     = "Plugin-Ordner auswaehlen (noch nicht in ExileCenter.sln):"
     $lbl.AutoSize = $false
     $lbl.Location = New-Object System.Drawing.Point(14, 14)
     $lbl.Size     = New-Object System.Drawing.Size(380, 34)
@@ -933,7 +933,7 @@ public class Win32ConsoleStable {
     # --- Aktuelle Version aus csproj ---
     $currentVersion = "1.0.0"
     try {
-        $csprojPath = Join-Path $Root "GameHelper\GameHelper.csproj"
+        $csprojPath = Join-Path $Root "ExileCenter\ExileCenter.csproj"
         if (Test-Path $csprojPath) {
             $xml = [xml](Get-Content $csprojPath -Raw)
             $v = $xml.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ } | Select-Object -First 1

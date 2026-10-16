@@ -6,11 +6,11 @@
     <NoWarn>1701;1702;1591</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\GameHelper\GameHelper.csproj" Private="false" CopyLocalSatelliteAssemblies="false" />
+    <ProjectReference Include="..\..\ExileCenter\ExileCenter.csproj" Private="false" CopyLocalSatelliteAssemblies="false" />
     <CameraLocalization Include="Localization\*.json" />
   </ItemGroup>
   <Target Name="CopyFiles" AfterTargets="Build">
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\CameraZoom" />
-    <Copy SourceFiles="@(CameraLocalization)" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\CameraZoom\Localization" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\CameraZoom" />
+    <Copy SourceFiles="@(CameraLocalization)" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\CameraZoom\Localization" />
   </Target>
 </Project>

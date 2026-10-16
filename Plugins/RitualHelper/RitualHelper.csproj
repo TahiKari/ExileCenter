@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <Version>0.1.0</Version>
@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\GameHelper\GameHelper.csproj">
+    <ProjectReference Include="..\..\ExileCenter\ExileCenter.csproj">
       <Private>false</Private>
       <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
     </ProjectReference>
@@ -34,7 +34,7 @@
       <_RitualDeployFiles Include="$(OutDir)item_names.json" Condition="Exists('$(OutDir)item_names.json')" />
     </ItemGroup>
     <Copy SourceFiles="@(_RitualDeployFiles)"
-          DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)"
+          DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)"
           SkipUnchangedFiles="true" />
   </Target>
 

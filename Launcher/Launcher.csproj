@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -35,9 +35,9 @@
 
   <Target Name="CopyLauncherToOutput" AfterTargets="Build">
     <Copy SourceFiles="$(OutDir)$(AssemblyName).exe;$(OutDir)$(AssemblyName).dll;$(OutDir)$(AssemblyName).runtimeconfig.json;$(OutDir)$(AssemblyName).deps.json;$(OutDir)AsmResolver.PE.dll;$(OutDir)AsmResolver.PE.File.dll;$(OutDir)AsmResolver.dll;$(OutDir)AsmResolver.PE.Win32Resources.dll;"
-          DestinationFolder="..\GameHelper\$(OutDir)"
+          DestinationFolder="..\ExileCenter\$(OutDir)"
           SkipUnchangedFiles="true"
-          Condition="Exists('..\GameHelper\$(OutDir)')" />
+          Condition="Exists('..\ExileCenter\$(OutDir)')" />
   </Target>
 
 </Project>

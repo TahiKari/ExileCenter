@@ -22,7 +22,7 @@ Community plugin for [GameHelper2](https://github.com/Gordin/GameHelper2) (Path 
 git clone https://github.com/Gordin/GameHelper2.git
 cd GameHelper2
 git clone https://github.com/MordWraith/AuraTracker.git Plugins/AuraTracker
-dotnet build GameHelper/GameHelper.csproj -c Release
+dotnet build ExileCenter/ExileCenter.csproj -c Release
 dotnet build Plugins/AuraTracker/AuraTracker.csproj -c Release
 ```
 

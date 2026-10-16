@@ -25,7 +25,7 @@ cd GameHelper2
 git clone https://github.com/MordWraith/SimpleBars.git Plugins/SimpleBars
 # If Textures/ is missing:
 #   copy from https://github.com/Reynbow/simplebars/tree/main/Textures
-dotnet build GameHelper/GameHelper.csproj -c Release
+dotnet build ExileCenter/ExileCenter.csproj -c Release
 dotnet build Plugins/SimpleBars/SimpleBars.csproj -c Release
 ```
 

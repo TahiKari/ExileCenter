@@ -28,7 +28,7 @@ Also bundled in [MordWraith/Gamehelper-Experimental](https://github.com/MordWrai
 git clone https://github.com/Gordin/GameHelper2.git
 cd GameHelper2
 git clone https://github.com/MordWraith/PlayerBuffBar.git Plugins/PlayerBuffBar
-dotnet build GameHelper/GameHelper.csproj -c Release
+dotnet build ExileCenter/ExileCenter.csproj -c Release
 dotnet build Plugins/PlayerBuffBar/PlayerBuffBar.csproj -c Release
 ```
 

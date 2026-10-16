@@ -31,7 +31,7 @@ $defaultPaths = @(
     "scripts\build-downloader.ps1",
     "scripts\publish.ps1",
     "scripts\set-version.ps1",
-    "GameOverlay.sln"
+    "ExileCenter.sln"
 )
 
 $transferPaths = if ($Paths -and $Paths.Count -gt 0) {

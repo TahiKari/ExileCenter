@@ -172,6 +172,8 @@ namespace StashUtility
         };
 
         public Dictionary<string, TabletProfile> TabletProfiles = new();
+        public TabletPreset[] TabletPresets = new TabletPreset[5];
+        public int ActiveTabletPreset;
         public int TabletFarmPresetVersion;
     }
 
@@ -206,5 +208,14 @@ namespace StashUtility
         public List<string> BadModPatterns = new();
         public List<string> GodModPatterns = new();
         public Dictionary<string, float> ModRequiredMinRolls = new();
+    }
+
+    public class TabletPreset
+    {
+        public Dictionary<string, TabletProfile> Profiles = new();
+        public bool FilterGreat;
+        public int MinimumGoodMods = 2;
+        public int MinimumHighlightedMods = 1;
+        public int MinimumGoodModsToIgnoreBad = 3;
     }
 }

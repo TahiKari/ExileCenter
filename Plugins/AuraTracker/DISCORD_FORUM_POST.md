@@ -33,7 +33,7 @@ Read-only overlay — no input automation.
    ```
 3. Build:
    ```
-   dotnet build GameHelper/GameHelper.csproj -c Release
+   dotnet build ExileCenter/ExileCenter.csproj -c Release
    dotnet build Plugins/AuraTracker/AuraTracker.csproj -c Release
    ```
 4. Enable **AuraTracker** in GameHelper → Plugins

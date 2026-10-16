@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\GameHelper\GameHelper.csproj">
+    <ProjectReference Include="..\..\ExileCenter\ExileCenter.csproj">
       <Private>false</Private>
       <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
     </ProjectReference>
@@ -58,13 +58,13 @@
   </ItemGroup>
 
   <Target Name="CopyFiles" AfterTargets="Build">
-    <Copy SourceFiles="$(OutDir)$(TargetName)$(TargetExt);$(OutDir)$(TargetName).pdb;$(OutDir)expedition2_recipes.json;$(OutDir)relic_mods_en.json;" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(OutDir)$(TargetName)$(TargetExt);$(OutDir)$(TargetName).pdb;$(OutDir)expedition2_recipes.json;$(OutDir)relic_mods_en.json;" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)" SkipUnchangedFiles="true" />
     <ItemGroup>
       <RewardIconFiles Include="$(OutDir)icons\**\*.png" />
       <LocalizationFiles Include="$(OutDir)Localization\**\*.json" />
     </ItemGroup>
-    <Copy SourceFiles="@(RewardIconFiles)" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)\icons\%(RecursiveDir)" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(LocalizationFiles)" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)\Localization\%(RecursiveDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(RewardIconFiles)" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)\icons\%(RecursiveDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(LocalizationFiles)" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)\Localization\%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

@@ -16,7 +16,7 @@ param(
     [switch]$LocalUpdate,
     [switch]$LegacyPackage,
     [string]$LocalSource,
-    [string]$LocalDestination = (Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'Gamehelpers\Maj GameHelper'),
+    [string]$LocalDestination = (Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'ExileCenter\Maj ExileCenter'),
     [string]$LocalLabel
 )
 
@@ -28,7 +28,7 @@ $Root = Split-Path $PSScriptRoot -Parent
 if ($LocalUpdate) {
     if (-not $SkipBuild) { throw 'Use -LocalUpdate -SkipBuild after building and checking the changed projects.' }
     if ([string]::IsNullOrWhiteSpace($LocalSource)) {
-        $LocalSource = Join-Path $Root 'GameHelper\bin\Release\net10.0-windows\win-x64'
+        $LocalSource = Join-Path $Root 'ExileCenter\bin\Release\net10.0-windows\win-x64'
     }
     $source = [IO.Path]::GetFullPath($LocalSource).TrimEnd([char]92, [char]47)
     $destination = [IO.Path]::GetFullPath($LocalDestination).TrimEnd([char]92, [char]47)
@@ -40,9 +40,25 @@ if ($LocalUpdate) {
         if (-not (Test-Path -LiteralPath (Join-Path $source $required) -PathType Leaf)) { throw "Missing $required" }
     }
     [IO.Directory]::CreateDirectory($destination) | Out-Null
+    $manifestPath = Join-Path $destination 'ExileCenter-Maj.json'
+    $legacyManifestPath = Join-Path $destination 'GameHelper-Maj.json'
+    $previousPackage = $null
+    $previousManifest = if (Test-Path -LiteralPath $manifestPath) { $manifestPath } else { $legacyManifestPath }
+    if (Test-Path -LiteralPath $previousManifest) {
+        $previous = Get-Content -LiteralPath $previousManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($previous.PackageFile -cmatch '^(?:GameHelper|ExileCenter)-Maj-\d{8}-\d{6}-[a-f0-9]{8}\.zip$' -and
+            (Test-Path -LiteralPath (Join-Path $destination $previous.PackageFile) -PathType Leaf)) {
+            $previousPackage = $previous.PackageFile
+        }
+    }
+    if (-not $previousPackage) {
+        $previousPackage = Get-ChildItem -LiteralPath $destination -File |
+            Where-Object { $_.Name -cmatch '^(?:GameHelper|ExileCenter)-Maj-\d{8}-\d{6}-[a-f0-9]{8}\.zip$' } |
+            Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1 -ExpandProperty Name
+    }
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $packageName = 'GameHelper-Maj-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0,8) + '.zip'
+    $packageName = 'ExileCenter-Maj-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0,8) + '.zip'
     $packagePath = Join-Path $destination $packageName
     $temporaryPackage = $packagePath + '.tmp'
     $files = @{}
@@ -89,11 +105,23 @@ if ($LocalUpdate) {
     if ($Version) { $manifest.ReleaseTag = $Version }
     if ($Changelog) { $manifest.Changes = $Changelog -join "`n" }
     $manifest = $manifest | ConvertTo-Json
-    $manifestPath = Join-Path $destination 'GameHelper-Maj.json'
     $temporaryManifest = $manifestPath + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
     [IO.File]::WriteAllText($temporaryManifest,$manifest,[Text.UTF8Encoding]::new($false))
     if (Test-Path -LiteralPath $manifestPath) { [IO.File]::Replace($temporaryManifest,$manifestPath,[NullString]::Value) }
     else { [IO.File]::Move($temporaryManifest,$manifestPath) }
+    # Only prune our generated archives, after the new manifest was atomically published.
+    if ($previousPackage -clike 'GameHelper-Maj-*') {
+        $renamed = $previousPackage.Replace('GameHelper-Maj-', 'ExileCenter-Maj-')
+        Move-Item -LiteralPath (Join-Path $destination $previousPackage) -Destination (Join-Path $destination $renamed)
+        $previousPackage = $renamed
+    }
+    foreach ($archiveFile in Get-ChildItem -LiteralPath $destination -File) {
+        if ($archiveFile.Name -cnotmatch '^(?:GameHelper|ExileCenter)-Maj-\d{8}-\d{6}-[a-f0-9]{8}\.zip$' -or
+            $archiveFile.Name -in @($packageName, $previousPackage)) { continue }
+        if ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($archiveFile.FullName)) -ne $destination) { throw 'Cleanup outside update folder refused.' }
+        Remove-Item -LiteralPath $archiveFile.FullName
+    }
+    if (Test-Path -LiteralPath $legacyManifestPath) { Remove-Item -LiteralPath $legacyManifestPath }
     Write-Host "Local update published: $packagePath ($($files.Count) files)"
     return
 }

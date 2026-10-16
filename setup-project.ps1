@@ -69,7 +69,7 @@ foreach ($file in @("Directory.Build.props", "NuGet.config", ".editorconfig")) {
 }
 
 # GameHelper.App als interner Overlay-Name
-$ghProj = Join-Path $Root "GameHelper\GameHelper.csproj"
+$ghProj = Join-Path $Root "ExileCenter\ExileCenter.csproj"
 if (Test-Path $ghProj) {
     $xml = Get-Content $ghProj -Raw
     if ($xml -notmatch '<AssemblyName>GameHelper.App</AssemblyName>') {

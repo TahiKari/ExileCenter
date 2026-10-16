@@ -75,9 +75,9 @@ StashUtility is a plugin for **GameHelper2** designed to manage, filter, and hig
 To compile the plugin yourself:
 
 1. Place the `StashUtility` repository folder inside the `Plugins/` directory of the `GameHelper2` project.
-2. Open the solution `GameOverlay.sln` in Visual Studio.
+2. Open the solution `ExileCenter.sln` in Visual Studio.
 3. Select the `Release` build configuration and rebuild the solution.
-4. The output will automatically copy `StashUtility.dll` and its assets to `GameHelper\bin\Release\net10.0-windows\win-x64\Plugins\StashUtility`.
+4. The output will automatically copy `StashUtility.dll` and its assets to `ExileCenter\bin\Release\net10.0-windows\win-x64\Plugins\StashUtility`.
 
 ---
 

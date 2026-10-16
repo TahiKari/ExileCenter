@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\GameHelper\GameHelper.csproj">
+    <ProjectReference Include="..\..\ExileCenter\ExileCenter.csproj">
       <Private>false</Private>
       <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
     </ProjectReference>
@@ -37,10 +37,10 @@
   </ItemGroup>
 
   <Target Name="CopyFiles" AfterTargets="Build">
-    <Copy SourceFiles="@(StashLocalizationFiles)" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)\Localization" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(StashTabletIcons)" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)\images" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="$(OutDir)$(TargetName)$(TargetExt);$(OutDir)$(TargetName).pdb;" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\Data\jewel_mod_ranges.json;$(MSBuildProjectDirectory)\Data\tablet_mod_ranges.json" DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)\Data" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(StashLocalizationFiles)" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)\Localization" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(StashTabletIcons)" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)\images" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(OutDir)$(TargetName)$(TargetExt);$(OutDir)$(TargetName).pdb;" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\Data\jewel_mod_ranges.json;$(MSBuildProjectDirectory)\Data\tablet_mod_ranges.json" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\$(ProjectName)\Data" SkipUnchangedFiles="true" />
   </Target>
 
   <ItemGroup>

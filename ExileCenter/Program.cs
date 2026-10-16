@@ -83,8 +83,15 @@ namespace GameHelper
     // Local packages take priority; public GitHub releases use the same verified installer.
     internal static class LocalUpdates
     {
-        internal static readonly string UpdateDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Gamehelpers", "Maj GameHelper");
+        internal static readonly string UpdateDirectory = ResolveUpdateDirectory();
+
+        private static string ResolveUpdateDirectory()
+        {
+            string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            string current = Path.Combine(desktop, "ExileCenter", "Maj ExileCenter");
+            return new[] { current, Path.Combine(desktop, "ExileCenter", "Maj GameHelper"),
+                Path.Combine(desktop, "Gamehelpers", "Maj GameHelper") }.FirstOrDefault(Directory.Exists) ?? current;
+        }
         private static readonly string InstallDirectory = Path.GetFullPath(AppContext.BaseDirectory);
         private const string StateName = "local-update-state.json";
         private const string ErrorName = "local-update-error.txt";
@@ -400,14 +407,15 @@ namespace GameHelper
             {
                 var errorPath = Path.Combine(installRoot, ErrorName);
                 var installationError = File.Exists(errorPath) ? File.ReadAllText(errorPath) : null;
-                var manifestPath = Path.Combine(updateRoot, "GameHelper-Maj.json");
+                var manifestPath = Path.Combine(updateRoot, "ExileCenter-Maj.json");
+                if (!File.Exists(manifestPath)) manifestPath = Path.Combine(updateRoot, "GameHelper-Maj.json");
                 if (!File.Exists(manifestPath)) return new(null, installationError);
                 var candidate = JsonSerializer.Deserialize<Package>(File.ReadAllText(manifestPath));
                 if (candidate == null || candidate.DownloadUrl != null || string.IsNullOrWhiteSpace(candidate.Id) || string.IsNullOrWhiteSpace(candidate.Label) ||
                     candidate.Sha256 == null || candidate.Sha256.Length != 64 || !candidate.Sha256.All(Uri.IsHexDigit) ||
                     string.IsNullOrWhiteSpace(candidate.PackageFile) || candidate.PackageFile != Path.GetFileName(candidate.PackageFile) ||
                     !candidate.PackageFile.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("GameHelper-Maj.json");
+                    throw new InvalidDataException(Path.GetFileName(manifestPath));
                 var statePath = Path.Combine(installRoot, StateName);
                 if (File.Exists(statePath))
                 {
@@ -416,6 +424,9 @@ namespace GameHelper
                         string.Equals(state.RootElement.GetProperty("Sha256").GetString(), candidate.Sha256, StringComparison.OrdinalIgnoreCase))
                         return new(null, installationError);
                 }
+                if (ReleaseVersion(candidate.ReleaseTag) is { } available &&
+                    ReleaseVersion(CurrentReleaseTag) is { } installed && available <= installed)
+                    return new(null, installationError);
                 if (!File.Exists(Path.Combine(updateRoot, candidate.PackageFile))) return new(null, installationError);
                 return new(candidate, installationError);
             }
