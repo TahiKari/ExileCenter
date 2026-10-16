@@ -8,6 +8,8 @@ ExileCenter rassemble dans une interface modulaire les outils de suivi et d'assi
 
 ### [Télécharger ExileCenter — Windows x64 (ZIP)](https://github.com/TahiKari/ExileCenter/releases/latest/download/ExileCenter-Complete-win-x64.zip)
 
+[Téléchargeur ExileCenter](https://github.com/TahiKari/ExileCenter/releases/latest/download/ExileCenterDownloader.exe)
+
 [Dernière version et changements](https://github.com/TahiKari/ExileCenter/releases/latest) · [Toutes les versions](https://github.com/TahiKari/ExileCenter/releases) · [Signaler un problème](https://github.com/TahiKari/ExileCenter/issues)
 
 ## Prérequis

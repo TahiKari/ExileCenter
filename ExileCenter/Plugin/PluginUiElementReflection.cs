@@ -20,7 +20,7 @@ namespace ExileCenter.Plugin
         private static readonly Assembly ExileCenterAssembly = typeof(Core).Assembly;
 
         public static Type? UiElementParentsType { get; } =
-            ExileCenterAssembly.GetType("GameHelper.Cache.UiElementParents");
+            ExileCenterAssembly.GetType("ExileCenter.Cache.UiElementParents");
 
         public static Type? UiElementBaseType { get; } =
             ExileCenterAssembly.GetType("ExileCenter.RemoteObjects.UiElement.UiElementBase");

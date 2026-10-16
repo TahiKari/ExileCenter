@@ -493,7 +493,7 @@ namespace StashValue
     }
 
     /// <summary>
-    ///     Module initializer to dynamically resolve GameHelper vs GameHelper.App assembly references.
+    ///     Module initializer to dynamically resolve ExileCenter assembly assembly references.
     /// </summary>
 #pragma warning disable CA2255
     public static class StashValueModuleInitializer
@@ -507,11 +507,11 @@ namespace StashValue
             AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
             {
                 var requestedName = new System.Reflection.AssemblyName(args.Name).Name;
-                if (requestedName == "GameHelper" || requestedName == "GameHelper.App")
+                if (requestedName == "ExileCenter" || requestedName == "ExileCenter.App")
                 {
                     var assemblies = AppDomain.CurrentDomain.GetAssemblies();
                     return assemblies.FirstOrDefault(a => 
-                        a.GetName().Name == "GameHelper" || a.GetName().Name == "GameHelper.App");
+                        a.GetName().Name == "ExileCenter" || a.GetName().Name == "ExileCenter.App");
                 }
                 return null;
             };

@@ -75,7 +75,7 @@ internal static partial class UpdateChecks
         if (args.Contains("--wait-owner")) { await Task.Delay(2500); return 0; }
         if (args.Contains("--onedrive")) { await RunOneDriveChecks(); return 0; }
         if (args.Length == 2 && args[0] == "--transition-package") { TransitionPackageCheck(args[1]); return 0; }
-        if (args.Contains("--version-only")) { var tag = Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, "ExileCenter.dll")).GetCustomAttributes<AssemblyMetadataAttribute>().Single(a => a.Key == "ExileCenterReleaseTag").Value; Check(tag == "v1.5.11-personnalise.38", "CI binary embeds the published release tag"); return 0; }
+        if (args.Contains("--version-only")) { var tag = Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, "ExileCenter.dll")).GetCustomAttributes<AssemblyMetadataAttribute>().Single(a => a.Key == "ExileCenterReleaseTag").Value; Check(tag == "v1.5.11-personnalise.39", "CI binary embeds the published release tag"); return 0; }
         if (args.Length == 4 && args[0] == "--brand-migration") { await BrandMigration(args[1], args[2], args[3]); return 0; }
         if (args.Contains("--public-package")) await PublicPackageCheck(); else await RunChecks();
         return 0;
@@ -265,7 +265,7 @@ internal static partial class UpdateChecks
         var oldAssembly = oldContext.LoadFromAssemblyPath(Path.Combine(oldRuntime, "GameHelper.dll"));
         var oldUpdates = oldAssembly.GetType("GameHelper.LocalUpdates", true)!;
         var oldPackage = oldUpdates.GetNestedType("Package", BindingFlags.NonPublic)!;
-        object package = Activator.CreateInstance(oldPackage, new object[] { "migration-fixture", "transition.zip", Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(transitionZip))), "ExileCenter P-V1.33" })!;
+        object package = Activator.CreateInstance(oldPackage, new object[] { "migration-fixture", "transition.zip", Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(transitionZip))), "ExileCenter P-V1.34" })!;
         string stage = (string)oldUpdates.GetMethod("Prepare", PrivateStatic)!.Invoke(null, new object[] { package, root, work, int.MaxValue })!;
         Check(Directory.GetFiles(Path.Combine(stage, "payload"), "*", SearchOption.AllDirectories).Length >= 400, "unmodified P-V1.32 updater accepts the entire migration package");
         Check(!File.Exists(Path.Combine(stage, "payload", "GameOffsets.dll")), "old updater excludes offsets from replacement");
@@ -290,6 +290,10 @@ internal static partial class UpdateChecks
         Check(!File.Exists(Path.Combine(root, "local-update-error.txt")) && !File.Exists(Path.Combine(root, "Error.log")), "migration reports no runtime or installer error");
         var current = Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, "ExileCenter.dll"));
         Check(current.GetName().Name == "ExileCenter" && !current.GetTypes().Any(t => t.Namespace?.StartsWith("GameHelper") == true), "native assembly and namespaces use ExileCenter");
+        var ui = current.GetType("ExileCenter.Plugin.PluginUiElementReflection", true)!;
+        Check(ui.GetProperty("UiElementParentsType")!.GetValue(null) is Type && ui.GetProperty("UiElementBaseType")!.GetValue(null) is Type,
+            "plugin UI reflection resolves both renamed internal types");
+        Check(!current.GetManifestResourceNames().Any(name => name.StartsWith("GameHelper.")), "all embedded resource identities use ExileCenter");
         string shortcuts = Path.Combine(work, "shortcuts"); Directory.CreateDirectory(shortcuts);
         dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell", true)!)!;
         dynamic link = shell.CreateShortcut(Path.Combine(shortcuts, "GameHelper.lnk"));
