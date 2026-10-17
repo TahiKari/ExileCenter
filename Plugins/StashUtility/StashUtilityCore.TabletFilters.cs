@@ -234,10 +234,18 @@ namespace StashUtility
         private void DrawTabletMetaFilters(string type, TabletProfile settings)
         {
             settings.MetaProfiles ??= new(); settings.ManualMetaModifiers ??= new(); settings.MetaSearch ??= "";
+            // Older settings could enable advanced filtering before a profile existed.
+            // There is no additional rule to apply in that case; keep the user's ranks.
+            if (settings.UseMetaFilters && ActiveMetaProfile(settings) == null)
+            { settings.UseMetaFilters = false; SaveSettings(); }
             if (Settings.TabletMode == "custom" && ImGui.CollapsingHeader(MT("advanced_rules", "Advanced filters (optional)") + "###TabletRulesEditor"))
             {
+                bool ready = TabletFilterEngine.Validate(ActiveMetaProfile(settings), MetaCatalog).Length == 0;
+                ImGui.BeginDisabled(!settings.UseMetaFilters && !ready);
                 if (ImGui.Checkbox(MT("advanced_enable", "Also require the advanced profile"), ref settings.UseMetaFilters)) SaveSettings();
+                ImGui.EndDisabled();
                 TabletHelp(MT("advanced_help", "Advanced rules add conditions to the AND / OR choice above. They are optional; analysis never enables filtering."));
+                if (!ready) MetaText(MT("advanced_requires_profile", "Create or select a profile and complete its rules before enabling the advanced filter. Your modifier ranks work without it."));
                 if (ImGui.BeginTabBar("TabletMetaTabs"))
                 {
                     if (ImGui.BeginTabItem(MT("rules", "Rules")))

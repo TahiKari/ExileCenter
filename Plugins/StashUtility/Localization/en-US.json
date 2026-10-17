@@ -1730,5 +1730,6 @@
   "stashutility.meta.match_too_many": "A tablet has at most 4 modifiers. Uncheck some modifiers to obtain a match with AND.",
   "stashutility.meta.advanced_rules": "Advanced filters (optional)",
   "stashutility.meta.advanced_enable": "Also require the advanced profile",
+  "stashutility.meta.advanced_requires_profile": "Create or select a profile and complete its rules before enabling the advanced filter. Your modifier ranks work without it.",
   "stashutility.meta.advanced_help": "Advanced rules add conditions to the AND / OR choice above. They are optional; analysis never enables filtering."
 }

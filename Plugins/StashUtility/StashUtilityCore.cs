@@ -5718,7 +5718,8 @@ namespace StashUtility
             if (isTablet)
             {
                 string metaType = GetTabletProfileType(name, path);
-                if (metaType != null && Settings.TabletProfiles?.TryGetValue(metaType, out var metaSettings) == true && metaSettings?.UseMetaFilters == true)
+                if (metaType != null && Settings.TabletProfiles?.TryGetValue(metaType, out var metaSettings) == true &&
+                    metaSettings?.UseMetaFilters == true && ActiveMetaProfile(metaSettings) != null)
                 {
                     item.TryGetComponent<Mods>(out var metaMods);
                     DrawMetaTabletHighlight(name, metaType, pos, size, metaMods);

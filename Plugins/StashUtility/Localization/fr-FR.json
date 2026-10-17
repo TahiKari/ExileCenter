@@ -1730,5 +1730,6 @@
   "stashutility.meta.match_too_many": "Une tablette possède au plus 4 mods. Décoche des mods pour permettre une correspondance en mode ET.",
   "stashutility.meta.advanced_rules": "Filtres avancés (facultatif)",
   "stashutility.meta.advanced_enable": "Exiger aussi le profil avancé",
+  "stashutility.meta.advanced_requires_profile": "Crée ou sélectionne un profil et complète ses règles avant d’activer le filtre avancé. Tes rangs de mods fonctionnent sans ce filtre.",
   "stashutility.meta.advanced_help": "Ces règles ajoutent des conditions au choix ET / OU ci-dessus. Elles sont facultatives. L’analyse n’active aucun filtre."
 }

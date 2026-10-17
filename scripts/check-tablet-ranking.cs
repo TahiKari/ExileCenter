@@ -435,6 +435,27 @@ internal static class TabletRankingCheck
             CheckItemOverlay("Metadata/Items/Currency/CurrencyIncursionCorruptTablet", "Ancient Infuser", false);
             CheckItemOverlay("Metadata/Items/Currency/Tablet", "Tablet", false);
             CheckItemOverlay("Metadata/Items/TowerAugment/GenericAugment", "Tablette irradiée", true);
+            var orphanItem = Activator.CreateInstance(itemType, flags, null, new object[] { IntPtr.Zero }, null);
+            entityType.GetProperty("Path").SetValue(orphanItem, "Metadata/Items/TowerAugment/GenericAugment");
+            var orphanBase = new Base(IntPtr.Zero);
+            typeof(Base).GetProperty("BaseItemName").SetValue(orphanBase, "Tablette irradiée");
+            var orphanMods = new Mods(IntPtr.Zero);
+            orphanMods.ExplicitMods.Add(("TowerMonsterEffectiveness", (15f, 0f)));
+            var orphanComponents = (System.Collections.Concurrent.ConcurrentDictionary<string, ExileCenter.RemoteObjects.Components.ComponentBase>)entityType.GetField("componentCache", flags).GetValue(orphanItem);
+            orphanComponents["Base"] = orphanBase; orphanComponents["Mods"] = orphanMods;
+            var orphanProfile = new TabletProfile { ModRanks = new() { ["TowerMonsterEffectiveness"] = "S" } };
+            highlightPlugin.Settings.TabletProfiles["Irradiated Tablet"] = orphanProfile;
+            (Vector2, Vector2, uint)[] OrphanOverlay(bool advanced)
+            {
+                orphanProfile.UseMetaFilters = advanced;
+                ImGuiNET.ImGui.NewFrame();
+                highlight.Invoke(highlightPlugin, new object[] { orphanItem, new Vector2(200, 40), new Vector2(52) });
+                var buffer = ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
+                var rendered = Enumerable.Range(0, buffer.Size).Select(i => (buffer[i].pos, buffer[i].uv, buffer[i].col)).ToArray();
+                ImGuiNET.ImGui.EndFrame(); return rendered;
+            }
+            var basicOverlay = OrphanOverlay(false);
+            Check(basicOverlay.Length > 0 && OrphanOverlay(true).SequenceEqual(basicOverlay), "Enabled advanced filter with no profile renders the normal rank without a question mark");
             var uiRoot = Path.Combine(Directory.GetCurrentDirectory(), "tablet-ui-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(uiRoot);
             var uiPlugin = new StashUtilityCore { DllDirectory = uiRoot };
@@ -710,12 +731,42 @@ internal static class TabletRankingCheck
                 var result = ((ImGuiNET.ImGui.GetItemRectMin() + ImGuiNET.ImGui.GetItemRectMax()) / 2, ImGuiNET.ImGui.GetCursorPosY(), ImGuiNET.ImGui.GetStateStorage().GetInt(reference, 0) != 0);
                 ImGuiNET.ImGui.End(); ImGuiNET.ImGui.Render(); return result;
             }
+            string existingRanks = JsonConvert.SerializeObject(profile.ModRanks);
+            profile.UseMetaFilters = true;
             var closed = MetaFrame(new Vector2(-100), false);
+            Check(!profile.UseMetaFilters && JsonConvert.SerializeObject(profile.ModRanks) == existingRanks,
+                "Opening settings repairs an orphan advanced toggle without changing the ranks");
+            var repaired = JsonConvert.DeserializeObject<StashUtilitySettings>(File.ReadAllText(Path.Combine(isolated, "config", "settings.txt")));
+            Check(!repaired.TabletProfiles["Breach Tablet"].UseMetaFilters, "Orphan toggle repair persists to disk");
             Check(!closed.referenceOpen && closed.height < 200, "Reference catalogue and rule editor are collapsed by default");
             MetaFrame(closed.center, false); MetaFrame(closed.center, true); var opened = MetaFrame(closed.center, false);
             Check(opened.referenceOpen && opened.height > closed.height + 250, "Reference catalogue opens with one click");
             MetaFrame(closed.center, true); var hidden = MetaFrame(closed.center, false);
             Check(!hidden.referenceOpen && hidden.height == closed.height, "Reference catalogue hides again with one click");
+            Vector2 AdvancedFrame(Vector2 mouse, bool down)
+            {
+                io.AddMousePosEvent(mouse.X, mouse.Y); io.AddMouseButtonEvent(0, down);
+                ImGuiNET.ImGui.NewFrame();
+                ImGuiNET.ImGui.SetNextWindowPos(new Vector2(20)); ImGuiNET.ImGui.SetNextWindowSize(new Vector2(1000, 750));
+                ImGuiNET.ImGui.Begin("advanced enable fixture");
+                var start = ImGuiNET.ImGui.GetCursorScreenPos();
+                float frameHeight = ImGuiNET.ImGui.GetFrameHeight();
+                ImGuiNET.ImGui.SetNextItemOpen(true);
+                meta.Invoke(plugin, new object[] { "Breach Tablet", profile });
+                var center = start + new Vector2(frameHeight / 2, frameHeight * 1.5f + ImGuiNET.ImGui.GetStyle().ItemSpacing.Y);
+                ImGuiNET.ImGui.End(); ImGuiNET.ImGui.Render(); return center;
+            }
+            var enableCenter = AdvancedFrame(new Vector2(-100), false);
+            AdvancedFrame(enableCenter, false); AdvancedFrame(enableCenter, true); AdvancedFrame(enableCenter, false);
+            Check(!profile.UseMetaFilters, "Advanced filter checkbox cannot enable a missing profile");
+            var editable = new TabletFilterProfile { Name = "UI validation", TabletType = "Breach Tablet" };
+            profile.MetaProfiles.Add(editable); profile.ActiveMetaProfileId = editable.Id;
+            AdvancedFrame(enableCenter, false); AdvancedFrame(enableCenter, true); AdvancedFrame(enableCenter, false);
+            Check(!profile.UseMetaFilters, "Advanced filter checkbox cannot enable an incomplete rule");
+            editable.Rule = new() { Kind = TabletRuleKind.RankExact, Rank = "S" };
+            AdvancedFrame(enableCenter, false); AdvancedFrame(enableCenter, true); AdvancedFrame(enableCenter, false);
+            Check(profile.UseMetaFilters, "Advanced filter checkbox enables a completed valid profile");
+            profile.UseMetaFilters = false; profile.ActiveMetaProfileId = ""; profile.MetaProfiles.Clear();
             var mode = typeof(StashUtilityCore).GetMethod("DrawTabletMatchMode", flags);
             (Vector2 all, Vector2 any) ModeFrame(Vector2 mouse, bool down)
             {
