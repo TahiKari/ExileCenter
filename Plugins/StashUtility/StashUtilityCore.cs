@@ -883,10 +883,12 @@ namespace StashUtility
             }
             if (ImGui.CollapsingHeader(PluginText.T("stashutility.filters.farm_preset", "Farming ranks - PoE 2 0.5.5")))
             {
+                ImGui.BeginDisabled(Settings.TabletMode != "custom");
                 if (ImGui.Button(PluginText.T("stashutility.filters.farm_preset_apply", "Reapply farming ranks to all 8 tablets")))
                 {
                     if (ApplyTabletFarmPreset(true)) SaveSettings();
                 }
+                ImGui.EndDisabled();
                 TabletHelp(PluginText.T("stashutility.filters.farm_preset_apply_help", "Apply workbook ranks without changing minimum rolls or AND / OR profiles."));
             }
             if (ImGui.CollapsingHeader(PluginText.T("stashutility.filters.highlight_rules", "Highlight rules")))
@@ -898,13 +900,16 @@ namespace StashUtility
             ImGui.TextColored(ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark], MT("rank_settings", "Modifier ranks S to F"));
             TabletHelp(PluginText.T("stashutility.filters.rank_help", "Choose S to F for each modifier. Unchecked modifiers and rolls below their minimum do not contribute to the classification."));
             DrawTabletTypeSelector();
+            DrawTabletModes();
             DrawTabletPresets();
             string type = StashUtilitySettings.TabletTypes[tabletFilterType];
             var profile = SelectedProfile(type);
             var catalog = Data.ModDatabase.AllTabletMods.Where(m => m.TabletTypes.Contains(type)).ToList();
             profile.ModRanks ??= new Dictionary<string, string>();
             if (MigrateTabletModRanks(profile)) SaveSettings();
+            ImGui.BeginDisabled(Settings.TabletMode != "custom");
             DrawTabletMatchMode(type, profile);
+            ImGui.EndDisabled();
             DrawTabletMetaFilters(type, profile);
             DrawModCatalog("tablet", catalog, profile.GoodModPatterns, profile.BadModPatterns, profile.GodModPatterns, profile.ModRequiredMinRolls, ref tabletSearchTerm, ref tabletConfiguredOnly, ref tabletAffixFilter, profile.ModRanks);
         }
@@ -1165,7 +1170,9 @@ namespace StashUtility
                         ImGui.TableSetColumnIndex(0);
                         ImGui.TextUnformatted(PluginText.T("stashutility.filters.affix." + mod.Affix, mod.Affix) + " (" + filtered.Count(m => m.Affix == mod.Affix) + ")");
                     }
+                    ImGui.BeginDisabled(scope == "tablet" && Settings.TabletMode != "custom");
                     DrawModConfigRow(mod, good, bad, priority, rolls, ranks, rankGrid);
+                    ImGui.EndDisabled();
                 }
                 ImGui.EndTable();
             }

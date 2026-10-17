@@ -30,6 +30,82 @@ namespace StashUtility
                 Newtonsoft.Json.JsonConvert.SerializeObject(profiles ?? new()),
                 new Newtonsoft.Json.JsonSerializerSettings { MaxDepth = TabletFilterEngine.MaximumDepth * 3 + 32 });
 
+        private static readonly string[] TabletModes = { "farm_trade", "farm", "strategy", "custom" };
+        private static readonly string[] TabletStrategies = { "fubgun", "ritual", "hiveblood" };
+
+        private bool SetTabletMode(string mode, string strategy = null)
+        {
+            strategy ??= Settings.TabletStrategy;
+            if (!TabletModes.Contains(mode) || !TabletStrategies.Contains(strategy)) return false;
+            if (Settings.TabletMode == mode && (mode != "strategy" || Settings.TabletStrategy == strategy)) return false;
+            var profiles = mode == "custom" ? CopyTabletProfiles(Settings.CustomTabletProfiles ?? Settings.TabletProfiles) :
+                StashUtilitySettings.TabletTypes.ToDictionary(type => type, type =>
+                {
+                    var profile = new TabletProfile();
+                    foreach (var mod in Data.ModDatabase.AllTabletMods.Where(mod => mod.TabletTypes.Contains(type)))
+                    {
+                        string rank = mode == "farm_trade" ? MetaCatalog.Recognize(type, new[] { mod.Id }).Mods[0].Modifier?.Rank ?? "" :
+                            Data.ModDatabase.GetTabletFarmRank(type, mod.Id) ?? "";
+                        SetTabletModRank(mod.Id, rank, profile.ModRanks, profile.GoodModPatterns, profile.BadModPatterns, profile.GodModPatterns);
+                    }
+                    return profile;
+                });
+            if (mode == "strategy")
+            {
+                var rule = CreateTabletStrategy(strategy);
+                if (TabletFilterEngine.Validate(rule, MetaCatalog).Length > 0) return false;
+                var profile = profiles[rule.TabletType];
+                profile.MetaProfiles.Add(rule); profile.ActiveMetaProfileId = rule.Id; profile.UseMetaFilters = true;
+                tabletFilterType = Array.IndexOf(StashUtilitySettings.TabletTypes, rule.TabletType);
+            }
+            if (Settings.TabletMode == "custom") Settings.CustomTabletProfiles = CopyTabletProfiles(Settings.TabletProfiles);
+            Settings.TabletProfiles = profiles;
+            Settings.TabletMode = mode; Settings.TabletStrategy = strategy;
+            lastMetaObservation = null;
+            SaveSettings();
+            return true;
+        }
+
+        private static TabletFilterProfile CreateTabletStrategy(string strategy)
+        {
+            if (strategy == "fubgun") return CreateFubgunTabletProfile();
+            string type = strategy == "ritual" ? "Ritual Tablet" : "Breach Tablet";
+            TabletRuleNode Mod(string id) => new() { Kind = TabletRuleKind.Modifier,
+                ModifierId = MetaCatalog.Recognize(type, new[] { id }).Mods[0].Modifier?.Id ?? "" };
+            return new TabletFilterProfile
+            {
+                Id = "strategy-" + strategy, Name = strategy == "ritual" ? "Ritual - Omens" : "Breach - Hiveblood", TabletType = type,
+                Rule = strategy == "ritual" ? new() { Kind = TabletRuleKind.All, Children = new()
+                    { Mod("TowerRitualOmenChance"), Mod("TowerRitualRerollCostIncrease") } } : Mod("TowerBreachHivebloodQuantity")
+            };
+        }
+
+        private void DrawTabletModes()
+        {
+            string ModeName(string mode) => MT("mode_" + mode, mode switch
+            { "farm_trade" => "Farming and resale", "farm" => "Farming only", "strategy" => "Specific strategy", _ => "Custom" });
+            ImGui.SetNextItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X, 100, 360));
+            if (ImGui.BeginCombo("##TabletMode", ModeName(Settings.TabletMode)))
+            {
+                foreach (string mode in TabletModes)
+                    if (ImGui.Selectable(ModeName(mode), Settings.TabletMode == mode)) SetTabletMode(mode);
+                ImGui.EndCombo();
+            }
+            if (Settings.TabletMode == "strategy")
+            {
+                string StrategyName(string strategy) => MT("strategy_" + strategy, strategy switch
+                { "ritual" => "Ritual - Omens", "hiveblood" => "Breach - Hiveblood", _ => "Fubgun - Irradiated" });
+                ImGui.SetNextItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X, 100, 360));
+                if (ImGui.BeginCombo("##TabletStrategy", StrategyName(Settings.TabletStrategy)))
+                {
+                    foreach (string strategy in TabletStrategies)
+                        if (ImGui.Selectable(StrategyName(strategy), Settings.TabletStrategy == strategy)) SetTabletMode("strategy", strategy);
+                    ImGui.EndCombo();
+                }
+            }
+            TabletHelp(MT("mode_help", "Automatic modes apply their own ranks. Custom restores your choices and enables presets 1 to 5. Resale uses the reference ranking, without live prices. A specific strategy adds its conditions to the relevant tablet type; other types keep farming ranks."));
+        }
+
         private void EnsureTabletPresetSlots()
         {
             if (Settings.TabletPresets == null) Settings.TabletPresets = new TabletPreset[5];
@@ -39,7 +115,7 @@ namespace StashUtility
 
         private bool SaveTabletPreset(int slot)
         {
-            if (slot is < 0 or >= 5) return false;
+            if (Settings.TabletMode != "custom" || slot is < 0 or >= 5) return false;
             EnsureTabletPresetSlots();
             Settings.TabletPresets[slot] = new TabletPreset
             {
@@ -56,7 +132,7 @@ namespace StashUtility
 
         private bool LoadTabletPreset(int slot)
         {
-            if (slot is < 0 or >= 5) return false;
+            if (Settings.TabletMode != "custom" || slot is < 0 or >= 5) return false;
             EnsureTabletPresetSlots();
             var preset = Settings.TabletPresets[slot];
             if (preset == null) return false;
@@ -75,6 +151,7 @@ namespace StashUtility
         private void DrawTabletPresets()
         {
             EnsureTabletPresetSlots();
+            ImGui.BeginDisabled(Settings.TabletMode != "custom");
             string label = MT("preset", "Preset") + " " + (Settings.ActiveTabletPreset + 1);
             ImGui.SetNextItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X - 76, 100, 240));
             if (ImGui.BeginCombo("##TabletPresetSlot", label))
@@ -101,6 +178,7 @@ namespace StashUtility
                 tabletProfileMessage = label + " · " + MT("preset_loaded", "Loaded");
             }
             ImGuiHelper.ToolTip(MT("preset_load", "Load this slot and apply its saved tablet choices. Empty slots cannot be loaded."));
+            ImGui.EndDisabled();
         }
 
         private static bool TabletPresetIcon(string id, bool save, bool enabled)
@@ -156,7 +234,7 @@ namespace StashUtility
         private void DrawTabletMetaFilters(string type, TabletProfile settings)
         {
             settings.MetaProfiles ??= new(); settings.ManualMetaModifiers ??= new(); settings.MetaSearch ??= "";
-            if (ImGui.CollapsingHeader(MT("advanced_rules", "Advanced filters (optional)") + "###TabletRulesEditor"))
+            if (Settings.TabletMode == "custom" && ImGui.CollapsingHeader(MT("advanced_rules", "Advanced filters (optional)") + "###TabletRulesEditor"))
             {
                 if (ImGui.Checkbox(MT("advanced_enable", "Also require the advanced profile"), ref settings.UseMetaFilters)) SaveSettings();
                 TabletHelp(MT("advanced_help", "Advanced rules add conditions to the AND / OR choice above. They are optional; analysis never enables filtering."));

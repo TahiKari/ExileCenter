@@ -40,6 +40,7 @@ internal static class TabletRankingCheck
             };
             Run();
             CheckTabletPresets();
+            CheckTabletModes();
             RunMetaFilters(args.Length > 1 && args[1] != "none" ? args[1] : null);
             CheckWorkbookPreset();
             CheckTooltipGeometry(root);
@@ -290,6 +291,52 @@ internal static class TabletRankingCheck
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void CheckTabletModes()
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var plugin = new StashUtilityCore();
+        var change = typeof(StashUtilityCore).GetMethod("SetTabletMode", flags);
+        bool Set(string mode, string strategy = null) => (bool)change.Invoke(plugin, new object[] { mode, strategy });
+        plugin.Settings.TabletProfiles["Irradiated Tablet"] = new() { ModRanks = new() { ["TowerMonsterEffectiveness"] = "F" },
+            ModRequiredMinRolls = new() { ["TowerMonsterEffectiveness"] = 14 }, RequireAllRankedMods = true };
+        var save = typeof(StashUtilityCore).GetMethod("SaveTabletPreset", flags);
+        var load = typeof(StashUtilityCore).GetMethod("LoadTabletPreset", flags);
+        save.Invoke(plugin, new object[] { 2 });
+        string personal = JsonConvert.SerializeObject(plugin.Settings.TabletProfiles);
+        string slots = JsonConvert.SerializeObject(plugin.Settings.TabletPresets);
+        Check(JsonConvert.DeserializeObject<StashUtilitySettings>("{}").TabletMode == "custom", "Existing settings stay in Custom mode");
+        Check(Set("farm_trade"), "Select farming and resale mode");
+        Check(plugin.Settings.TabletProfiles.Count == 8 && plugin.Settings.TabletProfiles["Irradiated Tablet"].ModRanks["TowerMonsterEffectiveness"] == "A", "Resale mode applies reference grades to all eight types");
+        string reference = JsonConvert.SerializeObject(plugin.Settings.TabletProfiles);
+        Check(!(bool)save.Invoke(plugin, new object[] { 2 }) && !(bool)load.Invoke(plugin, new object[] { 2 }), "Automatic modes cannot save or load a personal preset");
+        Check(Set("farm") && JsonConvert.SerializeObject(plugin.Settings.TabletProfiles) != reference, "Farming applies its own loot and density priorities");
+        Check(plugin.Settings.TabletProfiles["Irradiated Tablet"].ModRanks["TowerMonsterEffectiveness"] == "S", "Farming mode prioritizes monster effectiveness");
+        foreach (string strategy in new[] { "fubgun", "ritual", "hiveblood" })
+        {
+            Check(Set("strategy", strategy), "Select specific strategy " + strategy);
+            var active = plugin.Settings.TabletProfiles.Values.Single(p => p.UseMetaFilters);
+            var rule = active.MetaProfiles.Single();
+            Check(TabletFilterEngine.Validate(rule, ModDatabase.TabletMeta) == "", "Strategy uses valid canonical mods " + strategy);
+            var ids = strategy switch
+            {
+                "fubgun" => new[] { "TowerMapAdditionalModifier", "TowerMonsterEffectiveness" },
+                "ritual" => new[] { "TowerRitualOmenChance", "TowerRitualRerollCostIncrease" },
+                _ => new[] { "TowerBreachHivebloodQuantity" }
+            };
+            var observation = ModDatabase.TabletMeta.Recognize(rule.TabletType, ids);
+            foreach (var mod in observation.Mods) mod.Roll = 10000;
+            Check(TabletFilterEngine.Evaluate(rule, ModDatabase.TabletMeta, observation).State == TabletFilterState.Accepted, "Strategy accepts its farming combination " + strategy);
+            observation.Mods.RemoveAt(0);
+            Check(TabletFilterEngine.Evaluate(rule, ModDatabase.TabletMeta, observation).State == TabletFilterState.Rejected, "Strategy rejects its missing key modifier " + strategy);
+            Check(JsonConvert.SerializeObject(plugin.Settings.TabletPresets) == slots, "Changing strategy preserves all five saved slots " + strategy);
+        }
+        plugin.Settings = JsonConvert.DeserializeObject<StashUtilitySettings>(JsonConvert.SerializeObject(plugin.Settings));
+        Check(Set("custom") && JsonConvert.SerializeObject(plugin.Settings.TabletProfiles) == personal, "Returning to Custom after restart restores ranks, rolls and ET / OU");
+        Check((bool)load.Invoke(plugin, new object[] { 2 }), "Custom re-enables preset loading");
+        string stable = JsonConvert.SerializeObject(plugin.Settings);
+        Check(!Set("unknown") && !Set("strategy", "unknown") && JsonConvert.SerializeObject(plugin.Settings) == stable, "Invalid mode or strategy never changes current choices");
+    }
+
     private static void CheckWorkbookPreset()
     {
         const BindingFlags flags = BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic;
@@ -753,6 +800,21 @@ internal static class TabletRankingCheck
             Check(JsonConvert.SerializeObject(plugin.Settings.TabletProfiles) == choices, "Actual load icon restores the selected slot");
             var savedPresets = JsonConvert.DeserializeObject<StashUtilitySettings>(File.ReadAllText(Path.Combine(isolated, "config", "settings.txt")));
             Check(savedPresets.TabletPresets.Length == 5 && savedPresets.TabletPresets[0] != null, "Icon-saved presets are persisted on disk");
+            var changeMode = typeof(StashUtilityCore).GetMethod("SetTabletMode", flags);
+            changeMode.Invoke(plugin, new object[] { "farm", null });
+            string automatic = JsonConvert.SerializeObject(plugin.Settings.TabletProfiles);
+            string protectedSlots = JsonConvert.SerializeObject(plugin.Settings.TabletPresets);
+            PresetFrame(saveCenter, false); PresetFrame(saveCenter, true); PresetFrame(saveCenter, false);
+            PresetFrame(loadCenter, false); PresetFrame(loadCenter, true); PresetFrame(loadCenter, false);
+            Check(JsonConvert.SerializeObject(plugin.Settings.TabletProfiles) == automatic &&
+                JsonConvert.SerializeObject(plugin.Settings.TabletPresets) == protectedSlots, "Disabled save and load icons cannot change automatic profiles or personal slots");
+            Pane(1200, "tablets-mode-farming.png"); Pane(1200, "tablets-mode-farming.png");
+            changeMode.Invoke(plugin, new object[] { "farm_trade", null });
+            Pane(1200, "tablets-mode-resale.png");
+            changeMode.Invoke(plugin, new object[] { "strategy", "ritual" });
+            Pane(460, "tablets-mode-strategy.png"); Pane(460, "tablets-mode-strategy.png");
+            changeMode.Invoke(plugin, new object[] { "custom", null });
+            Check(JsonConvert.SerializeObject(plugin.Settings.TabletProfiles) == choices, "UI mode changes restore the exact Custom choices");
         }
         finally
         {

@@ -172,6 +172,9 @@ namespace StashUtility
         };
 
         public Dictionary<string, TabletProfile> TabletProfiles = new();
+        public string TabletMode = "custom";
+        public string TabletStrategy = "fubgun";
+        public Dictionary<string, TabletProfile> CustomTabletProfiles;
         public TabletPreset[] TabletPresets = new TabletPreset[5];
         public int ActiveTabletPreset;
         public int TabletFarmPresetVersion;
