@@ -1837,6 +1837,9 @@ namespace StashUtility
         private bool stashScanForCraft, craftScanCompleted, craftScanAttempted;
         private int craftResumePhase;
         private IntPtr craftSourcePage;
+        private bool craftNavigationComplete;
+        private int craftTier = -1, craftPage = -1;
+        private readonly Queue<(int tier, int page)> craftPages = new();
         private SortItem craftCurrencyCell;
         private int craftPhase, craftInputPhase, craftSpent, craftDone, craftSkipped, craftX, craftY, craftCurrencyCount;
         private Rarity craftBeforeRarity;
@@ -2013,6 +2016,96 @@ namespace StashUtility
             return matches.Count == 1 ? matches[0] : null;
         }
 
+        private bool CraftUiChildren(IntPtr address, int expected, out IntPtr[] children)
+        {
+            children = Array.Empty<IntPtr>();
+            if (address == IntPtr.Zero || !TryReadMemory<UiElementBaseOffset>(address, out var data) || data.Self != address ||
+                data.ChildrensPtr.TotalElements(IntPtr.Size) != expected) return false;
+            children = ReadStdVector<IntPtr>(data.ChildrensPtr);
+            return children.Length == expected && children.All(child => child != IntPtr.Zero);
+        }
+
+        private bool CraftWaystoneLayout(IntPtr page) => CraftUiChildren(ResolvePath(page, new[] { 0, 1 }), 16, out var tiers) &&
+            tiers.Any(tier => CraftUiChildren(ResolvePath(tier, new[] { 0, 1 }), 6, out _));
+
+        private DetectedStashTab FindCraftWaystoneTab(IEnumerable<DetectedStashTab> tabs, IntPtr preferred)
+        {
+            var matches = tabs.Where(tab => CraftWaystoneLayout(tab.Page)).ToList();
+            return matches.SingleOrDefault(tab => tab.Page == preferred) ?? (matches.Count == 1 ? matches[0] : null);
+        }
+
+        private void QueueCraftWaystones(IntPtr root)
+        {
+            craftQueue.Clear();
+            foreach (var address in CraftVisibleSlots(root).Keys)
+            {
+                var cell = craftInventoryBefore.SingleOrDefault(item => item.Address == address);
+                if (craftFromInventory && (cell == null || Settings.ProtectedInventoryCells?.Contains(cell.Y * InventoryColumns + cell.X) == true)) continue;
+                var stone = ReadFreshItem(address);
+                if (stone?.IsValid == true && IsCraftWaystone(stone.Path) && stone.TryGetComponent<Mods>(out var mods) && mods.Rarity != Rarity.Unique)
+                    craftQueue.Enqueue(address);
+            }
+        }
+
+        private void QueueCraftPages()
+        {
+            craftPages.Clear();
+            for (int tier = 0; tier < 16; tier++)
+                for (int page = 0; page < 6; page++) craftPages.Enqueue((tier, page));
+        }
+
+        private IntPtr CraftPageButton(IntPtr header, int index, int count)
+        {
+            if (index < 0 || index >= count) return IntPtr.Zero;
+            string name = null;
+            if (TryReadStashEntries(header, out var entries) && entries.Count == count) name = entries[index].name;
+            else if (count == 16) name = new[] { "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI" }[index];
+            var candidates = new List<(IntPtr address, string name)>();
+            // Native buttons can be wrapped into multiple rows. Resolve their own
+            // labels instead of confusing a row container with a clickable button.
+            foreach (var node in StashUiNodes(ReadStashUiBranch(ResolvePath(header, new[] { 0 }))))
+            {
+                var label = ResolvePath(node.Address, new[] { 0, 1 });
+                if (IsElementVisible(node.Address) && TryReadUiString(label, 0x98, out var id) && id == "label" &&
+                    TryReadUiString(label, 0x360, out var text) && !string.IsNullOrWhiteSpace(text))
+                    candidates.Add((node.Address, text));
+            }
+            if (name != null)
+            {
+                var matches = candidates.Where(button => button.name == name).ToList();
+                return matches.Count == 1 ? matches[0].address : IntPtr.Zero;
+            }
+            // These six native page slots are verified again after selection, before any craft.
+            return candidates.Count == count && candidates.Select(button => button.name).Distinct().Count() == count ?
+                candidates[index].address : IntPtr.Zero;
+        }
+
+        private IntPtr CraftPageControl(IntPtr header, int index, int count, bool navigate)
+        {
+            if (index < 0 || index >= count)
+                throw CraftFailure("page_layout", "The waystone tier or page controls could not be verified. No click was sent.");
+            if (!CraftUiChildren(ResolvePath(header, new[] { 1 }), count, out var pages))
+            {
+                if (!navigate) return IntPtr.Zero;
+                affinityNextAction = DateTime.UtcNow.AddMilliseconds(100);
+                return IntPtr.Zero;
+            }
+            var page = pages[index];
+            if (IsElementVisible(page) && pages.Count(IsTabVisible) == 1) return page;
+            if (!navigate) return IntPtr.Zero;
+            var button = CraftPageButton(header, index, count);
+            if (button == IntPtr.Zero || !IsElementVisible(button))
+                throw CraftFailure("page_layout", "The waystone tier or page controls could not be verified. No click was sent.");
+            NavigateStashControl(button);
+            return IntPtr.Zero;
+        }
+
+        private bool CraftSelectWaystonePage(bool navigate)
+        {
+            var tier = CraftPageControl(ResolvePath(craftSource.Page, new[] { 0 }), craftTier, 16, navigate);
+            return tier != IntPtr.Zero && CraftPageControl(ResolvePath(tier, new[] { 0 }), craftPage, 6, navigate) != IntPtr.Zero;
+        }
+
         private bool CraftPersonalStashOpen()
         {
             var ui = Core.States.InGameStateObject.GameUi;
@@ -2036,24 +2129,23 @@ namespace StashUtility
                 var page = affinityInventoryRoot;
                 if (!fromInventory)
                 {
-                    page = affinityStashRoot == IntPtr.Zero ? IntPtr.Zero : FindSelectedStashPage(affinityStashRoot);
-                    if (!IsActiveTab(page, out var type) || type != "Waystone") throw CraftFailure("open", "Open the waystone stash tab with an empty cursor before starting.");
-                    craftSource = detectedStashTabs.SingleOrDefault(tab => tab.Page == page);
+                    if (affinityStashRoot == IntPtr.Zero) throw CraftFailure("open", "Open your personal stash with an empty cursor before starting.");
+                    page = FindSelectedStashPage(affinityStashRoot, allowDropdown: true);
+                    craftSource = FindCraftWaystoneTab(detectedStashTabs, page);
                 }
                 craftSourcePage = fromInventory ? IntPtr.Zero : page;
                 craftInventoryBefore.Clear(); craftInventoryBefore.AddRange(CraftInventory());
                 if (!fromInventory && craftInventoryBefore.Sum(item => item.Width * item.Height) >= InventoryColumns * InventoryRows)
                     throw CraftFailure("space", "Keep at least one free inventory cell for crafting.");
                 craftQueue.Clear();
-                foreach (var address in CraftVisibleSlots(page).Keys)
+                craftPages.Clear(); craftTier = craftPage = -1;
+                if (fromInventory)
                 {
-                    var cell = craftInventoryBefore.SingleOrDefault(item => item.Address == address);
-                    if (fromInventory && (cell == null || Settings.ProtectedInventoryCells?.Contains(cell.Y * InventoryColumns + cell.X) == true)) continue;
-                    var stone = ReadFreshItem(address);
-                    if (stone?.IsValid == true && IsCraftWaystone(stone.Path) && stone.TryGetComponent<Mods>(out var mods) && mods.Rarity != Rarity.Unique)
-                        craftQueue.Enqueue(address);
+                    QueueCraftWaystones(affinityInventoryRoot);
+                    if (craftQueue.Count == 0) throw CraftFailure("empty", "No waystones are visible on this page.");
                 }
-                if (craftQueue.Count == 0) throw CraftFailure("empty", "No waystones are visible on this page.");
+                else
+                    QueueCraftPages();
                 ReleaseAffinityControl();
                 if (affinityCtrlHeld || affinityShiftHeld || !AffinityGetCursorPos(out affinityCursor)) throw CraftFailure("input", "Release the mouse buttons and modifier keys before starting.");
                 affinityWindow = Core.Process.WindowArea;
@@ -2138,8 +2230,9 @@ namespace StashUtility
 
         private bool CraftNavigate(DetectedStashTab target)
         {
-            if (craftRoute != target)
+            if (craftRoute != target || craftNavigationComplete)
             {
+                craftNavigationComplete = false;
                 craftRoute = target;
                 affinityEquipmentDestination = new StashDestination { TabName = target.Name, FolderPath = target.Folders.ToList() };
                 affinityEquipmentRouteResolved = true; affinityEquipmentTab = 0;
@@ -2148,6 +2241,7 @@ namespace StashUtility
             if (!EnsureEquipmentDestination()) return false;
             if (affinityOpenedPage != target.Page || FindSelectedStashPage(affinityStashRoot) != target.Page)
                 throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+            craftNavigationComplete = true;
             return true;
         }
 
@@ -2177,9 +2271,9 @@ namespace StashUtility
                     if (!craftScanCompleted) throw new InvalidOperationException(stashScanStatus);
                     if (!craftFromInventory)
                     {
-                        craftSource = detectedStashTabs.SingleOrDefault(tab => tab.Page == craftSourcePage);
-                        if (craftSource == null || FindSelectedStashPage(stash) != craftSourcePage)
-                            throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                        craftSource = craftResumePhase == 0 ? FindCraftWaystoneTab(detectedStashTabs, craftSourcePage) :
+                            detectedStashTabs.SingleOrDefault(tab => tab.Page == craftSourcePage);
+                        if (craftSource == null) throw CraftFailure("source", "No unique special waystone tab was identified. Open it once, then try again.");
                     }
                     craftPhase = craftResumePhase;
                     return;
@@ -2188,7 +2282,7 @@ namespace StashUtility
                 {
                     using var game = System.Diagnostics.Process.GetProcessById((int)Core.Process.Pid);
                     AffinitySetForegroundWindow(game.MainWindowHandle);
-                    craftPhase = 1; affinityNextAction = now.AddMilliseconds(300); return;
+                    craftPhase = craftFromInventory ? 1 : 13; affinityNextAction = now.AddMilliseconds(300); return;
                 }
                 if (!AffinityGameIsForeground()) throw CraftFailure("focus", "The game lost focus. Crafting stopped.");
                 if (craftInputPhase == 2)
@@ -2198,9 +2292,9 @@ namespace StashUtility
                     craftInputPhase = 0;
                     return;
                 }
-                if (!craftFromInventory && craftPhase is 1 or 2 or 3 or 4 or 11)
+                if (!craftFromInventory && craftPhase is 1 or 2 or 3 or 4)
                 {
-                    if (FindSelectedStashPage(stash) != craftSource.Page) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (FindSelectedStashPage(stash) != craftSource.Page || !CraftSelectWaystonePage(navigate: false)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                 }
                 else if (!craftLocalCurrency && craftPhase is 6 or 7 or 8 or 9)
                     if (FindSelectedStashPage(stash) != craftMoney.Page) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
@@ -2210,7 +2304,12 @@ namespace StashUtility
                     if (!CraftInventoryUnchanged(CraftInventory())) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                     if (craftItem == IntPtr.Zero)
                     {
-                        if (craftQueue.Count == 0) { StopWaystoneCraft(); return; }
+                        if (craftQueue.Count == 0)
+                        {
+                            if (craftFromInventory) StopWaystoneCraft();
+                            else { craftTier = craftPage = -1; craftPhase = 13; }
+                            return;
+                        }
                         craftItem = craftQueue.Dequeue();
                     }
                     if (!CraftVisibleSlots(craftFromInventory ? inv : craftSource.Page).TryGetValue(craftItem, out craftSlot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
@@ -2346,14 +2445,58 @@ namespace StashUtility
                         return;
                     }
                     if (!CraftNavigate(craftSource)) return;
+                    craftPhase = 15; craftDeadline = now.AddSeconds(20);
+                }
+                else if (craftPhase == 15)
+                {
+                    var stone = CraftInventoryStone();
+                    if (now >= craftDeadline || FindSelectedStashPage(stash) != craftSource.Page)
+                        throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (!CraftSelectWaystonePage(navigate: true)) return;
                     if (!CraftVisibleSlots(inv).TryGetValue(stone.Address, out var slot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                     if (!CraftPosition(slot, stone.Address) || !CraftInput(control: true, shift: true)) return;
                     craftPhase = 11; craftDeadline = now.AddSeconds(3);
                 }
                 else if (craftPhase == 11)
                 {
-                    if (CraftInventoryUnchanged(CraftInventory())) { craftDone++; craftItem = IntPtr.Zero; craftPhase = 1; craftRoute = null; }
+                    if (FindSelectedStashPage(stash) != craftSource.Page) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (CraftInventoryUnchanged(CraftInventory()))
+                    {
+                        craftDone++; craftItem = IntPtr.Zero; craftPhase = 16; craftRoute = null;
+                        craftDeadline = now.AddSeconds(20);
+                    }
                     else if (now >= craftDeadline) throw CraftFailure("ack", "The game did not confirm the action. No retry was sent. Check the inventory and press Escape.");
+                }
+                else if (craftPhase == 16)
+                {
+                    // Depositing a changed-tier/corrupted stone can change the game's
+                    // selected bucket. Restore the pending page without rebuilding its queue.
+                    if (now >= craftDeadline || !CraftInventoryUnchanged(CraftInventory()) || FindSelectedStashPage(stash) != craftSource.Page)
+                        throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (CraftSelectWaystonePage(navigate: true)) craftPhase = 1;
+                }
+                else if (craftPhase == 13)
+                {
+                    if (!CraftInventoryUnchanged(CraftInventory())) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (craftSource == null) throw CraftFailure("source", "No unique special waystone tab was identified. Open it once, then try again.");
+                    if (!CraftNavigate(craftSource)) return;
+                    craftSourcePage = craftSource.Page;
+                    craftPhase = 14;
+                }
+                else if (craftPhase == 14)
+                {
+                    if (!CraftInventoryUnchanged(CraftInventory()) || FindSelectedStashPage(stash) != craftSource.Page)
+                        throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (craftTier < 0)
+                    {
+                        if (craftPages.Count == 0) { StopWaystoneCraft(); return; }
+                        (craftTier, craftPage) = craftPages.Dequeue();
+                        craftDeadline = now.AddSeconds(20);
+                    }
+                    if (now >= craftDeadline) throw CraftFailure("page_layout", "The waystone tier or page controls could not be verified. No click was sent.");
+                    if (!CraftSelectWaystonePage(navigate: true)) return;
+                    QueueCraftWaystones(craftSource.Page);
+                    craftPhase = 1;
                 }
             }
             catch (Exception ex) { StopWaystoneCraft(ex.GetBaseException().Message); }
@@ -2378,6 +2521,10 @@ namespace StashUtility
                 ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.AlwaysAutoResize))
                 ImGui.TextWrapped(waystoneCraftRunning ? craftPhase == 12 ?
                     PluginText.T("stashutility.craft.scanning", "Detecting loaded stash tabs and currency. Keep the stash open and the mouse still. Escape stops crafting.") :
+                    craftPhase == 13 ? PluginText.T("stashutility.craft.navigating", "Opening the special waystone stash. Keep the mouse still.") :
+                    !craftFromInventory && craftTier >= 0 ? PluginText.F("stashutility.craft.page_progress",
+                        "Waystones: tier {0}/16, page {1}/6 · {2} crafted · {3} skipped · {4} currency attempts. Escape stops crafting.",
+                        craftTier + 1, craftPage + 1, craftDone, craftSkipped, craftSpent) :
                     PluginText.F("stashutility.craft.progress", "Auto-craft: {0} crafted · {1} skipped · {2} currency attempts. Escape stops crafting.", craftDone, craftSkipped, craftSpent) : craftStatus);
             ImGui.End();
         }
@@ -2592,11 +2739,11 @@ namespace StashUtility
             return FindSelectedStashPage(header);
         }
 
-        private IntPtr FindSelectedStashPage(IntPtr header)
+        private IntPtr FindSelectedStashPage(IntPtr header, bool allowDropdown = false)
         {
             for (int depth = 0; depth <= 8; depth++)
             {
-                if (!TryReadStashEntries(header, out var entries) || IsElementVisible(ResolvePath(header, new int[] { 4 }))) return IntPtr.Zero;
+                if (!TryReadStashEntries(header, out var entries) || !allowDropdown && IsElementVisible(ResolvePath(header, new int[] { 4 }))) return IntPtr.Zero;
                 var active = entries.Where(entry => IsTabVisible(entry.page) && IsElementVisible(entry.page)).ToList();
                 if (active.Count != 1) return IntPtr.Zero;
                 var nested = ResolvePath(active[0].page, new int[] { 0, 1 });
@@ -3619,6 +3766,16 @@ namespace StashUtility
                     throw new InvalidOperationException(PluginText.F("stashutility.transfer.destination_not_found", "Destination name not found or ambiguous: {0}", name));
                 var page = matches[0].page;
                 int visiblePages = entries.Count(entry => IsTabVisible(entry.page));
+                // An open list can hide every underlying page. Crafting must close
+                // that verified control before waiting for a unique selected page.
+                if (waystoneCraftRunning && visiblePages != 1 && IsElementVisible(ResolvePath(header, new[] { 4 })))
+                {
+                    var toggle = ResolvePath(header, new[] { 2 });
+                    if (!TryReadUiString(toggle, 0x98, out var toggleId) || toggleId != "tab_list_button")
+                        throw CraftFailure("page_layout", "The waystone tier or page controls could not be verified. No click was sent.");
+                    NavigateStashControl(toggle);
+                    return false;
+                }
                 if ((affinityTabletCategory != null || waystoneCraftRunning) && visiblePages != 1)
                 {
                     affinityNextAction = DateTime.UtcNow.AddMilliseconds(100);

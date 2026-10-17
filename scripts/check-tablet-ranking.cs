@@ -19,6 +19,125 @@ internal static class TabletRankingCheck
 {
     private static int checks;
 
+    private static void CheckWaystoneNavigation(string root)
+    {
+        const BindingFlags flags=BindingFlags.Static|BindingFlags.Instance|BindingFlags.NonPublic|BindingFlags.Public;
+        var allocations=new List<IntPtr>();
+        var readerType=typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Utils.SafeMemoryHandle");
+        var reader=Activator.CreateInstance(readerType,flags,null,new object[]{System.Diagnostics.Process.GetCurrentProcess().Id},null);
+        var plugin=new StashUtilityCore{DllDirectory=Path.Combine(root,"Plugins","StashUtility")};
+        typeof(StashUtilityCore).GetField("handleObj",flags).SetValue(plugin,reader);
+        typeof(StashUtilityCore).GetField("readStdWStringMethod",flags).SetValue(plugin,
+            readerType.GetMethods(flags).First(m=>m.Name=="ReadStdWString"&&m.GetParameters().Length==1));
+        IntPtr Allocate(int size){var p=Marshal.AllocHGlobal(size);allocations.Add(p);Marshal.Copy(new byte[size],0,p,size);return p;}
+        void Visible(IntPtr address,bool visible)
+        {
+            var data=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(address);
+            data.Flags=visible?1u<<11:0;Marshal.StructureToPtr(data,address,false);
+        }
+        IntPtr Node(params IntPtr[] children)
+        {
+            var address=Allocate(0x600);
+            var data=new GameOffsets.Objects.UiElement.UiElementBaseOffset{Self=address,Flags=1u<<11,LocalScaleMultiplier=1,
+                UnscaledSize=new GameOffsets.Natives.StdTuple2D<float>(40,40)};
+            if(children.Length>0)
+            {
+                var vector=Allocate(children.Length*IntPtr.Size);
+                for(int i=0;i<children.Length;i++)
+                {
+                    Marshal.WriteIntPtr(vector,i*IntPtr.Size,children[i]);
+                    var child=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(children[i]);
+                    child.ParentPtr=address;Marshal.StructureToPtr(child,children[i],false);
+                }
+                data.ChildrensPtr=new GameOffsets.Natives.StdVector{First=vector,Last=vector+children.Length*IntPtr.Size,End=vector+children.Length*IntPtr.Size};
+            }
+            Marshal.StructureToPtr(data,address,false);return address;
+        }
+        void Text(IntPtr address,int offset,string value)
+        {
+            var buffer=Allocate((Math.Max(16,value.Length)+1)*2);
+            Marshal.Copy((value+'\0').ToCharArray(),0,buffer,value.Length+1);
+            Marshal.StructureToPtr(new GameOffsets.Natives.StdWString{Buffer=buffer,Length=value.Length,Capacity=Math.Max(16,value.Length)},address+offset,false);
+        }
+        IntPtr Label(string text){var label=Node();Text(label,0x98,"label");Text(label,0x360,text);return label;}
+        IntPtr Header(string[] names,IntPtr[] pages,out IntPtr dropdown)
+        {
+            var buttons=Node(names.Select(name=>Node(Node(Node(),Label(name)))).ToArray());Text(buttons,0x98,"buttons_container");
+            var contents=Node(pages);Text(contents,0x98,"pages_container");
+            var rows=Node(names.Select(name=>Node(Node(Node(),Label(name)))).ToArray());
+            dropdown=Node(Node(),Node(),rows);
+            return Node(buttons,contents,Node(),Node(),dropdown);
+        }
+        object Call(string name,params object[] args)=>typeof(StashUtilityCore).GetMethod(name,flags).Invoke(plugin,args);
+        try
+        {
+            var tiers=new IntPtr[16];var subpages=new IntPtr[16][];
+            string[] roman={"I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI"};
+            for(int tier=0;tier<16;tier++)
+            {
+                subpages[tier]=Enumerable.Range(0,6).Select(_=>Node()).ToArray();
+                var header=Header(new[]{"Div - 1","Div - 2","300 - 700","200 - 299","20 - 49","10 - 19"},subpages[tier],out var dropdown);
+                Visible(dropdown,false);tiers[tier]=Node(header);
+                for(int page=1;page<6;page++)Visible(subpages[tier][page],false);
+            }
+            var tierHeader=Header(roman,tiers,out var tierDropdown);Visible(tierDropdown,false);
+            var waystone=Node(tierHeader);for(int tier=1;tier<16;tier++)Visible(tiers[tier],false);
+            var second=Node();Visible(second,false);
+            var folderHeader=Header(new[]{"PTP","Fragment"},new[]{waystone,second},out var folderDropdown);
+            var folder=Node(Node(Node(),folderHeader));
+            var other=Node();Visible(other,false);
+            var rootHeader=Header(new[]{"01 - Mapping","03 - Monétaires"},new[]{folder,other},out var rootDropdown);
+            Check((IntPtr)Call("FindSelectedStashPage",rootHeader,false)==IntPtr.Zero,"Open root dropdown keeps sorting blocked");
+            Check((IntPtr)Call("FindSelectedStashPage",rootHeader,true)==waystone,"Craft discovery resolves the selected waystone inside a folder with both dropdowns open");
+            Visible(rootDropdown,false);Visible(folderDropdown,false);
+            Check((IntPtr)Call("FindSelectedStashPage",rootHeader,false)==waystone,"Closed dropdowns retain existing selected-page detection");
+            Check((bool)Call("CraftWaystoneLayout",waystone),"Waystone detection verifies sixteen tiers and six subpages");
+            Visible(waystone,false);
+            Check((bool)Call("CraftWaystoneLayout",waystone),"Waystone destination can be discovered before its tab is opened");
+            Check(!(bool)Call("CraftWaystoneLayout",other),"A normal stash cannot be selected as the special waystone destination");
+            Visible(waystone,true);
+            var tabType=typeof(StashUtilityCore).GetNestedType("DetectedStashTab",flags);
+            object Tab(string name,IntPtr address){var tab=Activator.CreateInstance(tabType,true);tabType.GetField("Name").SetValue(tab,name);tabType.GetField("Page").SetValue(tab,address);return tab;}
+            object Select(IntPtr preferred,params object[] tabs){var array=Array.CreateInstance(tabType,tabs.Length);for(int i=0;i<tabs.Length;i++)array.SetValue(tabs[i],i);return Call("FindCraftWaystoneTab",array,preferred);}
+            var source=Tab("Any renamed tab",waystone);
+            Check(ReferenceEquals(Select(other,Tab("PTP",other),source),source),"A misleading name never overrides the actual special-tab structure");
+            Check(Select(IntPtr.Zero,source,Tab("Another special tab",waystone))==null,"Ambiguous special destinations require an explicit choice");
+            typeof(StashUtilityCore).GetField("craftSource",flags).SetValue(plugin,source);
+            Call("QueueCraftPages");
+            var jobs=((IEnumerable)typeof(StashUtilityCore).GetField("craftPages",flags).GetValue(plugin)).Cast<(int tier,int page)>().ToList();
+            Check(jobs.Count==96&&jobs.Distinct().Count()==96&&jobs.All(job=>job.tier>=0&&job.tier<16&&job.page>=0&&job.page<6),"The production queue visits all 96 native tier/page combinations exactly once");
+            Check(jobs.First()==(0,0)&&jobs.Last()==(15,5),"Full-stash traversal includes tiers I and XVI and both end pages");
+            for(int tier=0;tier<16;tier++)for(int page=0;page<6;page++)
+            {
+                foreach(var t in tiers)Visible(t,false);Visible(tiers[tier],true);
+                foreach(var p in subpages[tier])Visible(p,false);Visible(subpages[tier][page],true);
+                typeof(StashUtilityCore).GetField("craftTier",flags).SetValue(plugin,tier);
+                typeof(StashUtilityCore).GetField("craftPage",flags).SetValue(plugin,page);
+                Check((bool)Call("CraftSelectWaystonePage",false),"Exact selected native tier/page confirmed without input: "+tier+"/"+page);
+                typeof(StashUtilityCore).GetField("craftPage",flags).SetValue(plugin,(page+1)%6);
+                Check(!(bool)Call("CraftSelectWaystonePage",false),"A different visible page cannot receive the planned craft: "+tier+"/"+page);
+            }
+            typeof(StashUtilityCore).GetField("craftTier",flags).SetValue(plugin,15);
+            typeof(StashUtilityCore).GetField("craftPage",flags).SetValue(plugin,5);
+            Visible(subpages[15][0],true);
+            Check(!(bool)Call("CraftSelectWaystonePage",false),"Two visible native pages stop crafting instead of choosing an ambiguous target");
+            typeof(StashUtilityCore).GetField("craftTier",flags).SetValue(plugin,16);
+            bool invalid=false;
+            try{Call("CraftSelectWaystonePage",false);}catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){invalid=true;}
+            Check(invalid,"An out-of-range tier cannot become a navigation target");
+            var buttonsAddress=(IntPtr)Call("ResolvePath",tierHeader,new[]{0});
+            var buttonsData=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(buttonsAddress);
+            var originalButtons=Enumerable.Range(0,16).Select(i=>Marshal.ReadIntPtr(buttonsData.ChildrensPtr.First,i*IntPtr.Size)).ToArray();
+            for(int i=0;i<16;i++)Check((IntPtr)Call("CraftPageButton",tierHeader,i,16)==originalButtons[i],"Tier labels resolve the exact native button: "+roman[i]);
+            var grouped=Node(Node(originalButtons.Take(8).Reverse().ToArray()),Node(originalButtons.Skip(8).Reverse().ToArray()));
+            Text(grouped,0x98,"buttons_container");
+            var groupedHeader=Node(grouped,Node(tiers),Node(),Node(),Node());
+            for(int i=0;i<16;i++)Check((IntPtr)Call("CraftPageButton",groupedHeader,i,16)==originalButtons[i],"Two rows with reordered button children still resolve the intended Roman tier: "+roman[i]);
+            Console.WriteLine("VALIDATION waystone navigation: real native-memory fixture; nested open dropdowns, renamed special tabs and all 96 tier/page confirmations; no game input executed.");
+        }
+        finally{foreach(var allocation in allocations)Marshal.FreeHGlobal(allocation);((IDisposable)reader).Dispose();}
+    }
+
     private static void CheckWaystoneCraft(string root)
     {
         const BindingFlags flags=BindingFlags.Static|BindingFlags.Instance|BindingFlags.NonPublic;
@@ -426,6 +545,7 @@ internal static class TabletRankingCheck
                 return File.Exists(file) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(file) : null;
             };
             CheckWaystoneCraft(root);
+            CheckWaystoneNavigation(root);
             CheckCompactCompositions();
             Run();
             CheckTabletPresets();
