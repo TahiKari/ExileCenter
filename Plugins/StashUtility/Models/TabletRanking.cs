@@ -56,6 +56,17 @@ namespace StashUtility.Models
         public IReadOnlyList<TabletModifierQuality> Modifiers { get; init; } = Array.Empty<TabletModifierQuality>();
         public int? GlobalPosition { get; init; }
         public TabletRankingValidation RankingValidation { get; init; } = TabletRankingValidation.UnverifiedRestrictions;
+        public string PriorityBadgeLabel
+        {
+            get
+            {
+                string label = string.Concat(TabletComposition.DefaultOrder.Select(rank =>
+                    (Rank: rank, Count: Modifiers.Count(m => m.IsPriority && m.Rank == rank)))
+                    .Where(group => group.Count > 0).Select(group => group.Rank +
+                        (group.Count == 1 ? "" : group.Count.ToString(CultureInfo.InvariantCulture))));
+                return label.Length == 0 ? "N/C" : label;
+            }
+        }
         public string BadgeLabel => Composition == null ? "N/C" : GlobalPosition is > 0 && RankingValidation == TabletRankingValidation.Verified && TabletComposition.DefaultOrder.Contains(Rank)
             ? Rank + GlobalPosition.Value.ToString(CultureInfo.InvariantCulture) + " · " + Composition.Label : Composition.Label;
     }

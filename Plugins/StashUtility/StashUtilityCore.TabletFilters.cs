@@ -104,7 +104,7 @@ namespace StashUtility
                 }
             }
             TabletHelp(MT("mode_help", "Automatic modes apply their own ranks. Custom restores your choices and enables presets 1 to 5. Resale uses the reference ranking, without live prices. A specific strategy adds its conditions to the relevant tablet type; other types keep farming ranks."));
-            MetaText(MT("quality_legend", "S2A2 = two S modifiers and two A modifiers. Color follows the strongest effective modifier grade, including reference grades. Hover for priority details. No unverified global ordinal."));
+            MetaText(MT("quality_legend", "Badge: selected modifiers meeting their minimum, e.g. S2A = two S and one A. Color follows their strongest grade. No match: neutral N/C. Reference grades remain in the tooltip."));
         }
 
         private void EnsureTabletPresetSlots()
@@ -557,6 +557,7 @@ namespace StashUtility
         {
             var priorities = TabletPriorities(settings, observation.TabletType);
             var quality = TabletQualityEngine.Evaluate(observation, priorities);
+            MetaText(MT("priority_badge", "Badge (matching selected modifiers)") + " : " + quality.PriorityBadgeLabel);
             MetaText(MT("composition", "Composition") + " : " + (quality.Composition?.Label ?? "N/C"));
             MetaText(MT("global_grade", "Global grade (your priorities)") + " : " + (quality.Rank.Length > 0 ? quality.Rank : "N/C"));
             MetaText(MT("global_position", "Global position") + " : " + MT("position_unverified", "Unavailable: combination restrictions are not fully verified."));

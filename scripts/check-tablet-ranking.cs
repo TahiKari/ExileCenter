@@ -153,6 +153,8 @@ internal static class TabletRankingCheck
                             .Select(m => new TabletDetectedMod { Modifier = m, RawId = m.GameModIds[0], Roll = 10000 }).ToList() };
                         var result = engine.Evaluate(observation, priorities);
                         int expected = Math.Min(count, size);
+                        Check(result.PriorityBadgeLabel == (expected == 0 ? "N/C" : rank + (expected == 1 ? "" : expected.ToString())),
+                            $"{type} {rank} selected={count} affixes={size}: badge counts only matching selected mods");
                         Check(result.PriorityCount == expected && result.BestCount == expected, $"{type} {rank} selected={count} affixes={size}: custom counts");
                         Check(result.Rank == (expected == 0 ? "" : rank), $"{type} {rank}: no reference promotion");
                         Check(expected == 0 ? result.Label == "N/C" : result.Label.Contains('p') || result.Uncertain,
@@ -918,28 +920,41 @@ internal static class TabletRankingCheck
         profile.ModRanks[four[0].GameModIds[0]]="F";
         Check(Classify().RankLabel=="SA2F","Runtime classifier updates the same tablet immediately after a preference edit");
         profile.ModRanks.Clear();
-        Check(!Classify().IsRanked&&Classify().RankLabel==TabletComposition.Format(four.Select(m=>m.Rank).ToArray()).Label,"Runtime can display four reference grades without inventing a global priority grade");
-        string bestReference=TabletComposition.Format(four.Select(m=>m.Rank).ToArray()).Ranks[0];
-        Check(Classify().RankColor==colors["SABCDEF".IndexOf(bestReference)],"Unselected modifiers retain their strongest reference color without becoming priorities");
+        Check(!Classify().IsRanked&&Classify().RankLabel=="N/C","No selected modifiers means N/C despite known reference grades");
+        Check(Classify().RankColor==new Vector4(.65f,.69f,.75f,1f),"Unselected reference grades leave the badge neutral");
         var referenceS=available.First(m=>m.Rank=="S"&&m.Id!=four[0].Id);
         var savedMods=mods.ExplicitMods.ToArray();
         mods.ExplicitMods.Clear();
         mods.ExplicitMods.Add((referenceS.GameModIds[0],(10000f,10000f)));
         mods.ExplicitMods.Add((four[0].GameModIds[0],(10000f,10000f)));
         profile.ModRanks[four[0].GameModIds[0]]="A";
-        Check(Classify().Rank=="A"&&Classify().RankColor==colors[0],"Reference S beats matching priority A for color, including incomplete compositions");
+        Check(Classify().Rank=="A"&&Classify().RankLabel=="A"&&Classify().RankColor==colors[1],"Reference S never overrides matching selected A in badge or color");
         mods.ExplicitMods.Clear();mods.ExplicitMods.AddRange(savedMods);
         profile.ModRanks[four[0].GameModIds[0]]="A";
         var originalFourth=mods.ExplicitMods[3];mods.ExplicitMods[3]=("unknown",(0f,0f));
-        Check(Classify().RankLabel=="N/C"&&Classify().Uncertain,"Runtime unknown modifiers retain an explicit uncertain composition state");
+        Check(Classify().RankLabel=="A"&&Classify().Uncertain,"Unknown unrelated modifiers retain the confirmed selected A with uncertainty marker");
         mods.ExplicitMods[3]=originalFourth;
         ImGuiNET.ImGui.NewFrame();
-        var gold=new TabletClassification("A",0,"S2A2",colors[0],1);
-        badge.Invoke(null,new object[]{new Vector2(100,60),new Vector2(52),gold,1f,2f});
+        var red=new TabletClassification("A",0,"A",colors[1],1);
+        badge.Invoke(null,new object[]{new Vector2(100,60),new Vector2(52),red,1f,2f});
         var buffer=ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
-        Check(Enumerable.Range(0,buffer.Size).Any(i=>buffer[i].col==ExileCenter.Utils.ImGuiHelper.Color(colors[0]))&&
-            !Enumerable.Range(0,buffer.Size).Any(i=>buffer[i].col==ExileCenter.Utils.ImGuiHelper.Color(colors[1])),"Badge color uses strongest effective S independently of global priority A");
+        Check(Enumerable.Range(0,buffer.Size).Any(i=>buffer[i].col==ExileCenter.Utils.ImGuiHelper.Color(colors[1]))&&
+            !Enumerable.Range(0,buffer.Size).Any(i=>buffer[i].col==ExileCenter.Utils.ImGuiHelper.Color(colors[0])),"Selected A badge renders red without reference S gold");
         ImGuiNET.ImGui.EndFrame();
+        var screenshotMods=new Mods(IntPtr.Zero);
+        screenshotMods.ExplicitMods.AddRange(new[]{("TowerMapDroppedMapsIncrease",(32f,0f)),("TowerMonsterEffectiveness",(15f,0f)),
+            ("TowerRarePackIncrease",(32f,0f)),("TowerAdditionalSpiritChance",(80f,0f))});
+        var screenshotProfile=new TabletProfile();
+        foreach(var choice in new[]{("TowerPackSizeIncrease","B"),("TowerMonsterEffectiveness","A"),("TowerMapAdditionalModifier","S"),("TowerAdditionalStrongboxChance","E")})
+            screenshotProfile.ModRanks[choice.Item1]=choice.Item2;
+        TabletClassification Screenshot()=>(TabletClassification)classify.Invoke(null,new object[]{screenshotMods,screenshotProfile,"Irradiated Tablet"});
+        Check(Screenshot().RankLabel=="A"&&Screenshot().RankColor==colors[1],"Screenshot 5: four configured mods, only effectiveness matches, red A");
+        screenshotProfile.ModRanks.Clear();screenshotProfile.ModRanks["TowerMonsterEffectiveness"]="S";
+        Check(Screenshot().RankLabel=="S"&&Screenshot().RankColor==colors[0],"Screenshot 2: single effectiveness S rule yields S when present");
+        screenshotProfile.ModRequiredMinRolls["TowerMonsterEffectiveness"]=16;
+        Check(Screenshot().RankLabel=="N/C"&&!Screenshot().IsRanked&&Screenshot().RankColor==new Vector4(.65f,.69f,.75f,1f),"Single rule below minimum: neutral N/C despite reference S");
+        screenshotProfile.ModRequiredMinRolls.Clear();screenshotMods.ExplicitMods.RemoveAt(1);
+        Check(Screenshot().RankLabel=="N/C"&&!Screenshot().IsRanked,"Single rule absent: reference S cannot create a badge match");
         var itemType=typeof(ExileCenter.RemoteObjects.States.InGameStateObjects.Item);var entityType=itemType.BaseType;
         var item=Activator.CreateInstance(itemType,flags,null,new object[]{IntPtr.Zero},null);
         entityType.GetProperty("Path").SetValue(item,"Metadata/Items/TowerAugment/GenericAugment");
