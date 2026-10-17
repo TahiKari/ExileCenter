@@ -26,5 +26,6 @@ namespace StashUtility.Models
         // A quality grade need not have a certified global ordinal.
         public bool IsRanked => Rank?.Length == 1 && "SABCDEF".Contains(Rank);
         public string OrderKey { get; init; }
+        public bool Uncertain { get; init; }
     }
 }

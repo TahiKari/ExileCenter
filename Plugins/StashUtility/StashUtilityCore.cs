@@ -894,7 +894,7 @@ namespace StashUtility
             if (ImGui.CollapsingHeader(PluginText.T("stashutility.filters.highlight_rules", "Highlight rules")))
             {
                 DrawFilterThreshold("stashutility.filter_tablet_great", "Excellent highlight", "tabletGreat", ref Settings.FilterTabletGreat, ref Settings.MinTabletGoodMods, 4);
-                TabletHelp(PluginText.T("stashutility.filters.tablet_rank_conditions", "The best selected modifier meeting its minimum sets the grade and color. S·2p means two matching S priorities, not a global ordinal. Secondary grades and individual reference ranks break quality ties."));
+                TabletHelp(PluginText.T("stashutility.filters.tablet_rank_conditions", "Color follows your best matching priority. The badge describes four effective grades, e.g. S2A2, independently of priority counts. Unselected modifiers keep their reference quality. Global positions remain unverified."));
             }
             ImGui.Separator();
             ImGui.TextColored(ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark], MT("rank_settings", "Modifier ranks S to F"));
@@ -5728,15 +5728,15 @@ namespace StashUtility
                     return;
                 }
             }
-            if (isTablet && (TabletHighlightsSuppressed() || IsTabletOccluded(pos, size))) return;
-            // Only hide the hovered tablet's overlay so its remaining uses stay readable.
-            if (isTablet && Settings.HideTabletHighlightsOnItemHover)
+            if (isTablet)
             {
-                var mouse = ImGui.GetMousePos();
-                if (mouse.X >= pos.X && mouse.Y >= pos.Y &&
-                    mouse.X < pos.X + size.X && mouse.Y < pos.Y + size.Y) return;
+                if (tabletHighlightsHiddenManually || IsTabletOccluded(pos, size)) return;
+                var pointer = ImGui.GetMousePos();
+                bool overTablet = pointer.X >= pos.X && pointer.Y >= pos.Y && pointer.X < pos.X + size.X && pointer.Y < pos.Y + size.Y;
+                // Automatic hiding keeps the grid clear, but the hovered tablet
+                // still supplies its requested composition tooltip.
+                if (TabletHighlightsSuppressed() && !overTablet) return;
             }
-
             var rarity = ExileCenter.RemoteEnums.Rarity.Normal;
             if (item.TryGetComponent<Mods>(out var modsComponent))
             {
@@ -5786,23 +5786,22 @@ namespace StashUtility
             string tabletType = isTablet ? GetTabletProfileType(name, path) : null;
             if (isTablet && tabletType != null)
             {
-                var mouse = ImGui.GetMousePos();
-                if (!ImGui.GetIO().WantCaptureMouse && !IsTabletOccluded(pos, size) &&
-                    mouse.X >= pos.X && mouse.Y >= pos.Y && mouse.X < pos.X + size.X && mouse.Y < pos.Y + size.Y)
-                {
-                    lastMetaObservation = ObserveMetaTablet(tabletType, modsComponent);
-                    lastMetaItemName = name; lastMetaObservedUtc = DateTime.UtcNow;
-                }
-                if (Settings.TabletProfiles?.TryGetValue(tabletType, out var tabletProfile) == true)
-                    tabletClassification = ClassifyTabletMods(modsComponent, tabletProfile, tabletType);
+                TabletProfile tabletProfile = null;
+                Settings.TabletProfiles?.TryGetValue(tabletType, out tabletProfile);
+                tabletClassification = ClassifyTabletMods(modsComponent, tabletProfile, tabletType);
+                ObserveHoveredTablet(name, tabletType, pos, size, modsComponent, tabletProfile);
+                var pointer = ImGui.GetMousePos();
+                bool overTablet = pointer.X >= pos.X && pointer.Y >= pos.Y && pointer.X < pos.X + size.X && pointer.Y < pos.Y + size.Y;
+                if (TabletHighlightsSuppressed() || Settings.HideTabletHighlightsOnItemHover && overTablet) return;
             }
-            string tabletLabel = tabletClassification.IsRanked ? tabletClassification.RankLabel :
-                PluginText.T("stashutility.filters.tablet_unclassified", "N/C");
             if (isTablet && (tabletType == null || Settings.TabletProfiles?.TryGetValue(tabletType, out var selection) != true ||
                 !MatchesTabletSelection(modsComponent, selection, tabletType)))
             {
                 if (!Settings.DisableBadTabletHighlight)
-                    DrawTabletRankBadge(pos, size, tabletLabel + " · NON", size.X / 52f, Math.Max(2f, Settings.BorderMargin * size.X / 52f));
+                {
+                    DrawTabletCompositionBadge(pos, size, tabletClassification, size.X / 52f, Math.Max(2f, Settings.BorderMargin * size.X / 52f));
+                    if (!tabletClassification.Uncertain) DrawTabletFilterMarker(pos, size, "x", size.X / 52f);
+                }
                 return;
             }
             int jewelGoodCount = 0;
@@ -6041,7 +6040,7 @@ namespace StashUtility
             if (isWaystone && Settings.GoodModPatterns.Count > 0 && !isGood) passesNumericalFilters = false;
             if ((isTablet || isJewel) && !isBad && !isGood)
             {
-                if (isTablet) DrawTabletRankBadge(pos, size, tabletLabel, size.X / 52f, Math.Max(2f, Settings.BorderMargin * size.X / 52f));
+                if (isTablet) DrawTabletCompositionBadge(pos, size, tabletClassification, size.X / 52f, Math.Max(2f, Settings.BorderMargin * size.X / 52f));
                 return;
             }
 
@@ -6117,11 +6116,32 @@ namespace StashUtility
                 dl.AddTriangle(topTip, topTip + new Vector2(-arrowSize / 2, arrowSize), topTip + new Vector2(arrowSize / 2, arrowSize), 0xFF000000, Math.Max(1.0f, 1.5f * scale));
             }
             if (isTablet)
-                DrawTabletRankBadge(pos, size, tabletLabel, scale,
+                DrawTabletCompositionBadge(pos, size, tabletClassification, scale,
                     Math.Max(2f * scale, margin + activeBorderThickness + scale));
         }
 
         private static void DrawTabletRankBadge(Vector2 pos, Vector2 size, string rank, float scale, float inset)
+            => DrawTabletBadge(pos, size, rank, scale, inset, TabletItemRankColor(rank));
+
+        private static void DrawTabletCompositionBadge(Vector2 pos, Vector2 size, Models.TabletClassification classification, float scale, float inset)
+        {
+            DrawTabletBadge(pos, size, string.IsNullOrEmpty(classification.RankLabel) ? "N/C" : classification.RankLabel,
+                scale, inset, classification.RankColor);
+            if (classification.Uncertain) DrawTabletFilterMarker(pos, size, "?", scale);
+        }
+
+        private static void DrawTabletFilterMarker(Vector2 pos, Vector2 size, string marker, float scale)
+        {
+            if (size.X < 28 || size.Y < 28 || string.IsNullOrEmpty(marker)) return;
+            float fontSize = Math.Clamp(10f * scale, 8f, 14f);
+            var point = pos + new Vector2(2, size.Y - fontSize - 3);
+            var color = marker == "x" ? new Vector4(.95f, .4f, .35f, 1) : new Vector4(1, .73f, .3f, 1);
+            var draw = ImGui.GetBackgroundDrawList();
+            draw.AddRectFilled(point - Vector2.One, point + new Vector2(fontSize * .7f + 1, fontSize + 1), 0xF0101010, 2);
+            draw.AddText(ImGui.GetFont(), fontSize, point, ImGuiHelper.Color(color), marker);
+        }
+
+        private static void DrawTabletBadge(Vector2 pos, Vector2 size, string rank, float scale, float inset, Vector4 color)
         {
             if (string.IsNullOrEmpty(rank) || size.X < 20 || size.Y < 20) return;
             var dl = ImGui.GetBackgroundDrawList();
@@ -6134,7 +6154,6 @@ namespace StashUtility
             var badgeSize = textSize + new Vector2(padding * 2, padding);
             var p0 = pos + new Vector2(inset, inset);
             var p1 = p0 + badgeSize;
-            var color = TabletItemRankColor(rank);
             dl.AddRectFilled(p0, p1, ImGuiHelper.Color(new Vector4(.04f, .05f, .07f, .94f)), 3f);
             dl.AddRect(p0, p1, ImGuiHelper.Color(color), 3f, ImDrawFlags.RoundCornersAll, Math.Max(1f, scale));
             dl.AddText(ImGui.GetFont(), fontSize, p0 + new Vector2(padding, padding / 2), ImGuiHelper.Color(color), rank);
@@ -6958,9 +6977,10 @@ namespace StashUtility
         {
             var quality = TabletQualityEngine.Evaluate(ObserveMetaTablet(type, mods), TabletPriorities(profile, type));
             int index = Array.IndexOf(TabletModRanks, quality.Rank);
-            if (index < 0) return UnclassifiedTablet with { OrderKey = quality.OrderKey };
-            return new Models.TabletClassification(quality.Rank, 0, quality.Label, TabletModRankColors[index], index)
-                { OrderKey = quality.OrderKey };
+            var classification = index < 0 ? UnclassifiedTablet :
+                new Models.TabletClassification(quality.Rank, quality.RankingValidation == Models.TabletRankingValidation.Verified ? quality.GlobalPosition ?? 0 : 0,
+                    "", TabletModRankColors[index], index);
+            return classification with { RankLabel = quality.BadgeLabel, OrderKey = quality.OrderKey, Uncertain = quality.Uncertain };
         }
 
         private static IEnumerable<Models.TabletMod> SelectedTabletMods(TabletProfile profile, string type) =>

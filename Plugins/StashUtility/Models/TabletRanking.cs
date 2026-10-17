@@ -2,13 +2,63 @@ namespace StashUtility.Models
 {
     using System;
     using System.Collections.Generic;
+    using System.Collections.ObjectModel;
     using System.Globalization;
     using System.Linq;
 
     public sealed record TabletPriority(string Rank, float? Minimum = null);
 
+    public enum TabletRankingValidation { UnverifiedRestrictions, IncompleteObservation, IncompatibleObservation, Verified }
+
+    public sealed record TabletModifierQuality(string Id, string Rank, string ReferenceRankLabel, bool IsPriority);
+
+    public sealed record TabletComposition(IReadOnlyList<string> Ranks, IReadOnlyDictionary<string, int> Counts, string Label)
+    {
+        public static IReadOnlyList<string> DefaultOrder { get; } = Array.AsReadOnly("SABCDEF".Select(c => c.ToString()).ToArray());
+
+        public static TabletComposition Format(IReadOnlyList<string> ranks, IReadOnlyList<string> order = null)
+        {
+            order ??= DefaultOrder;
+            if (!ValidOrder(order) || ranks?.Count != 4 || ranks.Any(r => r == null || !order.Contains(r))) return null;
+            var counts = order.ToDictionary(r => r, r => ranks.Count(value => value == r), StringComparer.Ordinal);
+            string label = string.Concat(order.Where(r => counts[r] > 0).Select(r => r + (counts[r] == 1 ? "" : counts[r].ToString(CultureInfo.InvariantCulture))));
+            return new(Array.AsReadOnly(order.SelectMany(r => Enumerable.Repeat(r, counts[r])).ToArray()),
+                new ReadOnlyDictionary<string, int>(counts), label);
+        }
+
+        // Multisets only, with repetition for mathematical enumeration. This is NOT
+        // a pool of physically attainable tablets and never supplies an ordinal.
+        public static IEnumerable<TabletComposition> Generate(IReadOnlyList<string> order = null)
+        {
+            order ??= DefaultOrder;
+            if (!ValidOrder(order)) yield break;
+            string[] slots = new string[4];
+            IEnumerable<TabletComposition> Visit(int position, int first)
+            {
+                for (int i = first; i < order.Count; i++)
+                {
+                    slots[position] = order[i];
+                    if (position == 3) yield return Format(slots, order);
+                    else foreach (var combination in Visit(position + 1, i)) yield return combination;
+                }
+            }
+            foreach (var composition in Visit(0, 0)) yield return composition;
+        }
+
+        private static bool ValidOrder(IReadOnlyList<string> order) => order.Count > 0 &&
+            order.All(r => r?.Length == 1 && r[0] is >= 'A' and <= 'Z') && order.Distinct(StringComparer.Ordinal).Count() == order.Count;
+    }
+
     public sealed record TabletQuality(string Rank, int PriorityCount, int BestCount,
-        string OrderKey, string Label, bool Uncertain, int MaximumBestCountUpperBound);
+        string OrderKey, string Label, bool Uncertain, int MaximumBestCountUpperBound)
+    {
+        public TabletComposition Composition { get; init; }
+        public IReadOnlyList<TabletModifierQuality> Modifiers { get; init; } = Array.Empty<TabletModifierQuality>();
+        public int? GlobalPosition { get; init; }
+        public TabletRankingValidation RankingValidation { get; init; } = TabletRankingValidation.UnverifiedRestrictions;
+        public string BadgeLabel => Composition == null ? "N/C" : GlobalPosition is > 0 && RankingValidation == TabletRankingValidation.Verified && TabletComposition.DefaultOrder.Contains(Rank)
+            ? Rank + GlobalPosition.Value.ToString(CultureInfo.InvariantCulture) + " · " + Composition.Label : Composition.Label;
+    }
 
     /// <summary>
     /// Orders canonical modifier combinations, independently of filtering and UI.
@@ -74,6 +124,10 @@ namespace StashUtility.Models
                 var ordered = unique.Select(m => new { Mod = m.Modifier,
                     Grade = Grades.IndexOf(Matches(m) ? selected[m.Modifier.Id].Rank : m.Modifier.Rank, StringComparison.Ordinal) })
                     .OrderBy(m => m.Grade).ThenBy(m => Grades.IndexOf(m.Mod.Rank, StringComparison.Ordinal)).ThenBy(m => m.Mod.SubRank).ToArray();
+                bool compositionKnown = observation?.Readable == true && detected.Count == 4 && unique.Length == 4 &&
+                    !unique.Any(m => selected.TryGetValue(m.Modifier.Id, out var p) && p.Minimum.HasValue &&
+                        (!m.Roll.HasValue || !float.IsFinite(m.Roll.Value)) && p.Rank != m.Modifier.Rank);
+                var composition = compositionKnown ? TabletComposition.Format(ordered.Select(m => Grades[m.Grade].ToString()).ToArray(), catalog.RankOrder) : null;
                 string gradeKey = string.Concat(ordered.Select(m => m.Grade.ToString(CultureInfo.InvariantCulture)))
                     .PadRight(4, '7'); // An empty slot is worse than F, never a fabricated F affix.
                 string individualKey = string.Join("", ordered.Select(m => Grades.IndexOf(m.Mod.Rank, StringComparison.Ordinal)
@@ -102,7 +156,15 @@ namespace StashUtility.Models
                     maxima[maximumKey] = maximum;
                 }
                 var result = new TabletQuality(rank, matched.Length, bestCount, key,
-                    rank.Length == 0 ? "N/C" : rank + (uncertain ? "·?" : "·" + bestCount + "p"), uncertain, maximum);
+                    rank.Length == 0 ? "N/C" : rank + (uncertain ? "·?" : "·" + bestCount + "p"), uncertain, maximum)
+                {
+                    Composition = composition,
+                    Modifiers = Array.AsReadOnly(ordered.Select(m => new TabletModifierQuality(m.Mod.Id, Grades[m.Grade].ToString(),
+                        m.Mod.RankLabel, matched.Any(match => match.Modifier.Id == m.Mod.Id))).ToArray()),
+                    RankingValidation = !Compatible(unique.Select(m => m.Modifier).ToArray()) ? TabletRankingValidation.IncompatibleObservation :
+                        uncertain ? TabletRankingValidation.IncompleteObservation :
+                        TabletRankingValidation.UnverifiedRestrictions
+                };
                 if (cache.Count >= CacheLimit) cache.Clear();
                 cache[signature] = result;
                 return result;

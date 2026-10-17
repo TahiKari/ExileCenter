@@ -104,7 +104,7 @@ namespace StashUtility
                 }
             }
             TabletHelp(MT("mode_help", "Automatic modes apply their own ranks. Custom restores your choices and enables presets 1 to 5. Resale uses the reference ranking, without live prices. A specific strategy adds its conditions to the relevant tablet type; other types keep farming ranks."));
-            MetaText(MT("quality_legend", "S·2p = two matching S priorities, not position 2. Secondary grades and individual reference ranks break ties. No match: N/C. Global positions are withheld because all combination restrictions are not verified. See Analysis."));
+            MetaText(MT("quality_legend", "S2A2 = two S modifiers and two A modifiers. Composition is separate from your matching priorities and global grade. Reference grades describe unselected modifiers; no global ordinal is claimed. Hover a tablet for details."));
         }
 
         private void EnsureTabletPresetSlots()
@@ -553,32 +553,70 @@ namespace StashUtility
             }
         }
 
-        private void DrawTabletQuality(TabletObservation observation, TabletProfile settings)
+        private void DrawTabletQuality(TabletObservation observation, TabletProfile settings, bool compact = false)
         {
             var priorities = TabletPriorities(settings, observation.TabletType);
             var quality = TabletQualityEngine.Evaluate(observation, priorities);
-            MetaText(observation.TabletType + " · " + quality.Label);
+            MetaText(MT("composition", "Composition") + " : " + (quality.Composition?.Label ?? "N/C"));
+            MetaText(MT("global_grade", "Global grade (your priorities)") + " : " + (quality.Rank.Length > 0 ? quality.Rank : "N/C"));
+            MetaText(MT("global_position", "Global position") + " : " + MT("position_unverified", "Unavailable: combination restrictions are not fully verified."));
             MetaText(MT("quality_counts", "Matching priorities / best grade / upper bound for that grade") + " : " +
                 quality.PriorityCount + " / " + quality.BestCount + " / <= " + quality.MaximumBestCountUpperBound);
-            MetaText(MT("quality_limit", "The upper bound respects known exclusion groups and four affixes. Prefix/suffix budgets, item-level availability and special crafting restrictions are not fully verified: no exact maximum or global ordinal is claimed. Rolls only determine whether a minimum is met; this is not a price estimate."));
+            if (!compact) MetaText(MT("quality_limit", "The upper bound respects known exclusion groups and four affixes. Prefix/suffix budgets, item-level availability and special crafting restrictions are not fully verified: no exact maximum or global ordinal is claimed. Rolls only determine whether a minimum is met; this is not a price estimate."));
             foreach (var detected in observation.Mods)
             {
                 if (detected?.Modifier == null) { MetaText(MT("unknown", "Unknown modifier") + " : " + detected?.RawId); continue; }
                 var modifier = detected.Modifier;
-                string selection = priorities.TryGetValue(modifier.Id, out var priority) ?
-                    MT("quality_selected", "Selected") + " " + priority.Rank + (priority.Minimum.HasValue ? " · min " + priority.Minimum +
-                    " · " + (detected.Roll.HasValue ? detected.Roll.Value.ToString() : "?") : "") :
-                    MT("quality_secondary", "Not selected: secondary reference quality only");
-                MetaText(modifier.RankLabel + " · " + selection + " · " + MetaDisplayText(modifier));
+                var ranked = quality.Modifiers.FirstOrDefault(m => m.Id == modifier.Id);
+                string selection = ranked?.IsPriority == true ? MT("quality_selected", "Selected") : MT("quality_secondary", "Secondary reference only; not a matching priority");
+                string minimum = priorities.TryGetValue(modifier.Id, out var priority) ? " · " + MT("configured_rank", "Choice") + " " + priority.Rank +
+                    (priority.Minimum.HasValue ? " · min " + priority.Minimum + " · " + (detected.Roll.HasValue ? detected.Roll.Value.ToString() : "?") : "") : "";
+                MetaText((ranked?.Rank ?? "?") + " · " + selection + " · " + MT("reference_rank", "Reference") + " " + modifier.RankLabel + minimum + " · " + MetaDisplayText(modifier));
             }
             bool accepted = quality.PriorityCount > 0 && (!settings.RequireAllRankedMods || quality.PriorityCount == priorities.Count);
-            MetaText((settings.RequireAllRankedMods ? "ET / AND" : "OU / OR") + " : " + (quality.Uncertain ? "?" : accepted ? "OK" : "NON"));
+            MetaText((settings.RequireAllRankedMods ? "ET / AND" : "OU / OR") + " : " + (accepted ? "OK" : "NON"));
+            MetaText(MT("quality_order", "Sort order: global grade, count of matching priorities of that grade, secondary grades, then individual reference subranks. Equal quality stays tied. Composition is not a drop probability or a unique item identifier."));
+            if (quality.Composition == null) MetaText(MT("composition_unknown", "N/C: the effective grades of exactly four distinct, readable modifiers are required."));
+            if (quality.RankingValidation == TabletRankingValidation.IncompatibleObservation)
+                MetaText(MT("composition_conflict", "Known modifier-group conflict: composition describes observations without certifying a feasible combination."));
             if (quality.Uncertain) MetaText(MT("quality_uncertain", "Incomplete or incompatible observation: the letter uses only confirmed matches, and no complete quality comparison is guaranteed."));
+        }
+
+        private bool ObserveHoveredTablet(string name, string type, Vector2 pos, Vector2 size, Mods mods,
+            TabletProfile settings, TabletFilterResult result = null)
+        {
+            var mouse = ImGui.GetMousePos();
+            if (ImGui.GetIO().WantCaptureMouse || tabletHighlightsHiddenManually || IsTabletOccluded(pos, size) ||
+                mouse.X < pos.X || mouse.Y < pos.Y || mouse.X >= pos.X + size.X || mouse.Y >= pos.Y + size.Y) return false;
+            lastMetaObservation = result?.Observation ?? ObserveMetaTablet(type, mods);
+            lastMetaItemName = name; lastMetaObservedUtc = DateTime.UtcNow;
+            if (Settings.TabletHelpTooltips)
+            {
+                float width = Math.Max(200, Math.Min(460, ImGui.GetIO().DisplaySize.X - 20));
+                ImGui.SetNextWindowSize(new Vector2(width, 0), ImGuiCond.Always);
+                ImGui.SetNextWindowSizeConstraints(new Vector2(width, 0), new Vector2(width,
+                    Math.Max(200, ImGui.GetIO().DisplaySize.Y - 20)));
+                if (ImGui.BeginTooltip())
+                {
+                    ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + Math.Min(430, Math.Max(180, ImGui.GetIO().DisplaySize.X - 40)));
+                    MetaText(name);
+                    DrawTabletQuality(lastMetaObservation, settings ?? new TabletProfile(), true);
+                    if (result != null)
+                    {
+                        MetaText(MT("advanced", "Advanced conditions (optional)") + " : " +
+                            MT(result.State.ToString().ToLowerInvariant(), result.State.ToString().ToUpperInvariant()));
+                        MetaText(MT("action", "Action") + " : " + MT(result.Action.ToString().ToLowerInvariant(), result.Action.ToString()));
+                        if (result.Error.Length > 0) MetaText(MetaError(result.Error));
+                    }
+                    ImGui.PopTextWrapPos(); ImGui.EndTooltip();
+                }
+            }
+            return true;
         }
 
         private void DrawMetaResult(TabletFilterResult result)
         {
-            MetaText(MT("combination", "Detected combination") + " : " + string.Join(" + ", result.Observation?.Mods.Select(m => m.Modifier?.RankLabel ?? "?") ?? Array.Empty<string>()));
+            MetaText(MT("combination", "Detected individual reference subranks") + " : " + string.Join(" + ", result.Observation?.Mods.Select(m => m.Modifier?.RankLabel ?? "?") ?? Array.Empty<string>()));
             foreach (var mod in result.Observation?.Mods ?? new()) MetaText(mod.Modifier == null ? MT("unknown", "Unknown modifier") + " : " + mod.RawId : mod.Modifier.RankLabel + " · " + MetaDisplayText(mod.Modifier));
             ImGui.TextColored(MetaResultColor(result), MT(result.State.ToString().ToLowerInvariant(), result.State.ToString().ToUpperInvariant()));
             if (result.Error.Length > 0) MetaText(MetaError(result.Error));
@@ -657,28 +695,30 @@ namespace StashUtility
 
         private void DrawMetaTabletHighlight(string name, string type, Vector2 pos, Vector2 size, Mods mods)
         {
-            var result = AnalyzeMetaTablet(type, mods); var mouse = ImGui.GetMousePos();
-            bool hovered = !ImGui.GetIO().WantCaptureMouse && mouse.X >= pos.X && mouse.Y >= pos.Y && mouse.X < pos.X + size.X && mouse.Y < pos.Y + size.Y;
+            var result = AnalyzeMetaTablet(type, mods);
+            Settings.TabletProfiles.TryGetValue(type, out var settings);
+            bool hovered = ObserveHoveredTablet(name, type, pos, size, mods, settings, result);
             bool occluded = IsTabletOccluded(pos, size);
-            if (hovered && !occluded) { lastMetaObservation = result.Observation; lastMetaItemName = name; lastMetaObservedUtc = DateTime.UtcNow; }
             if (TabletHighlightsSuppressed() || occluded || (Settings.HideTabletHighlightsOnItemHover && hovered)) return;
             if (result.Action == TabletFilterAction.Ignore || (result.State == TabletFilterState.Rejected && Settings.DisableBadTabletHighlight)) return;
-            Settings.TabletProfiles.TryGetValue(type, out var settings);
             var classification = ClassifyTabletMods(mods, settings, type);
             if (!MatchesTabletSelection(mods, settings, type))
             {
                 if (!Settings.DisableBadTabletHighlight)
-                    DrawTabletRankBadge(pos, size, (classification.IsRanked ? classification.RankLabel : "N/C") + " · NON", size.X / 52f, Math.Max(2, Settings.BorderMargin * size.X / 52f));
+                {
+                    DrawTabletCompositionBadge(pos, size, classification, size.X / 52f, Math.Max(2, Settings.BorderMargin * size.X / 52f));
+                    if (!classification.Uncertain) DrawTabletFilterMarker(pos, size, "x", size.X / 52f);
+                }
                 return;
             }
             var color = classification.IsRanked ? classification.RankColor : MetaResultColor(result);
             float scale = size.X / 52f;
             if (Settings.ShowTabletModBorder) ImGui.GetBackgroundDrawList().AddRect(pos + Vector2.One, pos + size - Vector2.One, ImGuiHelper.Color(color), 3, ImDrawFlags.RoundCornersAll, Math.Clamp(scale, 1, 2));
             if (Settings.ShowRarityBorder && mods != null) DrawItemRarityMarker(pos, size, scale, Settings.ShowTabletModBorder ? Math.Clamp(scale, 1, 2) : 0, mods.Rarity);
-            string status = result.State is TabletFilterState.Uncertain or TabletFilterState.Invalid ? "?" :
-                result.Action == TabletFilterAction.Signal ? "!" : result.State == TabletFilterState.Accepted ? "OK" : "NON";
-            string badge = (classification.IsRanked ? classification.RankLabel : PluginText.T("stashutility.filters.tablet_unclassified", "N/C")) + " · " + status;
-            DrawTabletRankBadge(pos, size, badge, scale, Math.Max(2, Settings.BorderMargin * scale));
+            DrawTabletCompositionBadge(pos, size, classification, scale, Math.Max(2, Settings.BorderMargin * scale));
+            string marker = result.State is TabletFilterState.Uncertain or TabletFilterState.Invalid ? "?" :
+                result.Action == TabletFilterAction.Signal ? "!" : result.State == TabletFilterState.Rejected ? "x" : "";
+            if (!classification.Uncertain) DrawTabletFilterMarker(pos, size, marker, scale);
         }
 
         private void DrawItemRarityMarker(Vector2 pos, Vector2 size, float margin, float borderThickness, ExileCenter.RemoteEnums.Rarity rarity)

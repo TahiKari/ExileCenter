@@ -19,6 +19,114 @@ internal static class TabletRankingCheck
 {
     private static int checks;
 
+    private static void CheckCompactCompositions()
+    {
+        int start = checks;
+        var generated = TabletComposition.Generate().ToArray();
+        Check(generated.Length == 210 && generated.Select(c => c.Label).Distinct().Count() == 210, "Exactly 210 theoretical four-grade multisets, not a physically attainable pool");
+        foreach (var combination in generated)
+        {
+            Check(combination.Ranks.Count == 4 && combination.Counts.Values.Sum() == 4, "Every theoretical composition describes four real slots");
+            Check(combination.Label.Length <= 4 && !combination.Label.Contains('1'), "Compact label has at most four characters and never writes a single occurrence count");
+            Check(TabletComposition.Format(combination.Ranks.Reverse().ToArray()).Label == combination.Label, "Composition is independent of modifier order");
+            int previous = -1, total = 0;
+            for(int i=0;i<combination.Label.Length;i++)
+            {
+                int rank = "SABCDEF".IndexOf(combination.Label[i]);
+                Check(rank > previous, "Each letter appears once, in canonical S-A-B-C-D-E-F order");
+                previous = rank;
+                total += i+1<combination.Label.Length && char.IsAsciiDigit(combination.Label[i+1]) ? combination.Label[++i]-'0' : 1;
+            }
+            Check(total == 4, "Independent compact-label parser reconstructs exactly four occurrences");
+        }
+        var examples = new Dictionary<string,string> {
+            ["SSSS"]="S4",["SSSA"]="S3A",["SSSB"]="S3B",["SSAA"]="S2A2",["SSAB"]="S2AB",["SSBB"]="S2B2",["SSCD"]="S2CD",
+            ["SAAA"]="SA3",["SAAB"]="SA2B",["SABB"]="SAB2",["SABC"]="SABC",["SABF"]="SABF",["SBBB"]="SB3",["SDDD"]="SD3",
+            ["SFFF"]="SF3",["SSSD"]="S3D",["AABB"]="A2B2",["AAFF"]="A2F2",["AABC"]="A2BC",["ABCD"]="ABCD",["ACEF"]="ACEF",
+            ["BBCC"]="B2C2",["BCCC"]="BC3",["CCCC"]="C4",["CDEF"]="CDEF",["DDDD"]="D4",["EEFF"]="E2F2",["FFFF"]="F4" };
+        foreach(var example in examples)
+            Check(TabletComposition.Format(example.Key.Select(c=>c.ToString()).ToArray()).Label == example.Value, "Required example " + example.Key + " -> " + example.Value);
+        var letters = "SABCDEF".Select(c=>c.ToString()).ToArray();
+        var allLabels = new HashSet<string>();
+        foreach(string a in letters)foreach(string b in letters)foreach(string c in letters)foreach(string d in letters)
+        {
+            var input = new[]{a,b,c,d};
+            var result = TabletComposition.Format(input);
+            Check(result.Label == TabletComposition.Format(input.OrderBy(r=>Array.IndexOf(letters,r)).ToArray()).Label, "All 2401 input sequences format canonically");
+            allLabels.Add(result.Label);
+        }
+        Check(allLabels.SetEquals(generated.Select(c=>c.Label)), "All 2401 ordered inputs collapse to exactly the generated 210 compositions");
+        Check(TabletComposition.Generate(new[]{"S","A","B","C","D","F"}).Count()==126, "Generator respects a six-grade schema without inventing E");
+        Check(TabletComposition.Generate(new[]{"F"}).Single().Label=="F4", "Single-grade schema");
+        Check(!TabletComposition.Generate(Array.Empty<string>()).Any()&&!TabletComposition.Generate(new[]{"S","S"}).Any(), "Invalid or empty schemas cannot invent combinations");
+        foreach(var invalid in new string[][] {null,Array.Empty<string>(),new[]{"S"},new[]{"S","A","B"},new[]{"S","A","B","C","D"},new[]{"S","A","B","Z"},new[]{"S","A",null,"F"},new[]{"S","A","B",""}})
+            Check(TabletComposition.Format(invalid)==null, "Missing, excessive or invalid grades never get padded or guessed");
+        var catalog=ModDatabase.TabletMeta;
+        var engine=new TabletRankingEngine(catalog);
+        foreach(string type in catalog.Types.Values)
+        {
+            var four=catalog.ForType(type).Where(m=>m.Affix=="prefix").Take(2).Concat(catalog.ForType(type).Where(m=>m.Affix=="suffix").Take(2)).ToArray();
+            var observation=new TabletObservation{TabletType=type,Mods=four.Select(m=>new TabletDetectedMod{Modifier=m,RawId=m.GameModIds[0],Roll=10000}).ToList()};
+            var priorities=four.Select((m,i)=>(m.Id,Grade:i<2?"S":"A")).ToDictionary(p=>p.Id,p=>new TabletPriority(p.Grade));
+            var quality=engine.Evaluate(observation,priorities);
+            Check(quality.Composition.Label=="S2A2"&&quality.PriorityCount==4&&quality.BestCount==2, "Composition and priority counts are separate: "+type);
+            Check(quality.BadgeLabel=="S2A2"&&quality.GlobalPosition==null&&quality.RankingValidation!=TabletRankingValidation.Verified,"Composition alone while global numbering is unverified: "+type);
+            priorities[four[0].Id]=new("F");
+            var changed=engine.Evaluate(observation,priorities);
+            Check(changed.Composition.Label=="SA2F"&&changed.OrderKey!=quality.OrderKey,"Preference edit updates composition and quality immediately: "+type);
+            priorities.Clear();
+            var reference=engine.Evaluate(observation,priorities);
+            Check(reference.Composition.Label==TabletComposition.Format(four.Select(m=>m.Rank).ToArray()).Label&&reference.PriorityCount==0&&reference.Rank=="", "Unselected reference grades describe all four mods without creating priorities: "+type);
+            priorities[four[0].Id]=new("F",10001);
+            var below=engine.Evaluate(observation,priorities);
+            Check(below.Composition.Label==reference.Composition.Label&&below.PriorityCount==0,"Below-minimum modifier keeps secondary reference quality only: "+type);
+            for(int size=0;size<4;size++)
+            {
+                var partial=new TabletObservation{TabletType=type,Mods=observation.Mods.Take(size).ToList()};
+                Check(engine.Evaluate(partial,priorities).Composition==null&&engine.Evaluate(partial,priorities).BadgeLabel=="N/C","Incomplete tablets never invent a four-affix composition: "+size+type);
+            }
+            var duplicated=new TabletObservation{TabletType=type,Mods=Enumerable.Repeat(observation.Mods[0],4).ToList()};
+            Check(engine.Evaluate(duplicated,priorities).Composition==null,"One physical modifier cannot become four S modifiers: "+type);
+            var unknown=new TabletObservation{TabletType=type,Mods=observation.Mods.Take(3).Concat(new[]{new TabletDetectedMod{RawId="unknown"}}).ToList()};
+            Check(engine.Evaluate(unknown,priorities).BadgeLabel=="N/C","Unknown fourth modifier is explicit N/C: "+type);
+        }
+        var toy=new TabletMetaCatalog{RankOrder=letters.ToList()};
+        for(int i=0;i<8;i++)toy.Modifiers.Add(new(){Id="mod:"+i,TabletType="toy",Rank=i<4?"S":"A",RankLabel=(i<4?"S":"A")+(i%4+1),SubRank=i%4+1,Affix=i%2==0?"prefix":"suffix",Groups=new(){"group"+i}});
+        var model=new TabletRankingEngine(toy);
+        TabletObservation Obs(params int[] indices)=>new(){TabletType="toy",Mods=indices.Select(i=>new TabletDetectedMod{Modifier=toy.Modifiers[i]}).ToList()};
+        var selected=toy.Modifiers.ToDictionary(m=>m.Id,m=>new TabletPriority(m.Rank));
+        var better=model.Evaluate(Obs(0,1,4,5),selected);var worse=model.Evaluate(Obs(2,3,6,7),selected);
+        Check(better.Composition.Label==worse.Composition.Label&&string.CompareOrdinal(better.OrderKey,worse.OrderKey)<0,"Identical S2A2 compositions retain individual-subrank quality differences");
+        selected=toy.Modifiers.Take(2).ToDictionary(m=>m.Id,_=>new TabletPriority("S"));
+        var referenceS=model.Evaluate(Obs(0,1,2,3),selected);
+        Check(referenceS.Composition.Label=="S4"&&referenceS.BestCount==2&&referenceS.PriorityCount==2&&referenceS.MaximumBestCountUpperBound==2,"Reference S letters do not become extra selected S priorities");
+        Check((better with{GlobalPosition=1}).BadgeLabel=="S2A2","An ordinal without verification is never displayed");
+        Check((better with{GlobalPosition=1,RankingValidation=TabletRankingValidation.Verified}).BadgeLabel=="S1 · S2A2"&&
+            (better with{GlobalPosition=2,RankingValidation=TabletRankingValidation.Verified}).BadgeLabel=="S2 · S2A2","Conditional ordinal display stays distinct from composition; no production ordinal is enabled");
+        var conflicting=JsonConvert.DeserializeObject<TabletMetaCatalog>(JsonConvert.SerializeObject(toy));
+        conflicting.Modifiers[1].Groups=new(conflicting.Modifiers[0].Groups);
+        var conflictObservation=new TabletObservation{TabletType="toy",Mods=conflicting.Modifiers.Take(4).Select(m=>new TabletDetectedMod{Modifier=m}).ToList()};
+        var conflict=new TabletRankingEngine(conflicting).Evaluate(conflictObservation,selected);
+        Check(conflict.Composition.Label=="S4"&&conflict.GlobalPosition==null&&conflict.RankingValidation==TabletRankingValidation.IncompatibleObservation&&conflict.Uncertain,"Known group conflict keeps descriptive composition but cannot receive a fictitious ordinal");
+        Check(conflict.MaximumBestCountUpperBound==1,"Two mutually exclusive selected S modifiers never imply two compatible priorities");
+        var minimumObservation=Obs(0,1,4,5);
+        var minimums=new Dictionary<string,TabletPriority>{{toy.Modifiers[0].Id,new("F",10)}};
+        Check(model.Evaluate(minimumObservation,minimums).Composition==null,"An unknown minimum roll cannot invent the effective custom grade");
+        minimumObservation.Mods[0].Roll=9;
+        Check(model.Evaluate(minimumObservation,minimums).Composition.Label=="S2A2"&&model.Evaluate(minimumObservation,minimums).PriorityCount==0,"A confirmed failed minimum uses reference quality without a priority match");
+        minimumObservation.Mods[0].Roll=10;
+        Check(model.Evaluate(minimumObservation,minimums).Composition.Label=="SA2F"&&model.Evaluate(minimumObservation,minimums).Rank=="F","Crossing a minimum updates composition and the independent global grade");
+        minimumObservation.Mods.Add(new(){Modifier=toy.Modifiers[6]});
+        Check(model.Evaluate(minimumObservation,minimums).Composition==null,"Five modifiers cannot receive a four-mod composition");
+        var warm=Obs(0,1,4,5);var cached=model.Evaluate(warm,selected);
+        var timer=System.Diagnostics.Stopwatch.StartNew();bool reused=true;
+        for(int i=0;i<10000;i++)reused&=ReferenceEquals(model.Evaluate(warm,selected),cached);
+        timer.Stop();
+        Check(reused&&model.CachedResults<=TabletRankingEngine.CacheLimit&&timer.Elapsed<TimeSpan.FromSeconds(10),"Ten thousand unchanged observations reuse the immutable computed composition within a bounded cache");
+        Console.WriteLine($"VALIDATION composition cache: 10000 unchanged observations in {timer.ElapsedMilliseconds} ms; immutable result reused.");
+        Console.WriteLine($"VALIDATION composition: 210 theoretical multisets; 2401 input orders; 28 mandatory examples; 8 types; priorities, dynamic edits, partial/unknown inputs and independent sorting: {checks-start} checks passed.");
+    }
+
     private static void CheckDynamicQuality()
     {
         var catalog = ModDatabase.TabletMeta;
@@ -110,7 +218,7 @@ internal static class TabletRankingCheck
         Check(Before(Q(0,4), Q(0)), "Real secondary F/A slots are not padded imaginary affixes");
         var firstRoll=Obs(0); firstRoll.Mods[0].Roll=1;
         var secondRoll=Obs(0); secondRoll.Mods[0].Roll=2;
-        Check(model.Evaluate(firstRoll,config)==model.Evaluate(secondRoll,config),"Rolls above the threshold are equivalent quality, not invented positions");
+        Check(model.Evaluate(firstRoll,config).OrderKey==model.Evaluate(secondRoll,config).OrderKey,"Rolls above the threshold are equivalent quality, not invented positions");
         var forged=Obs(0);
         forged.Mods[0].Modifier=new TabletMetaModifier {Id=t[0].Id,TabletType="toy",Rank="S",SubRank=1};
         Check(model.Evaluate(forged,config).Uncertain && model.Evaluate(forged,config).Rank=="","A foreign definition cannot reuse a recognized observation's cached result");
@@ -183,12 +291,13 @@ internal static class TabletRankingCheck
                 if (!File.Exists(file)) file = Path.Combine(root, "Plugins", "StashUtility", name.Name + ".dll");
                 return File.Exists(file) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(file) : null;
             };
+            CheckCompactCompositions();
             Run();
             CheckTabletPresets();
             CheckTabletModes();
             RunMetaFilters(args.Length > 1 && args[1] != "none" ? args[1] : null);
             CheckWorkbookPreset();
-            CheckTooltipGeometry(root);
+            CheckTooltipGeometry(root, args.Length > 2 ? args[2] : null);
             CheckTabletSettingsUi(root, args.Length > 2 ? args[2] : null);
             Console.WriteLine(checks + " tablet classification checks passed.");
             return 0;
@@ -540,7 +649,7 @@ internal static class TabletRankingCheck
         }
     }
 
-    private static void CheckTooltipGeometry(string root)
+    private static void CheckTooltipGeometry(string root, string previewDirectory)
     {
         NativeLibrary.SetDllImportResolver(typeof(ImGuiNET.ImGui).Assembly, (name, assembly, path) =>
             name == "cimgui" ? NativeLibrary.Load(Path.Combine(root, "cimgui.dll")) : IntPtr.Zero);
@@ -652,10 +761,10 @@ internal static class TabletRankingCheck
             var vertices = ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
             var actualBadge = Enumerable.Range(0, vertices.Size).Select(i => (vertices[i].pos, vertices[i].uv, vertices[i].col)).ToArray();
             ImGuiNET.ImGui.EndFrame(); ImGuiNET.ImGui.NewFrame();
-            typeof(StashUtilityCore).GetMethod("DrawTabletRankBadge", flags | BindingFlags.Static).Invoke(null, new object[] { new Vector2(200,40), new Vector2(52), "E·3p · OK", 1f, Math.Max(2f, uiPlugin.Settings.BorderMargin) });
+            typeof(StashUtilityCore).GetMethod("DrawTabletRankBadge", flags | BindingFlags.Static).Invoke(null, new object[] { new Vector2(200,40), new Vector2(52), "E3F", 1f, Math.Max(2f, uiPlugin.Settings.BorderMargin) });
             vertices = ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
             var expectedBadge = Enumerable.Range(0, vertices.Size).Select(i => (vertices[i].pos, vertices[i].uv, vertices[i].col)).ToArray();
-            Check(actualBadge.Length > 0 && actualBadge.SequenceEqual(expectedBadge), "AND / OR overlay renders priority count separately from OK");
+            Check(actualBadge.Length > 0 && actualBadge.SequenceEqual(expectedBadge), "Overlay shows the exact compact composition; priorities and filter status remain separate");
             ImGuiNET.ImGui.EndFrame();
             uiProfile.ModRanks[badgeMods.ExplicitMods[0].name] = "S";
             uiPlugin.Settings.ShowTabletModBorder = true;
@@ -739,6 +848,7 @@ internal static class TabletRankingCheck
             plugin.Settings.HideTabletHighlightsOnItemHover = false;
             Check(!Hidden(), "Disabling automatic mode overrides tooltip hiding");
             Check(queue.Count == 0, "Hover checks do not retain stale queued items");
+            CheckCompositionUi(root, previewDirectory, pixels, width, height);
         }
         finally
         {
@@ -748,6 +858,132 @@ internal static class TabletRankingCheck
             ImGuiNET.ImGui.DestroyContext(context);
             Directory.SetCurrentDirectory(previousDirectory);
         }
+    }
+
+    private static void CheckCompositionUi(string root, string previewDirectory, IntPtr atlas, int atlasWidth, int atlasHeight)
+    {
+        int before = checks;
+        const BindingFlags flags=BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Instance|BindingFlags.Static;
+        var io=ImGuiNET.ImGui.GetIO();io.DisplaySize=new Vector2(1280,960);
+        var previousLanguage=ExileCenter.Core.GHSettings.UiLanguage;
+        ExileCenter.Core.GHSettings.UiLanguage=ExileCenter.Localization.OverlayLanguage.French;
+        var colors=(Vector4[])typeof(StashUtilityCore).GetField("TabletModRankColors",flags).GetValue(null);
+        var badge=typeof(StashUtilityCore).GetMethod("DrawTabletCompositionBadge",flags);
+        var marker=typeof(StashUtilityCore).GetMethod("DrawTabletFilterMarker",flags);
+        var atlasBytes=new byte[atlasWidth*atlasHeight*4];Marshal.Copy(atlas,atlasBytes,0,atlasBytes.Length);
+        foreach(float size in new[]{32f,40f,52f,104f})foreach(var composition in TabletComposition.Generate())
+        {
+            string grade=composition.Ranks[0];
+            var classification=new TabletClassification(grade,0,composition.Label,colors["SABCDEF".IndexOf(grade)],0);
+            ImGuiNET.ImGui.NewFrame();
+            badge.Invoke(null,new object[]{new Vector2(100,60),new Vector2(size),classification,size/52f,2f});
+            var vertices=ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
+            Check(vertices.Size>0,"Every compact label is drawn in a "+size+"px cell: "+composition.Label);
+            Check(Enumerable.Range(0,vertices.Size).All(i=>vertices[i].pos.X>=99.99f&&vertices[i].pos.X<=100+size+.01f&&vertices[i].pos.Y>=59.99f&&vertices[i].pos.Y<=60+size+.01f),"Badge stays inside its cell: "+composition.Label);
+            int start=vertices.Size;
+            marker.Invoke(null,new object[]{new Vector2(100,60),new Vector2(size),"!",size/52f});
+            vertices=ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
+            Check(Enumerable.Range(start,vertices.Size-start).All(i=>vertices[i].pos.X<100+size*.5f),"Filter marker leaves the quantity's right half clear");
+            ImGuiNET.ImGui.EndFrame();
+        }
+        Console.WriteLine("VALIDATION composition UI: all 840 cell layouts and filter-marker bounds passed.");
+        ImGuiNET.ImGui.NewFrame();
+        var draw=ImGuiNET.ImGui.GetBackgroundDrawList();draw.AddText(new Vector2(20,16),0xFFFFFFFF,"210 compositions theoriques - pas une liste de tablettes realisables");
+        int slot=0;
+        foreach(var composition in TabletComposition.Generate())
+        {
+            var point=new Vector2(20+slot%21*58,52+slot/21*58);
+            draw.AddRectFilled(point,point+new Vector2(52),0xFF29231E,3);
+            var classification=new TabletClassification(composition.Ranks[0],0,composition.Label,colors["SABCDEF".IndexOf(composition.Ranks[0])],0);
+            badge.Invoke(null,new object[]{point,new Vector2(52),classification,1f,2f});slot++;
+        }
+        ImGuiNET.ImGui.Render();
+        if(previewDirectory!=null){Directory.CreateDirectory(previewDirectory);SaveUiPreview(Path.Combine(previewDirectory,"tablet-compositions-210.png"),atlasBytes,atlasWidth,atlasHeight);}
+
+        var plugin=new StashUtilityCore{DllDirectory=Path.Combine(root,"Plugins","StashUtility")};
+        var profile=new TabletProfile();plugin.Settings.TabletProfiles["Irradiated Tablet"]=profile;
+        var available=ModDatabase.TabletMeta.ForType("Irradiated Tablet").ToArray();
+        var four=available.Where(m=>m.Affix=="prefix").Take(2).Concat(available.Where(m=>m.Affix=="suffix").Take(2)).ToArray();
+        var mods=new Mods(IntPtr.Zero);
+        for(int i=0;i<4;i++){profile.ModRanks[four[i].GameModIds[0]]=i<2?"S":"A";mods.ExplicitMods.Add((four[i].GameModIds[0],(10000f,10000f)));}
+        var classify=typeof(StashUtilityCore).GetMethod("ClassifyTabletMods",flags);
+        TabletClassification Classify()=>(TabletClassification)classify.Invoke(null,new object[]{mods,profile,"Irradiated Tablet"});
+        Check(Classify().RankLabel=="S2A2"&&Classify().RankIndex==0,"Runtime classifier supplies composition independently of disabled positions");
+        profile.ModRanks[four[0].GameModIds[0]]="F";
+        Check(Classify().RankLabel=="SA2F","Runtime classifier updates the same tablet immediately after a preference edit");
+        profile.ModRanks.Clear();
+        Check(!Classify().IsRanked&&Classify().RankLabel==TabletComposition.Format(four.Select(m=>m.Rank).ToArray()).Label,"Runtime can display four reference grades without inventing a global priority grade");
+        profile.ModRanks[four[0].GameModIds[0]]="A";
+        var originalFourth=mods.ExplicitMods[3];mods.ExplicitMods[3]=("unknown",(0f,0f));
+        Check(Classify().RankLabel=="N/C"&&Classify().Uncertain,"Runtime unknown modifiers retain an explicit uncertain composition state");
+        mods.ExplicitMods[3]=originalFourth;
+        ImGuiNET.ImGui.NewFrame();
+        var red=new TabletClassification("A",0,"S2A2",colors[1],1);
+        badge.Invoke(null,new object[]{new Vector2(100,60),new Vector2(52),red,1f,2f});
+        var buffer=ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
+        Check(Enumerable.Range(0,buffer.Size).Any(i=>buffer[i].col==ExileCenter.Utils.ImGuiHelper.Color(colors[1]))&&
+            !Enumerable.Range(0,buffer.Size).Any(i=>buffer[i].col==ExileCenter.Utils.ImGuiHelper.Color(colors[0])),"Badge color uses global priority A, not secondary reference S");
+        ImGuiNET.ImGui.EndFrame();
+        var itemType=typeof(ExileCenter.RemoteObjects.States.InGameStateObjects.Item);var entityType=itemType.BaseType;
+        var item=Activator.CreateInstance(itemType,flags,null,new object[]{IntPtr.Zero},null);
+        entityType.GetProperty("Path").SetValue(item,"Metadata/Items/TowerAugment/GenericAugment");
+        var baseComponent=new Base(IntPtr.Zero);typeof(Base).GetProperty("BaseItemName").SetValue(baseComponent,"Tablette de validation");
+        var components=(System.Collections.Concurrent.ConcurrentDictionary<string,ExileCenter.RemoteObjects.Components.ComponentBase>)entityType.GetField("componentCache",flags).GetValue(item);
+        components["Base"]=baseComponent;components["Mods"]=mods;
+        var highlight=typeof(StashUtilityCore).GetMethod("EvaluateAndHighlightItem",flags);
+        typeof(StashUtilityCore).GetField("tabletItemHovered",flags).SetValue(plugin,true);
+        typeof(StashUtilityCore).GetField("tabletTooltipVisible",flags).SetValue(plugin,true);
+        string savedSettings=JsonConvert.SerializeObject(plugin.Settings);
+        int hoverBackgroundVertices=0;
+        for(int frame=0;frame<3;frame++)
+        {
+            io.AddMousePosEvent(110,90);ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;
+            highlight.Invoke(plugin,new object[]{item,new Vector2(100,80),new Vector2(52)});
+            hoverBackgroundVertices=ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer.Size;
+            ImGuiNET.ImGui.Render();
+        }
+        Check(ImGuiNET.ImGui.GetDrawData().TotalVtxCount>0,"Hover tooltip renders even while automatic hiding protects the item quantity");
+        var tooltipData=ImGuiNET.ImGui.GetDrawData();
+        var tooltipXs=Enumerable.Range(0,tooltipData.CmdListsCount).SelectMany(i=>Enumerable.Range(0,tooltipData.CmdLists[i].VtxBuffer.Size).Select(j=>tooltipData.CmdLists[i].VtxBuffer[j].pos.X)).ToArray();
+        Check(tooltipData.TotalVtxCount>500&&tooltipXs.Max()-tooltipXs.Min()>200&&tooltipXs.Max()-tooltipXs.Min()<500,"Tooltip has a readable text area, not an empty narrow auto-size column");
+        Check(hoverBackgroundVertices==0,"Hover tooltip does not restore the hidden item badge or cover its quantity");
+        Check(((TabletObservation)typeof(StashUtilityCore).GetField("lastMetaObservation",flags).GetValue(plugin)).Mods.Count==4,"Hover shares the same four observed modifiers with Analysis");
+        if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"tablet-composition-tooltip.png"),atlasBytes,atlasWidth,atlasHeight);
+        Check(JsonConvert.SerializeObject(plugin.Settings)==savedSettings,"Rendering composition and tooltips never changes saved profiles");
+        foreach(var point in new[]{new Vector2(8,8),new Vector2(1200,8),new Vector2(8,880),new Vector2(1200,880)})
+        {
+            for(int frame=0;frame<2;frame++)
+            {
+                io.AddMousePosEvent(point.X+8,point.Y+8);ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;
+                highlight.Invoke(plugin,new object[]{item,point,new Vector2(52)});ImGuiNET.ImGui.Render();
+            }
+            var data=ImGuiNET.ImGui.GetDrawData();
+            var points=Enumerable.Range(0,data.CmdListsCount).SelectMany(i=>Enumerable.Range(0,data.CmdLists[i].VtxBuffer.Size).Select(j=>data.CmdLists[i].VtxBuffer[j].pos)).ToArray();
+            Check(data.TotalVtxCount>500&&points.All(p=>p.X>=-2&&p.Y>=-2&&p.X<=io.DisplaySize.X+2&&p.Y<=io.DisplaySize.Y+2),"Tooltip text fits the viewport near each corner");
+        }
+        plugin.Settings.TabletHelpTooltips=false;
+        io.AddMousePosEvent(110,90);ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;
+        highlight.Invoke(plugin,new object[]{item,new Vector2(100,80),new Vector2(52)});ImGuiNET.ImGui.Render();
+        Check(ImGuiNET.ImGui.GetDrawData().TotalVtxCount==0,"Existing help switch disables the new tooltip");
+        plugin.Settings.TabletHelpTooltips=true;
+        typeof(StashUtilityCore).GetField("tabletHighlightsHiddenManually",flags).SetValue(plugin,true);
+        ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;
+        highlight.Invoke(plugin,new object[]{item,new Vector2(100,80),new Vector2(52)});ImGuiNET.ImGui.Render();
+        Check(ImGuiNET.ImGui.GetDrawData().TotalVtxCount==0,"Manual hiding remains authoritative over badges and tooltips");
+        typeof(StashUtilityCore).GetField("tabletHighlightsHiddenManually",flags).SetValue(plugin,false);
+        typeof(StashUtilityCore).GetField("tabletItemHovered",flags).SetValue(plugin,false);
+        typeof(StashUtilityCore).GetField("tabletTooltipVisible",flags).SetValue(plugin,false);
+        plugin.Settings.HideTabletHighlightsOnItemHover=false;
+        var advanced=new TabletFilterProfile{TabletType="Irradiated Tablet",Rule=new(){Kind=TabletRuleKind.RankExact,Rank="A"},OnMatch=TabletFilterAction.Signal};
+        profile.MetaProfiles.Add(advanced);profile.ActiveMetaProfileId=advanced.Id;profile.UseMetaFilters=true;
+        io.AddMousePosEvent(900,800);ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;
+        highlight.Invoke(plugin,new object[]{item,new Vector2(100,80),new Vector2(52)});
+        var advancedVertices=ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
+        uint amber=ExileCenter.Utils.ImGuiHelper.Color(new Vector4(1,.73f,.3f,1));
+        Check(Enumerable.Range(0,advancedVertices.Size).Any(i=>advancedVertices[i].col==amber),"Advanced Signal action keeps its separate visible alert marker");
+        ImGuiNET.ImGui.EndFrame();
+        ExileCenter.Core.GHSettings.UiLanguage=previousLanguage;
+        Console.WriteLine($"VALIDATION composition UI: 210 labels at 32/40/52/104px; bounds, quantity space, colors, live edits and hover/help switches: {checks-before} checks passed.");
     }
 
     private static void CheckTabletSettingsUi(string root, string previewDirectory)
@@ -1126,7 +1362,7 @@ internal static class TabletRankingCheck
         string[] grades = { "S", "A", "B", "C", "D", "E", "F" };
         // Independent synthetic scores exercise the existing grid planner below.
         var results = Enumerable.Range(0, 210).ToDictionary(i => i.ToString(),
-            i => new TabletClassification("S", 0, "S·1p", Vector4.One, i));
+            i => new TabletClassification("S", 0, "S2A2", Vector4.One, i));
 
         var analyze = typeof(StashUtilityCore).GetMethod("ClassifyTabletMods", BindingFlags.Static | BindingFlags.NonPublic);
         var match = typeof(StashUtilityCore).GetMethod("MatchesTabletSelection", BindingFlags.Static | BindingFlags.NonPublic);
