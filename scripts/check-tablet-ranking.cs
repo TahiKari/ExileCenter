@@ -122,6 +122,32 @@ internal static class TabletRankingCheck
         typeof(StashUtilityCore).GetField("craftCurrencyCount",flags).SetValue(plugin,2);
         Check(!Unchanged(Cells(other,target),3),"A nonempty local currency stack may not disappear");
         baseline.Clear();
+        var scanFlag=typeof(StashUtilityCore).GetField("stashScanForCraft",flags);
+        var scanComplete=typeof(StashUtilityCore).GetField("craftScanCompleted",flags);
+        var finishScan=typeof(StashUtilityCore).GetMethod("CompleteStashScan",flags);
+        plugin.Settings.TransferDestinations["Equipment"]=new StashDestination{TabName="Keep my destination",Disabled=true};
+        plugin.Settings.ScannedStashTabs.Add(new StashDestination{TabName="PTP",FolderPath=new List<string>{"01 - Mapping"}});
+        string settingsBefore=JsonConvert.SerializeObject(plugin.Settings);
+        scanFlag.SetValue(plugin,true);
+        finishScan.Invoke(plugin,null);
+        Check((bool)scanComplete.GetValue(plugin)&&!(bool)scanFlag.GetValue(plugin),"Automatic craft scanning completes without starting another scan");
+        Check(JsonConvert.SerializeObject(plugin.Settings)==settingsBefore,"Automatic craft detection never changes saved routes, scan history or settings");
+        var queue=typeof(StashUtilityCore).GetField("stashScanQueue",flags).GetValue(plugin);
+        var enqueue=queue.GetType().GetMethod("Enqueue");
+        var queuedType=queue.GetType().GetGenericArguments()[0];
+        void EnqueueScan()=>enqueue.Invoke(queue,new[]{Activator.CreateInstance(queuedType,Tab("PTP"),new IntPtr(123),0)});
+        int Queued()=>(int)queue.GetType().GetProperty("Count").GetValue(queue);
+        var stopCraft=typeof(StashUtilityCore).GetMethod("StopWaystoneCraft",flags);
+        EnqueueScan();scanFlag.SetValue(plugin,true);
+        stopCraft.Invoke(plugin,new object[]{null});
+        Check(Queued()==0&&!(bool)scanFlag.GetValue(plugin),"Stopping craft cancels its pending automatic scan without game input");
+        EnqueueScan();
+        stopCraft.Invoke(plugin,new object[]{null});
+        Check(Queued()==1,"Stopping an idle craft leaves a separate manual stash scan alone");
+        scanFlag.SetValue(plugin,true);scanComplete.SetValue(plugin,false);
+        typeof(StashUtilityCore).GetMethod("CancelStashScan",flags).Invoke(plugin,new object[]{"fixture interruption"});
+        Check(Queued()==0&&!(bool)scanComplete.GetValue(plugin),"An interrupted automatic scan cannot be mistaken for a completed scan");
+        Check(JsonConvert.SerializeObject(plugin.Settings)==settingsBefore,"Scan cancellation leaves all saved settings unchanged");
         Console.WriteLine("VALIDATION waystone crafting: rarity, counts, French/English item text, exclusions and renamed currency sources passed; no native input executed.");
     }
 

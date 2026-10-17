@@ -1834,6 +1834,9 @@ namespace StashUtility
         // Uses the existing transfer navigation and input guard exclusively; never runs
         // alongside sorting, scanning or transferring. No game input is sent by tests.
         private bool waystoneCraftRunning, craftFromInventory, craftLocalCurrency, craftCurrencyPending;
+        private bool stashScanForCraft, craftScanCompleted, craftScanAttempted;
+        private int craftResumePhase;
+        private IntPtr craftSourcePage;
         private SortItem craftCurrencyCell;
         private int craftPhase, craftInputPhase, craftSpent, craftDone, craftSkipped, craftX, craftY, craftCurrencyCount;
         private Rarity craftBeforeRarity;
@@ -1950,13 +1953,28 @@ namespace StashUtility
             ReadFreshItem(item.Address)?.TryGetComponent<Stack>(out var stack) == true && stack.Count > 0)
             .OrderBy(item => item.Y).ThenBy(item => item.X).FirstOrDefault();
 
-        private void CraftRequireCurrency()
+        private bool CraftRequireCurrency()
         {
-            if (CraftInventoryCurrency() != null) return;
+            if (CraftInventoryCurrency() != null) return true;
             if (affinityStashRoot == IntPtr.Zero)
                 throw CraftFailure("inventory_currency", "The required currency is missing from the inventory. Open your stash to use its currency tab.");
             craftMoney = FindCraftCurrencyTab(detectedStashTabs);
+            if (craftMoney == null && !craftScanAttempted)
+            {
+                StartCraftStashScan(craftPhase);
+                return false;
+            }
             if (craftMoney == null) throw CraftFailure("scan", "Scan the stash after opening the waystone and currency tabs. Exactly one currency source must be identified.");
+            return true;
+        }
+
+        private void StartCraftStashScan(int resumePhase)
+        {
+            craftScanAttempted = true;
+            craftResumePhase = resumePhase;
+            BeginStashScan(craftOnly: true);
+            craftPhase = 12;
+            craftDeadline = DateTime.UtcNow.AddSeconds(90);
         }
 
         private bool TryGetCraftInventory(out IntPtr inventory, out IntPtr stash)
@@ -2010,6 +2028,7 @@ namespace StashUtility
             try
             {
                 craftFromInventory = fromInventory;
+                craftScanAttempted = craftScanCompleted = false;
                 craftLocalCurrency = craftCurrencyPending = false; craftCurrencyCell = null;
                 craftSource = craftMoney = null;
                 if (!TryGetCraftInventory(out affinityInventoryRoot, out affinityStashRoot) || Core.IsSettingsMenuOpen ||
@@ -2020,8 +2039,8 @@ namespace StashUtility
                     page = affinityStashRoot == IntPtr.Zero ? IntPtr.Zero : FindSelectedStashPage(affinityStashRoot);
                     if (!IsActiveTab(page, out var type) || type != "Waystone") throw CraftFailure("open", "Open the waystone stash tab with an empty cursor before starting.");
                     craftSource = detectedStashTabs.SingleOrDefault(tab => tab.Page == page);
-                    if (craftSource == null) throw CraftFailure("scan", "Scan the stash after opening the waystone and currency tabs. Exactly one currency source must be identified.");
                 }
+                craftSourcePage = fromInventory ? IntPtr.Zero : page;
                 craftInventoryBefore.Clear(); craftInventoryBefore.AddRange(CraftInventory());
                 if (!fromInventory && craftInventoryBefore.Sum(item => item.Width * item.Height) >= InventoryColumns * InventoryRows)
                     throw CraftFailure("space", "Keep at least one free inventory cell for crafting.");
@@ -2043,6 +2062,7 @@ namespace StashUtility
                 craftSpent = craftDone = craftSkipped = craftInputPhase = craftPhase = 0;
                 craftRoute = null; craftItem = IntPtr.Zero; craftStatus = "";
                 craftClipboardBefore = ImGui.GetClipboardText(); craftClipboardSequence = GetClipboardSequenceNumber();
+                if (!fromInventory && craftSource == null) StartCraftStashScan(0);
                 waystoneCraftRunning = true;
                 affinityNextAction = DateTime.UtcNow.AddMilliseconds(500);
             }
@@ -2053,6 +2073,11 @@ namespace StashUtility
         {
             bool wasRunning = waystoneCraftRunning;
             waystoneCraftRunning = false;
+            if (stashScanForCraft)
+            {
+                stashScanQueue.Clear();
+                stashScanForCraft = false;
+            }
             if (wasRunning)
             {
                 ReleaseAffinityControl();
@@ -2140,10 +2165,25 @@ namespace StashUtility
                     !affinityShiftHeld && (AffinityGetAsyncKeyState(0x10) & 0x8000) != 0)
                     throw CraftFailure("input", "Release the mouse buttons and modifier keys before starting.");
                 if (Core.Process.WindowArea != affinityWindow || Core.IsSettingsMenuOpen || Core.States.GameCurrentState != GameStateTypes.InGameState ||
-                    sortRunning || affinityTransferRunning || stashScanQueue.Count > 0 ||
+                    sortRunning || affinityTransferRunning || stashScanQueue.Count > 0 && craftPhase != 12 ||
                     !TryGetCraftInventory(out var inv, out var stash) || inv != affinityInventoryRoot || stash != affinityStashRoot || ReadSortCursorItem() != IntPtr.Zero)
                     throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                 if (now < affinityNextAction) return;
+                if (craftPhase == 12)
+                {
+                    if (!InventoryToolbarHasFocus() || now >= craftDeadline)
+                        throw CraftFailure("scan_failed", "The automatic stash scan was interrupted. Keep the stash open and try again.");
+                    if (stashScanQueue.Count > 0) return;
+                    if (!craftScanCompleted) throw new InvalidOperationException(stashScanStatus);
+                    if (!craftFromInventory)
+                    {
+                        craftSource = detectedStashTabs.SingleOrDefault(tab => tab.Page == craftSourcePage);
+                        if (craftSource == null || FindSelectedStashPage(stash) != craftSourcePage)
+                            throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    }
+                    craftPhase = craftResumePhase;
+                    return;
+                }
                 if (craftPhase == 0)
                 {
                     using var game = System.Diagnostics.Process.GetProcessById((int)Core.Process.Pid);
@@ -2205,7 +2245,6 @@ namespace StashUtility
                         if (craftCurrency == null) { craftSkipped++; craftItem = IntPtr.Zero; craftPhase = 1; }
                         else
                         {
-                            CraftRequireCurrency();
                             if (craftFromInventory)
                             {
                                 var target = craftInventoryBefore.Single(item => item.Address == craftItem);
@@ -2219,6 +2258,7 @@ namespace StashUtility
                 }
                 else if (craftPhase == 3)
                 {
+                    if (!CraftRequireCurrency()) return;
                     if (SortItemIdentity(ReadFreshItem(craftItem)) != craftIdentity || !CraftInventoryUnchanged(CraftInventory())) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                     if (!CraftVisibleSlots(craftSource.Page).TryGetValue(craftItem, out craftSlot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                     if (!CraftPosition(craftSlot, craftItem) || !CraftInput(control: true)) return;
@@ -2239,7 +2279,7 @@ namespace StashUtility
                 else if (craftPhase == 5)
                 {
                     CraftInventoryStone();
-                    CraftRequireCurrency();
+                    if (!CraftRequireCurrency()) return;
                     craftLocalCurrency = CraftInventoryCurrency() != null;
                     if (craftLocalCurrency || CraftNavigate(craftMoney)) craftPhase = 6;
                 }
@@ -2330,13 +2370,15 @@ namespace StashUtility
 
         private void DrawWaystoneCraftFeedback()
         {
-            if ((!waystoneCraftRunning && DateTime.UtcNow > craftFeedbackUntil) || !Core.Process.Foreground || Core.IsSettingsMenuOpen) return;
+            if ((!waystoneCraftRunning && DateTime.UtcNow > craftFeedbackUntil) || !InventoryToolbarHasFocus() || Core.IsSettingsMenuOpen) return;
             var viewport = ImGui.GetMainViewport();
             ImGui.SetNextWindowPos(viewport.Pos + new Vector2(viewport.Size.X / 2, 65), ImGuiCond.Always, new Vector2(.5f, 0));
             ImGui.SetNextWindowSize(new Vector2(Math.Min(650, Math.Max(250, viewport.Size.X - 40)), 0));
             if (ExileCenter.Ui.ImGuiTheme.BeginWindow("##waystoneCraftFeedback", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoInputs |
                 ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.AlwaysAutoResize))
-                ImGui.TextWrapped(waystoneCraftRunning ? PluginText.F("stashutility.craft.progress", "Auto-craft: {0} crafted · {1} skipped · {2} currency attempts. Escape stops crafting.", craftDone, craftSkipped, craftSpent) : craftStatus);
+                ImGui.TextWrapped(waystoneCraftRunning ? craftPhase == 12 ?
+                    PluginText.T("stashutility.craft.scanning", "Detecting loaded stash tabs and currency. Keep the stash open and the mouse still. Escape stops crafting.") :
+                    PluginText.F("stashutility.craft.progress", "Auto-craft: {0} crafted · {1} skipped · {2} currency attempts. Escape stops crafting.", craftDone, craftSkipped, craftSpent) : craftStatus);
             ImGui.End();
         }
 
@@ -4597,9 +4639,11 @@ namespace StashUtility
             destination.OverflowTabNames = tabs.Skip(1).Select(tab => tab.Name).ToList();
         }
 
-        private void BeginStashScan()
+        private void BeginStashScan(bool craftOnly = false)
         {
-            if (waystoneCraftRunning || sortRunning || affinityTransferRunning) return;
+            if (waystoneCraftRunning && !craftOnly || sortRunning || affinityTransferRunning) return;
+            stashScanForCraft = craftOnly;
+            if (craftOnly) craftScanCompleted = false;
             stashScanQueue.Clear();
             detectedStashTabs.Clear();
             transferDestinationChecks.Clear();
@@ -4740,6 +4784,14 @@ namespace StashUtility
 
         private void CompleteStashScan()
         {
+            if (stashScanForCraft)
+            {
+                // Crafting only refreshes native routes and loaded currency evidence.
+                // Keep all saved transfer destinations and user settings unchanged.
+                craftScanCompleted = true;
+                stashScanForCraft = false;
+                return;
+            }
             Settings.TransferDestinations ??= new Dictionary<string, StashDestination>();
             // Keep valid routes even when their contents were not loaded during this scan.
             foreach (var pair in Settings.TransferDestinations)
