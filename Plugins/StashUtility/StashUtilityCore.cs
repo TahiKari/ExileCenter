@@ -1857,6 +1857,14 @@ namespace StashUtility
         private InvalidOperationException CraftFailure(string key, string fallback) =>
             new(PluginText.T("stashutility.craft." + key, fallback));
 
+        private static unsafe string CraftClipboardText()
+        {
+            // ImGui's native clipboard getter can return null for an empty clipboard.
+            // The managed GetClipboardText wrapper dereferences it unconditionally.
+            var text = ImGuiNative.igGetClipboardText();
+            return text == null ? string.Empty : Marshal.PtrToStringUTF8((IntPtr)text) ?? string.Empty;
+        }
+
         private static bool IsCraftWaystone(string path) => path?.StartsWith("Metadata/Items/Maps/MapKey", StringComparison.Ordinal) == true ||
             path?.StartsWith("Metadata/Items/Maps/Waystone", StringComparison.Ordinal) == true;
 
@@ -2152,7 +2160,7 @@ namespace StashUtility
                 affinityMousePositioned = true;
                 craftSpent = craftDone = craftSkipped = craftInputPhase = craftPhase = 0;
                 craftRoute = null; craftItem = IntPtr.Zero; craftStatus = "";
-                craftClipboardBefore = ImGui.GetClipboardText(); craftClipboardSequence = GetClipboardSequenceNumber();
+                craftClipboardBefore = CraftClipboardText(); craftClipboardSequence = GetClipboardSequenceNumber();
                 if (!fromInventory && craftSource == null) StartCraftStashScan(0);
                 waystoneCraftRunning = true;
                 affinityNextAction = DateTime.UtcNow.AddMilliseconds(500);
@@ -2333,7 +2341,7 @@ namespace StashUtility
                     if (stone?.IsValid != true || !stone.TryGetComponent<Mods>(out var mods) || !stone.TryGetComponent<Base>(out var itemBase) ||
                         craftPhase == 2 && SortItemIdentity(stone) != craftIdentity) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                     string previousCurrency = craftCurrency;
-                    string copied = ImGui.GetClipboardText();
+                    string copied = CraftClipboardText();
                     craftCurrency = NextWaystoneCurrency(stone.Path, mods.Rarity, mods.ExplicitMods.Count, copied, itemBase.BaseItemName, Settings.WaystoneCraftCorrupt);
                     if (craftPhase == 9 && previousCurrency == CraftVaal && (!CraftTextIsCorrupted(copied) || craftCurrency != null))
                         throw CraftFailure("ack", "The game did not confirm the action. No retry was sent. Check the inventory and press Escape.");

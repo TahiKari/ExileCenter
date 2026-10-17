@@ -910,11 +910,46 @@ internal static class TabletRankingCheck
         }
     }
 
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr CraftClipboardGetter(IntPtr context);
+
+    private static void CheckCraftClipboard()
+    {
+        var platform=ImGuiNET.ImGui.GetPlatformIO();
+        IntPtr previous=platform.Platform_GetClipboardTextFn;
+        IntPtr value=IntPtr.Zero;
+        CraftClipboardGetter getter=_=>value;
+        var read=typeof(StashUtilityCore).GetMethod("CraftClipboardText",BindingFlags.Static|BindingFlags.NonPublic);
+        try
+        {
+            // Replace the native callback only in this isolated ImGui context.
+            // Never read or replace the user's actual Windows clipboard.
+            platform.Platform_GetClipboardTextFn=Marshal.GetFunctionPointerForDelegate(getter);
+            bool reproduced=false;
+            try{ImGuiNET.ImGui.GetClipboardText();}catch(NullReferenceException){reproduced=true;}
+            Check(reproduced,"The reported NullReferenceException is reproduced by the old wrapper when the native clipboard returns null");
+            Check((string)read.Invoke(null,null)=="","An unavailable or empty native clipboard no longer aborts craft startup");
+            value=Marshal.StringToCoTaskMemUTF8("");
+            Check((string)read.Invoke(null,null)=="","An explicit empty clipboard string remains safe");
+            Marshal.FreeCoTaskMem(value);value=Marshal.StringToCoTaskMemUTF8("Classe d’objet : Pierres de téléportation\nRareté : Rare\nCorrompu");
+            Check((string)read.Invoke(null,null)=="Classe d’objet : Pierres de téléportation\nRareté : Rare\nCorrompu","Fresh copied item text retains accents and line breaks");
+            Check((string)read.Invoke(null,null)==ImGuiNET.ImGui.GetClipboardText(),"Nonempty native clipboard text matches the existing wrapper exactly");
+        }
+        finally
+        {
+            platform.Platform_GetClipboardTextFn=previous;
+            if(value!=IntPtr.Zero)Marshal.FreeCoTaskMem(value);
+            GC.KeepAlive(getter);
+        }
+        Console.WriteLine("VALIDATION craft startup: exact null-clipboard crash reproduced; null, empty and UTF-8 clipboard reads are safe; no system clipboard or game input changed.");
+    }
+
     private static void CheckTooltipGeometry(string root, string previewDirectory)
     {
         NativeLibrary.SetDllImportResolver(typeof(ImGuiNET.ImGui).Assembly, (name, assembly, path) =>
             name == "cimgui" ? NativeLibrary.Load(Path.Combine(root, "cimgui.dll")) : IntPtr.Zero);
         var context = ImGuiNET.ImGui.CreateContext();
+        CheckCraftClipboard();
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
         string previousDirectory = Directory.GetCurrentDirectory();
         Directory.SetCurrentDirectory(Path.GetDirectoryName(typeof(TabletRankingCheck).Assembly.Location));
