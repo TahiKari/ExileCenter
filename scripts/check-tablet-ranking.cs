@@ -83,6 +83,45 @@ internal static class TabletRankingCheck
         foreach(string text in new[]{"", "Unidentified", "10% chance to find corrupted items"})Check(!(bool)corruption.Invoke(null,new object[]{Text(ExileCenter.RemoteEnums.Rarity.Rare,text)}),"Item modifiers or unreadable flags cannot acknowledge corruption");
         var defaults=JsonConvert.DeserializeObject<StashUtilitySettings>("{}");
         Check(defaults.WaystoneCraftCorrupt&&defaults.WaystoneCraftCurrencyLimit==200,"Existing settings receive bounded craft defaults without migration");
+        var delta=typeof(StashUtilityCore).GetMethod("CraftLocalCurrencyDelta",flags);
+        bool Delta(int before,int after,bool same=true,bool identity=true)=>(bool)delta.Invoke(null,new object[]{before,after,same,identity});
+        foreach(int before in new[]{1,2,20,100})
+        {
+            Check(Delta(before,before),"A currency stack can remain unchanged while awaiting confirmation");
+            Check(!Delta(before,before,identity:false),"An unrelated change to the selected currency is rejected");
+            if(before>1)Check(Delta(before,before-1,identity:false),"Exactly one local orb may be consumed");
+            foreach(int after in new[]{-1,before+1,before-2})Check(!Delta(before,after),"Invalid local currency delta stops the craft");
+            Check(!Delta(before,before-1,same:false),"Replacing local currency with another item is rejected");
+        }
+        var cellType=typeof(StashUtilityCore).GetNestedType("SortItem",BindingFlags.NonPublic);
+        object Cell(int address,int x,string identity)
+        {
+            var cell=Activator.CreateInstance(cellType,true);
+            foreach(var pair in new Dictionary<string,object>{{"Address",new IntPtr(address)},{"X",x},{"Y",0},{"Width",1},{"Height",1},{"Identity",identity}})
+                cellType.GetField(pair.Key).SetValue(cell,pair.Value);
+            return cell;
+        }
+        var listType=typeof(List<>).MakeGenericType(cellType);
+        IList Cells(params object[] cells){var list=(IList)Activator.CreateInstance(listType);foreach(var cell in cells)list.Add(cell);return list;}
+        var baseline=(IList)typeof(StashUtilityCore).GetField("craftInventoryBefore",flags).GetValue(plugin);
+        var invariant=typeof(StashUtilityCore).GetMethod("CraftInventoryUnchanged",flags);
+        bool Unchanged(IList current,int except=0)=>(bool)invariant.Invoke(plugin,new object[]{current,new IntPtr(except)});
+        var other=Cell(1,0,"other");var coin=Cell(2,1,"one exalt");var target=Cell(3,2,"waystone");
+        baseline.Add(other);baseline.Add(coin);baseline.Add(target);
+        Check(Unchanged(Cells(other,coin,target)),"Inventory targets start in the unchanged baseline");
+        baseline.Remove(target);
+        Check(Unchanged(Cells(other,coin,Cell(4,2,"crafted waystone")),4),"Only the active inventory waystone may change");
+        Check(!Unchanged(Cells(Cell(1,0,"changed other"),coin,target),3),"Unrelated inventory changes stop the craft");
+        Check(!Unchanged(Cells(other,Cell(2,3,"one exalt"),target),3),"Currency movement cannot be mistaken for consumption");
+        typeof(StashUtilityCore).GetField("craftLocalCurrency",flags).SetValue(plugin,true);
+        typeof(StashUtilityCore).GetField("craftCurrencyPending",flags).SetValue(plugin,true);
+        typeof(StashUtilityCore).GetField("craftCurrencyCell",flags).SetValue(plugin,coin);
+        typeof(StashUtilityCore).GetField("craftCurrencyCount",flags).SetValue(plugin,1);
+        Check(Unchanged(Cells(other,target),3),"The last local orb may disappear pending acknowledgement");
+        Check(!Unchanged(Cells(Cell(1,0,"changed other"),target),3),"Last-orb consumption still protects unrelated inventory items");
+        typeof(StashUtilityCore).GetField("craftCurrencyCount",flags).SetValue(plugin,2);
+        Check(!Unchanged(Cells(other,target),3),"A nonempty local currency stack may not disappear");
+        baseline.Clear();
         Console.WriteLine("VALIDATION waystone crafting: rarity, counts, French/English item text, exclusions and renamed currency sources passed; no native input executed.");
     }
 
