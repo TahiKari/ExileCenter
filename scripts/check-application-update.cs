@@ -73,6 +73,7 @@ internal static partial class UpdateChecks
         if (Path.GetFileName(Environment.ProcessPath)!.Equals("ExileCenter.exe", StringComparison.OrdinalIgnoreCase))
         { File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "restart-ok.txt"), "harmless fixture restarted"); return 0; }
         if (args.Contains("--wait-owner")) { await Task.Delay(2500); return 0; }
+        if (args.Length == 2 && args[0] == "--camera-zoom") { CameraZoomSettingsCheck(args[1]); return 0; }
         if (args.Contains("--onedrive")) { await RunOneDriveChecks(); return 0; }
         if (args.Length == 2 && args[0] == "--transition-package") { TransitionPackageCheck(args[1]); return 0; }
         if (args.Contains("--version-only")) { var tag = Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, "ExileCenter.dll")).GetCustomAttributes<AssemblyMetadataAttribute>().Single(a => a.Key == "ExileCenterReleaseTag").Value; Check(tag == "v1.5.11-personnalise.39", "CI binary embeds the published release tag"); return 0; }
@@ -80,6 +81,74 @@ internal static partial class UpdateChecks
         if (args.Contains("--public-package")) await PublicPackageCheck(); else await RunChecks();
         return 0;
     }
+    static void CameraZoomSettingsCheck(string runtime)
+    {
+        runtime = Path.GetFullPath(runtime);
+        System.Runtime.Loader.AssemblyLoadContext.Default.Resolving += (_, name) =>
+        {
+            string dependency = Path.Combine(runtime, name.Name + ".dll");
+            return File.Exists(dependency) ? Assembly.LoadFrom(dependency) : null;
+        };
+        var core = Assembly.LoadFrom(Path.Combine(runtime, "ExileCenter.dll")).GetType("ExileCenter.Core", true)!;
+        var process = core.GetProperty("Process")!.GetValue(null)!;
+        Check((uint)process.GetType().GetProperty("Pid")!.GetValue(process)! == 0, "isolated fixture is not attached to any game process");
+        var type = Assembly.LoadFrom(Path.Combine(runtime, "Plugins", "CameraZoom", "CameraZoom.dll")).GetType("CameraZoom.CameraZoomCore", true)!;
+        string work = Path.Combine(AppContext.BaseDirectory, "camera-settings-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(work, "config"));
+        string path = Path.Combine(work, "config", "settings.txt");
+        File.WriteAllText(path, "{\"MinimumZoom\":0,\"MaximumZoom\":1.3}");
+        object Create()
+        {
+            var plugin = Activator.CreateInstance(type)!;
+            type.GetField("DllDirectory")!.SetValue(plugin, work);
+            type.GetMethod("OnEnable")!.Invoke(plugin, new object[] { false });
+            return plugin;
+        }
+        object Settings(object plugin) => type.GetField("Settings")!.GetValue(plugin)!;
+        bool Enabled(object plugin) => (bool)Settings(plugin).GetType().GetProperty("Enabled")!.GetValue(Settings(plugin))!;
+        void Set(object plugin, bool enabled) => type.GetMethod("SetEnabled", PrivateInstance)!.Invoke(plugin, new object[] { enabled });
+        uint Attempt(object plugin) => (uint)type.GetField("attemptedPid", PrivateInstance)!.GetValue(plugin)!;
+        var original = File.ReadAllText(path);
+        var first = Create();
+        Check(!Enabled(first) && Math.Abs((float)Settings(first).GetType().GetProperty("MaximumZoom")!.GetValue(Settings(first))! - 1.3f) < .001f,
+            "legacy settings preserve zoom distances without guessing a missing activation preference");
+        Check(File.ReadAllText(path) == original, "loading legacy camera settings does not overwrite them");
+        Set(first, true);
+        using (var saved = JsonDocument.Parse(File.ReadAllText(path)))
+            Check(saved.RootElement.GetProperty("Enabled").GetBoolean(), "activating custom zoom persists the preference immediately");
+        type.GetMethod("DrawUI")!.Invoke(first, null);
+        Check(Attempt(first) == 0 && (IntPtr)type.GetField("handle", PrivateInstance)!.GetValue(first)! == IntPtr.Zero,
+            "enabled zoom waits for the game without opening or modifying a process");
+        type.GetMethod("OnDisable")!.Invoke(first, null);
+        var restarted = Create();
+        try
+        {
+            Check(Enabled(restarted), "restart or update restores the enabled preference");
+            var resume = type.GetMethod("ResumeIfRequested", PrivateInstance)!;
+            resume.Invoke(restarted, new object[] { 77u, false });
+            Check(Attempt(restarted) == 0, "automatic activation waits until the character is in game");
+            // Synthetic PID arguments exercise retry scheduling. The fixture's real
+            // Core.Process.Pid stays zero, so Detect exits before OpenProcess.
+            resume.Invoke(restarted, new object[] { 77u, true });
+            Check(Attempt(restarted) == 77 && Enabled(restarted), "failed activation keeps the saved preference and records the attempted process");
+            type.GetField("statusKey", PrivateInstance)!.SetValue(restarted, "fixture-stopped");
+            resume.Invoke(restarted, new object[] { 77u, true });
+            Check((string)type.GetField("statusKey", PrivateInstance)!.GetValue(restarted)! == "fixture-stopped", "failure never retries in a loop on the same process");
+            resume.Invoke(restarted, new object[] { 78u, true });
+            Check(Attempt(restarted) == 78, "a new game process permits a fresh compatibility check");
+            Set(restarted, false);
+            resume.Invoke(restarted, new object[] { 79u, true });
+            Check(!Enabled(restarted) && Attempt(restarted) == 0, "manual disabling cancels pending automatic activation");
+        }
+        finally { type.GetMethod("OnDisable")!.Invoke(restarted, null); }
+        var disabled = Create();
+        Check(!Enabled(disabled), "manual disabling also persists across restarts");
+        Check(Math.Abs((float)Settings(disabled).GetType().GetProperty("MaximumZoom")!.GetValue(Settings(disabled))! - 1.3f) < .001f,
+            "activation changes never replace the user's zoom distance");
+        type.GetMethod("OnDisable")!.Invoke(disabled, null);
+        Console.WriteLine($"{passed} camera persistence checks passed; no game process was attached or modified.");
+    }
+
     static async Task PublicPackageCheck()
     {
         var assembly = Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, "ExileCenter.dll"));

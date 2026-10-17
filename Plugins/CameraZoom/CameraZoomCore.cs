@@ -14,6 +14,7 @@ namespace CameraZoom
 
     public sealed class CameraZoomSettings : IPSettings
     {
+        public bool Enabled { get; set; }
         public float MinimumZoom { get; set; } = 0f;
         public float MaximumZoom { get; set; } = 3f;
 
@@ -32,7 +33,7 @@ namespace CameraZoom
             null, null, null, null, 0xF3, 0x0F, 0x11, 0x8E, 0x28, 0x05, 0x00, 0x00 };
         private readonly object gate = new();
         private IntPtr handle, instruction, constant;
-        private uint attachedPid;
+        private uint attachedPid, attemptedPid;
         private byte[]? original;
         private bool active, exitSubscribed, limitingStopped;
         private string statusKey = "idle", detail = string.Empty;
@@ -48,7 +49,9 @@ namespace CameraZoom
             }
             catch (Exception ex) { Console.WriteLine($"[CameraZoom] Settings: {ex.Message}"); }
             Settings.Normalize();
-            // Never automatically persist or reapply a game modification.
+            attemptedPid = 0;
+            statusKey = Settings.Enabled ? "waiting" : "idle";
+            detail = string.Empty;
             if (!exitSubscribed) { AppDomain.CurrentDomain.ProcessExit += OnExit; exitSubscribed = true; }
         }
 
@@ -80,15 +83,9 @@ namespace CameraZoom
                 ("general", "Settings", () =>
                 {
                     ImGui.TextWrapped(PluginText.T("help", "Enable extended zoom, then use the game's mouse wheel. Disable it to restore the original limit."));
-                    bool requested = active;
+                    bool requested = Settings.Enabled || active;
                     if (ImGui.Checkbox(PluginText.Label("enable", "Enable extended camera zoom", "EnableCameraZoom"), ref requested))
-                    {
-                        lock (gate)
-                        {
-                            if (requested) TryActivate();
-                            else TryRestore();
-                        }
-                    }
+                        SetEnabled(requested);
                     ImGui.TextWrapped(PluginText.T("status." + statusKey, statusKey));
                     if (detail.Length > 0) ImGui.TextWrapped(detail);
                 }),
@@ -135,15 +132,18 @@ namespace CameraZoom
 
         public override void DrawUI()
         {
-            if (handle == IntPtr.Zero) return;
+            if (!Settings.Enabled && handle == IntPtr.Zero) return;
             lock (gate)
             {
-                if (Core.Process.Pid != attachedPid)
+                uint pid = Core.Process.Pid;
+                if (handle != IntPtr.Zero && pid != attachedPid)
                 {
-                    if (TryRestore()) { Close(); statusKey = "idle"; }
-                    return;
+                    if (!TryRestore()) return;
+                    Close(); attemptedPid = 0;
+                    statusKey = Settings.Enabled ? "waiting" : "idle";
                 }
-                if (!active || limitingStopped || Core.States.GameCurrentState != GameStateTypes.InGameState) return;
+                ResumeIfRequested(pid, pid != 0 && Core.States.GameCurrentState == GameStateTypes.InGameState);
+                if (handle == IntPtr.Zero || !active || limitingStopped || Core.States.GameCurrentState != GameStateTypes.InGameState) return;
                 try
                 {
                     if (DateTime.UtcNow >= nextCheck)
@@ -166,6 +166,32 @@ namespace CameraZoom
                     else Fail(ex);
                 }
             }
+        }
+
+        private void SetEnabled(bool requested)
+        {
+            lock (gate)
+            {
+                Settings.Enabled = requested;
+                SaveSettings();
+                attemptedPid = 0;
+                if (requested)
+                {
+                    statusKey = "waiting"; detail = string.Empty;
+                    uint pid = Core.Process.Pid;
+                    ResumeIfRequested(pid, pid != 0 && Core.States.GameCurrentState == GameStateTypes.InGameState);
+                }
+                else if (TryRestore()) { Close(); statusKey = "restored"; detail = string.Empty; }
+            }
+        }
+
+        private void ResumeIfRequested(uint pid, bool inGame)
+        {
+            if (!Settings.Enabled || active || pid == 0 || pid == attemptedPid || !inGame) return;
+            // One attempt per game process. A failed compatibility check or safety
+            // stop requires a new process or an explicit off/on request to retry.
+            attemptedPid = pid;
+            TryActivate();
         }
 
         private void LimitCameraZoom(IntPtr state, IntPtr camera)
