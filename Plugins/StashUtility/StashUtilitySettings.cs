@@ -8,6 +8,8 @@ namespace StashUtility
     {
         // General
         public bool EnableWaystoneManager = true;
+        public bool WaystoneCraftCorrupt = true;
+        public int WaystoneCraftCurrencyLimit = 200;
         public bool EnableTabletManager = true;
         public bool TabletHelpTooltips = true;
         public bool EnableTabletUI = true;

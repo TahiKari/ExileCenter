@@ -19,6 +19,73 @@ internal static class TabletRankingCheck
 {
     private static int checks;
 
+    private static void CheckWaystoneCraft(string root)
+    {
+        const BindingFlags flags=BindingFlags.Static|BindingFlags.Instance|BindingFlags.NonPublic;
+        var plugin=new StashUtilityCore{DllDirectory=Path.Combine(root,"Plugins","StashUtility")};
+        var planner=typeof(StashUtilityCore).GetMethod("NextWaystoneCurrency",flags);
+        string Text(ExileCenter.RemoteEnums.Rarity rarity,string flag="",bool french=false) => french ?
+            "Classe d'objet : Pierres de téléportation\r\nRareté : "+(rarity==ExileCenter.RemoteEnums.Rarity.Magic?"Magique":rarity.ToString())+
+                "\r\nPierre de téléportation (Palier 15)\r\n--------\r\nNiveau de l'objet : 83\r\n"+flag :
+            "Item Class: Waystones\r\nRarity: "+rarity+"\r\nWaystone (Tier 15)\r\n--------\r\nItem Level: 83\r\n"+flag;
+        string Next(ExileCenter.RemoteEnums.Rarity rarity,int count,string flag="",bool corrupt=true,bool french=false,string path="Metadata/Items/Maps/MapKeyTier15") =>
+            (string)planner.Invoke(plugin,new object[]{path,rarity,count,Text(rarity,flag,french),french?"Pierre de téléportation (Palier 15)":"Waystone (Tier 15)",corrupt});
+        foreach(bool french in new[]{false,true})foreach(bool corrupt in new[]{false,true})
+        {
+            Check(Next(ExileCenter.RemoteEnums.Rarity.Normal,0,corrupt:corrupt,french:french)=="CurrencyUpgradeToRare","White waystone uses alchemy "+french+corrupt);
+            foreach(int count in new[]{1,2})Check(Next(ExileCenter.RemoteEnums.Rarity.Magic,count,corrupt:corrupt,french:french)=="CurrencyUpgradeToRare","Magic waystone uses alchemy "+count+french+corrupt);
+            for(int count=0;count<=6;count++)Check(Next(ExileCenter.RemoteEnums.Rarity.Rare,count,corrupt:corrupt,french:french)==
+                (count<6?"CurrencyAddModToRare":corrupt?"CurrencyCorrupt":null),"Rare waystone fills six explicit modifiers before optional Vaal "+count+french+corrupt);
+        }
+        foreach(string flag in new[]{"Corrupted","Corrompu","Corrompue","Unidentified","Non identifié","Non identifiée","Mirrored","Dupliqué","Dupliquée","Sanctified","Sanctifié","Sanctifiée"})
+            foreach(int count in new[]{2,6,8})Check(Next(ExileCenter.RemoteEnums.Rarity.Rare,count,flag)==null,"Read-only waystone never consumes currency: "+flag+count);
+        Check(Next(ExileCenter.RemoteEnums.Rarity.Unique,6)==null,"Unique waystones are excluded");
+        foreach(string path in new[]{"Metadata/Items/TowerAugment/GenericAugment","Metadata/Items/Currency/CurrencyCorrupt","Metadata/Items/Maps/NotAWaystone",null})
+            Check(Next(ExileCenter.RemoteEnums.Rarity.Normal,0,path:path)==null,"Only waystones can be crafted: "+path);
+        void Reject(int count,string text)
+        {
+            bool rejected=false;
+            try{planner.Invoke(plugin,new object[]{"Metadata/Items/Maps/MapKeyTier15",ExileCenter.RemoteEnums.Rarity.Rare,count,text,"Waystone (Tier 15)",true});}
+            catch(TargetInvocationException error)when(error.InnerException is InvalidOperationException){rejected=true;}
+            Check(rejected,"Unverified or inconsistent state sends no currency");
+        }
+        Reject(7,Text(ExileCenter.RemoteEnums.Rarity.Rare));Reject(-1,Text(ExileCenter.RemoteEnums.Rarity.Rare));
+        foreach(string text in new[]{"",null,"unrelated clipboard",Text(ExileCenter.RemoteEnums.Rarity.Magic),Text(ExileCenter.RemoteEnums.Rarity.Rare).Replace("Waystones","Tablets"),
+            Text(ExileCenter.RemoteEnums.Rarity.Rare).Replace("Tier 15","Tier 14")})Reject(4,text);
+        var tabType=typeof(StashUtilityCore).GetNestedType("DetectedStashTab",BindingFlags.NonPublic);
+        object Tab(string name,params string[] ids)
+        {
+            var tab=Activator.CreateInstance(tabType,true);tabType.GetField("Name").SetValue(tab,name);
+            var currencies=(HashSet<string>)tabType.GetField("CurrencyIds").GetValue(tab);foreach(string id in ids)currencies.Add(id);return tab;
+        }
+        var selector=typeof(StashUtilityCore).GetMethod("FindCraftCurrencyTab",flags);
+        object Select(params object[] tabs){var values=Array.CreateInstance(tabType,tabs.Length);for(int i=0;i<tabs.Length;i++)values.SetValue(tabs[i],i);return selector.Invoke(null,new object[]{values});}
+        foreach(string name in new[]{"PTP","Monnaies","02 - Réserve","Tout autre nom"})
+        {
+            var money=Tab(name,"CurrencyUpgradeToRare","CurrencyAddModToRare","CurrencyCorrupt");
+            Check(ReferenceEquals(Select(Tab("Pierres"),money),money),"Currency detection is independent of renamed stash tabs: "+name);
+            Check(Select(money,Tab("Autre source","CurrencyUpgradeToRare","CurrencyAddModToRare","CurrencyCorrupt"))==null,"Ambiguous currency sources are rejected");
+        }
+        Check(Select(Tab("Monnaies","CurrencyUpgradeToRare","CurrencyAddModToRare"))==null,"The tab name cannot replace missing currency evidence");
+        var acknowledge=typeof(StashUtilityCore).GetMethod("CraftCurrencyAcknowledged",flags);
+        bool Ack(string currency,int before,int after,int beforeCurrency=20,int afterCurrency=19,bool changed=true,ExileCenter.RemoteEnums.Rarity rarity=ExileCenter.RemoteEnums.Rarity.Rare) =>
+            (bool)acknowledge.Invoke(null,new object[]{currency,rarity,before,ExileCenter.RemoteEnums.Rarity.Rare,after,beforeCurrency,afterCurrency,changed});
+        Check(Ack("CurrencyUpgradeToRare",0,4,rarity:ExileCenter.RemoteEnums.Rarity.Normal),"Alchemy requires the confirmed four-mod rare result");
+        Check(!Ack("CurrencyUpgradeToRare",1,3,rarity:ExileCenter.RemoteEnums.Rarity.Magic),"An unexpected alchemy result cannot advance the craft");
+        Check(Ack("CurrencyAddModToRare",5,6)&&Ack("CurrencyAddModToRare",4,6),"Exaltation confirms one or multiple added mods within six slots");
+        Check(!Ack("CurrencyAddModToRare",6,7)&&!Ack("CurrencyAddModToRare",5,5)&&!Ack("CurrencyAddModToRare",5,6,changed:false),"A full or unchanged waystone cannot acknowledge exaltation");
+        Check(Ack("CurrencyCorrupt",6,6,changed:false),"Vaal can leave native mods unchanged; fresh corrupted item text is still required");
+        Check(!Ack("CurrencyCorrupt",5,6)&&!Ack("CurrencyCorrupt",7,8)&&!Ack("CurrencyChaos",4,5),"Only the planned currency at the expected stage can acknowledge");
+        foreach(string currency in new[]{"CurrencyUpgradeToRare","CurrencyAddModToRare","CurrencyCorrupt"})
+            foreach(int afterCount in new[]{-1,18,20,21})Check(!Ack(currency,4,6,afterCurrency:afterCount),"No repeat or advance without exactly one confirmed currency consumption: "+currency+afterCount);
+        var corruption=typeof(StashUtilityCore).GetMethod("CraftTextIsCorrupted",flags);
+        foreach(string text in new[]{"Corrupted","Corrompu","Corrompue"})Check((bool)corruption.Invoke(null,new object[]{Text(ExileCenter.RemoteEnums.Rarity.Rare,text)}),"Corruption acknowledgement accepts a standalone localized status: "+text);
+        foreach(string text in new[]{"", "Unidentified", "10% chance to find corrupted items"})Check(!(bool)corruption.Invoke(null,new object[]{Text(ExileCenter.RemoteEnums.Rarity.Rare,text)}),"Item modifiers or unreadable flags cannot acknowledge corruption");
+        var defaults=JsonConvert.DeserializeObject<StashUtilitySettings>("{}");
+        Check(defaults.WaystoneCraftCorrupt&&defaults.WaystoneCraftCurrencyLimit==200,"Existing settings receive bounded craft defaults without migration");
+        Console.WriteLine("VALIDATION waystone crafting: rarity, counts, French/English item text, exclusions and renamed currency sources passed; no native input executed.");
+    }
+
     private static void CheckCompactCompositions()
     {
         int start = checks;
@@ -293,6 +360,7 @@ internal static class TabletRankingCheck
                 if (!File.Exists(file)) file = Path.Combine(root, "Plugins", "StashUtility", name.Name + ".dll");
                 return File.Exists(file) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(file) : null;
             };
+            CheckWaystoneCraft(root);
             CheckCompactCompositions();
             Run();
             CheckTabletPresets();
@@ -1276,6 +1344,20 @@ internal static class TabletRankingCheck
                 Check(SearchFrame("",width).highlights==0,"Clearing search removes the highlight: "+width);
             }
             Check(JsonConvert.SerializeObject(searchProfile)==searchSettings,"Searching never changes ranks, minima or selected rules");
+            var craftOptions=typeof(StashUtilityCore).GetMethod("DrawWaystoneCraftOptions",flags);
+            string craftSettings=JsonConvert.SerializeObject(plugin.Settings);
+            foreach(float width in new[]{460f,1000f})
+            {
+                io.AddMousePosEvent(-100,-100);ImGuiNET.ImGui.NewFrame();
+                ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width,750));
+                ImGuiNET.ImGui.Begin("Auto-craft des pierres de téléportation##craft-options",ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                craftOptions.Invoke(plugin,null);
+                Check(ImGuiNET.ImGui.GetCursorPosY()<740,"Craft settings fit inside the pane: "+width);
+                Check(ImGuiNET.ImGui.GetItemRectMax().X<=16+width,"Craft budget control stays inside compact and wide panes: "+width);
+                ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
+                if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"waystone-craft-"+width+".png"),pixels,atlasWidth,atlasHeight);
+            }
+            Check(JsonConvert.SerializeObject(plugin.Settings)==craftSettings,"Viewing craft settings never starts crafting or changes saved settings");
             var analysisObservation = ModDatabase.TabletMeta.Recognize("Breach Tablet",
                 new[] { ModDatabase.TabletMeta.FindSubRank("Breach Tablet","S1").GameModIds[0] });
             analysisObservation.Mods[0].Roll=10000;

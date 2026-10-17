@@ -82,6 +82,7 @@ namespace StashUtility
             public IntPtr Page;
             public readonly Dictionary<string, string> ItemKinds = new();
             public readonly HashSet<IntPtr> ItemAddresses = new();
+            public readonly HashSet<string> CurrencyIds = new(StringComparer.Ordinal);
             public readonly HashSet<IntPtr> UiAddresses = new();
             public readonly List<(string name, Rarity rarity)> Items = new();
             public string DisplayName => string.Join(" / ", Folders.Append(Name));
@@ -207,6 +208,7 @@ namespace StashUtility
 
         public override void OnDisable()
         {
+            StopWaystoneCraft();
             UnloadTabletIcons();
             StopGridSort();
             stashScanQueue.Clear();
@@ -822,6 +824,7 @@ namespace StashUtility
         {
             if (ImGui.Checkbox(PluginText.T("stashutility.enable_waystone_manager", "Enable Waystone Manager"), ref Settings.EnableWaystoneManager)) SaveSettings();
             if (!Settings.EnableWaystoneManager) return;
+            if (ImGui.CollapsingHeader(PluginText.T("stashutility.craft.title", "Waystone auto-crafting"))) DrawWaystoneCraftOptions();
             ImGui.TextWrapped(PluginText.T("stashutility.filters.waystone_help", "Choose the modifiers you want or want to avoid. Numerical limits are optional."));
             if (ImGui.CollapsingHeader(PluginText.T("stashutility.waystone_criteria_header", "Numerical limits")))
             {
@@ -1828,6 +1831,424 @@ namespace StashUtility
             ImGui.EndDisabled();
         }
 
+        // Uses the existing transfer navigation and input guard exclusively; never runs
+        // alongside sorting, scanning or transferring. No game input is sent by tests.
+        private bool waystoneCraftRunning;
+        private int craftPhase, craftInputPhase, craftSpent, craftDone, craftSkipped, craftX, craftY, craftCurrencyCount;
+        private Rarity craftBeforeRarity;
+        private int craftBeforeModCount;
+        private DetectedStashTab craftSource, craftMoney, craftRoute;
+        private readonly Queue<IntPtr> craftQueue = new();
+        private readonly List<SortItem> craftInventoryBefore = new();
+        private IntPtr craftItem, craftSlot, craftCurrencyItem;
+        private string craftIdentity, craftCurrency, craftStatus = "", craftClipboardBefore;
+        private uint craftClipboardSequence;
+        private DateTime craftDeadline, craftFeedbackUntil;
+        private const string CraftAlchemy = "CurrencyUpgradeToRare", CraftExalted = "CurrencyAddModToRare", CraftVaal = "CurrencyCorrupt";
+        [DllImport("user32.dll")] private static extern uint GetClipboardSequenceNumber();
+
+        private InvalidOperationException CraftFailure(string key, string fallback) =>
+            new(PluginText.T("stashutility.craft." + key, fallback));
+
+        private static bool IsCraftWaystone(string path) => path?.StartsWith("Metadata/Items/Maps/MapKey", StringComparison.Ordinal) == true ||
+            path?.StartsWith("Metadata/Items/Maps/Waystone", StringComparison.Ordinal) == true;
+
+        private static string NormalizeCraftText(string text) => string.Join(" ", NormalizeModSearch(text).Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        private static bool CraftTextIsCorrupted(string text) => (text ?? "").Split('\n').Select(NormalizeCraftText)
+            .Any(line => line is "corrupted" or "corrompu" or "corrompue");
+
+        private static bool CraftCurrencyAcknowledged(string currency, Rarity beforeRarity, int beforeMods, Rarity afterRarity,
+            int afterMods, int beforeCount, int afterCount, bool identityChanged) => beforeCount > 0 && afterCount == beforeCount - 1 &&
+            (currency == CraftAlchemy ? identityChanged && beforeRarity is Rarity.Normal or Rarity.Magic && afterRarity == Rarity.Rare && afterMods == 4 :
+                currency == CraftExalted ? identityChanged && beforeRarity == Rarity.Rare && afterRarity == Rarity.Rare && beforeMods is >= 0 and < 6 &&
+                    afterMods > beforeMods && afterMods <= 6 : currency == CraftVaal && beforeRarity == Rarity.Rare && beforeMods == 6 && afterMods is >= 0 and <= 32);
+
+        private string NextWaystoneCurrency(string path, Rarity rarity, int mods, string text, string baseName, bool corrupt)
+        {
+            if (!IsCraftWaystone(path) || rarity == Rarity.Unique) return null;
+            var lines = (text ?? "").Split('\n').Select(NormalizeCraftText).ToArray();
+            string name = NormalizeCraftText(baseName);
+            string expectedRarity = rarity switch { Rarity.Normal => "normal", Rarity.Magic => "magic", Rarity.Rare => "rare", _ => "" };
+            bool readable = lines.Length >= 5 && name.Length >= 3 && lines.Any(line => line.Contains(name, StringComparison.Ordinal)) &&
+                lines.Any(line => line == "item class waystones" ||
+                    (line.StartsWith("classe d objet", StringComparison.Ordinal) && line.EndsWith("pierres de teleportation", StringComparison.Ordinal))) &&
+                lines.Any(line => line == "rarity " + expectedRarity || line == "rarete " +
+                    (rarity == Rarity.Magic ? "magique" : rarity == Rarity.Normal ? "normal" : expectedRarity) ||
+                    rarity == Rarity.Normal && line == "rarete normale");
+            if (!readable || mods < 0 || mods > 32)
+                throw CraftFailure("unreadable", "The copied waystone could not be verified. No currency was applied.");
+            if (lines.Any(line => new[] { "corrupted", "corrompu", "corrompue", "unidentified", "non identifie", "non identifiee",
+                "mirrored", "duplique", "dupliquee", "sanctified", "sanctifie", "sanctifiee" }.Contains(line))) return null;
+            if (mods > 6 || rarity == Rarity.Normal && mods != 0 || rarity == Rarity.Magic && mods > 2)
+                throw CraftFailure("unreadable", "The copied waystone could not be verified. No currency was applied.");
+            return rarity is Rarity.Normal or Rarity.Magic ? CraftAlchemy : rarity == Rarity.Rare ?
+                mods < 6 ? CraftExalted : corrupt ? CraftVaal : null : null;
+        }
+
+        private Dictionary<IntPtr, IntPtr> CraftVisibleSlots(IntPtr root)
+        {
+            var result = new Dictionary<IntPtr, IntPtr>();
+            var visited = new HashSet<IntPtr>();
+            var pending = new System.Collections.Generic.Stack<(IntPtr address, int depth)>();
+            pending.Push((root, 0));
+            while (pending.Count > 0)
+            {
+                var node = pending.Pop();
+                if (node.address == IntPtr.Zero || !visited.Add(node.address)) continue;
+                // The inventory grid is a layout container whose own visibility bit
+                // can be unset; TryGetAffinityInventory validates its visible panel.
+                if (!(node.address == root && root == affinityInventoryRoot) && !IsElementVisible(node.address)) continue;
+                if (visited.Count > 4096 || node.depth > 18) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                var item = GetHighlightItemAddress(node.address);
+                if (item != IntPtr.Zero && PluginUiElementReflection.TryGetAbsoluteRect(node.address, out _, out var size) &&
+                    size.X is >= 15 and <= 110 && size.Y is >= 15 and <= 110 && !result.ContainsKey(item)) result.Add(item, node.address);
+                var data = ReadMemory<UiElementBaseOffset>(node.address);
+                long count = data.ChildrensPtr.TotalElements(IntPtr.Size);
+                if (count < 0 || count > 4096) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                foreach (var child in ReadStdVector<IntPtr>(data.ChildrensPtr)) pending.Push((child, node.depth + 1));
+            }
+            return result;
+        }
+
+        private List<SortItem> CraftInventory()
+        {
+            var items = ReadSortItems(FindPlayerInventoryAddress(InventoryName.MainInventory1), InventoryColumns, InventoryRows);
+            foreach (var item in items) item.Identity = SortItemIdentity(ReadFreshItem(item.Address));
+            if (items.Any(item => string.IsNullOrEmpty(item.Identity))) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+            return items;
+        }
+
+        private bool CraftInventoryUnchanged(List<SortItem> items, IntPtr except = default) =>
+            items.Count(item => item.Address != except) == craftInventoryBefore.Count && craftInventoryBefore.All(before =>
+                items.Any(item => item.Address == before.Address && item.Identity == before.Identity &&
+                    (item.X, item.Y, item.Width, item.Height) == (before.X, before.Y, before.Width, before.Height)));
+
+        private Item CraftInventoryStone()
+        {
+            var items = CraftInventory();
+            var target = items.SingleOrDefault(item => item.X == craftX && item.Y == craftY && item.Width == 1 && item.Height == 1);
+            if (target == null || !CraftInventoryUnchanged(items, target.Address) ||
+                Settings.ProtectedInventoryCells?.Contains(craftY * InventoryColumns + craftX) == true)
+                throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+            var stone = ReadFreshItem(target.Address);
+            if (stone?.IsValid != true || !IsCraftWaystone(stone.Path)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+            craftItem = target.Address;
+            return stone;
+        }
+
+        private static DetectedStashTab FindCraftCurrencyTab(IEnumerable<DetectedStashTab> tabs)
+        {
+            var matches = tabs.Where(tab => new[] { CraftAlchemy, CraftExalted, CraftVaal }.All(tab.CurrencyIds.Contains)).ToList();
+            return matches.Count == 1 ? matches[0] : null;
+        }
+
+        private bool CraftPersonalStashOpen()
+        {
+            var ui = Core.States.InGameStateObject.GameUi;
+            var title = ui == null ? IntPtr.Zero : ResolvePath(ui.LeftPanel.Address, new int[] { 1 });
+            return title != IntPtr.Zero && TryReadUiString(title, 0x98, out var id) && id == "label_title" &&
+                TryReadUiString(title, 0x360, out var text) && NormalizeCraftText(text) is "reserve" or "stash" or "coffre";
+        }
+
+        private void BeginWaystoneCraft()
+        {
+            if (waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0) return;
+            craftSpent = craftDone = craftSkipped = 0;
+            try
+            {
+                if (!TryGetAffinityInventory(out affinityInventoryRoot, out affinityStashRoot) || !CraftPersonalStashOpen() || Core.IsSettingsMenuOpen ||
+                    ReadSortCursorItem() != IntPtr.Zero) throw CraftFailure("open", "Open the waystone stash tab with an empty cursor before starting.");
+                var page = FindSelectedStashPage(affinityStashRoot);
+                if (!IsActiveTab(page, out var type) || type != "Waystone") throw CraftFailure("open", "Open the waystone stash tab with an empty cursor before starting.");
+                craftSource = detectedStashTabs.SingleOrDefault(tab => tab.Page == page);
+                craftMoney = FindCraftCurrencyTab(detectedStashTabs);
+                if (craftSource == null || craftMoney == null) throw CraftFailure("scan", "Scan the stash after opening the waystone and currency tabs. Exactly one currency source must be identified.");
+                craftInventoryBefore.Clear(); craftInventoryBefore.AddRange(CraftInventory());
+                if (craftInventoryBefore.Sum(item => item.Width * item.Height) >= InventoryColumns * InventoryRows)
+                    throw CraftFailure("space", "Keep at least one free inventory cell for crafting.");
+                craftQueue.Clear();
+                foreach (var address in CraftVisibleSlots(page).Keys)
+                {
+                    var stone = ReadFreshItem(address);
+                    if (stone?.IsValid == true && IsCraftWaystone(stone.Path) && stone.TryGetComponent<Mods>(out var mods) && mods.Rarity != Rarity.Unique)
+                        craftQueue.Enqueue(address);
+                }
+                if (craftQueue.Count == 0) throw CraftFailure("empty", "No waystones are visible on this page.");
+                ReleaseAffinityControl();
+                if (affinityCtrlHeld || affinityShiftHeld || !AffinityGetCursorPos(out affinityCursor)) throw CraftFailure("input", "Release the mouse buttons and modifier keys before starting.");
+                affinityWindow = Core.Process.WindowArea;
+                affinityActionDelay = Math.Clamp(Settings.AffinityTransferDelayMs, 40, 150);
+                affinityMousePositioned = true;
+                craftSpent = craftDone = craftSkipped = craftInputPhase = craftPhase = 0;
+                craftRoute = null; craftItem = IntPtr.Zero; craftStatus = "";
+                craftClipboardBefore = ImGui.GetClipboardText(); craftClipboardSequence = GetClipboardSequenceNumber();
+                waystoneCraftRunning = true;
+                affinityNextAction = DateTime.UtcNow.AddMilliseconds(500);
+            }
+            catch (Exception ex) { StopWaystoneCraft(ex.GetBaseException().Message); }
+        }
+
+        private void StopWaystoneCraft(string reason = null)
+        {
+            bool wasRunning = waystoneCraftRunning;
+            waystoneCraftRunning = false;
+            if (wasRunning)
+            {
+                ReleaseAffinityControl();
+                // Do not overwrite clipboard content copied by another application.
+                if (craftClipboardBefore != null && GetClipboardSequenceNumber() == craftClipboardSequence)
+                    ImGui.SetClipboardText(craftClipboardBefore);
+            }
+            if (!wasRunning && reason == null) return;
+            craftStatus = PluginText.F("stashutility.craft.summary", "Crafted: {0} · skipped: {1} · currency attempts: {2}", craftDone, craftSkipped, craftSpent) +
+                (string.IsNullOrEmpty(reason) ? "" : "\n" + reason);
+            if (wasRunning && reason != null) craftStatus += "\n" + PluginText.T("stashutility.craft.interrupted_help", "Check the inventory and press Escape to cancel any selected currency before continuing manually.");
+            craftFeedbackUntil = DateTime.UtcNow.AddSeconds(20);
+        }
+
+        private bool CraftPosition(IntPtr slot, IntPtr expected)
+        {
+            if (GetHighlightItemAddress(slot) != expected || !IsElementVisible(slot) ||
+                !PluginUiElementReflection.TryGetAbsoluteRect(slot, out var pos, out var size))
+                throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+            var point = new NativePoint { X = affinityWindow.X + (int)(pos.X + size.X / 2), Y = affinityWindow.Y + (int)(pos.Y + size.Y / 2) };
+            if (pos.X < 0 || pos.Y < 0 || pos.X + size.X > affinityWindow.Width || pos.Y + size.Y > affinityWindow.Height)
+                throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+            if (point.X == affinityCursor.X && point.Y == affinityCursor.Y) return true;
+            MoveTransferCursor(point); affinityNextAction = DateTime.UtcNow.AddMilliseconds(affinityActionDelay); return false;
+        }
+
+        private bool CraftInput(bool control = false, bool shift = false, bool copy = false, bool right = false)
+        {
+            if (craftInputPhase == 0)
+            {
+                if (new[] { 0x10, 0x11, 0x12, 0x5B, 0x5C, 0x01, 0x02 }.Any(key => (AffinityGetAsyncKeyState(key) & 0x8000) != 0))
+                    throw CraftFailure("input", "Release the mouse buttons and modifier keys before starting.");
+                if (control)
+                {
+                    if (AffinitySendInput(1, new[] { AffinityKeyInput(0) }, Marshal.SizeOf<AffinityInput>()) != 1) throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
+                    affinityCtrlHeld = true;
+                    if (shift)
+                    {
+                        if (AffinitySendInput(1, new[] { AffinityKeyInput(0, 0x10) }, Marshal.SizeOf<AffinityInput>()) != 1) throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
+                        affinityShiftHeld = true;
+                    }
+                    craftInputPhase = 1; affinityNextAction = DateTime.UtcNow.AddMilliseconds(affinityActionDelay); return false;
+                }
+            }
+            if (craftInputPhase < 2)
+            {
+                var inputs = copy ? new[] { AffinityKeyInput(0, 0x43), AffinityKeyInput(2, 0x43) } :
+                    new[] { AffinityMouseInput(right ? 0x0008u : 0x0002u), AffinityMouseInput(right ? 0x0010u : 0x0004u) };
+                if (AffinitySendInput(2, inputs, Marshal.SizeOf<AffinityInput>()) != 2)
+                {
+                    AffinitySendInput(1, new[] { copy ? AffinityKeyInput(2, 0x43) : AffinityMouseInput(right ? 0x0010u : 0x0004u) }, Marshal.SizeOf<AffinityInput>());
+                    throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
+                }
+                craftInputPhase = 2; affinityNextAction = DateTime.UtcNow.AddMilliseconds(affinityActionDelay); return true;
+            }
+            throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
+        }
+
+        private bool CraftNavigate(DetectedStashTab target)
+        {
+            if (craftRoute != target)
+            {
+                craftRoute = target;
+                affinityEquipmentDestination = new StashDestination { TabName = target.Name, FolderPath = target.Folders.ToList() };
+                affinityEquipmentRouteResolved = true; affinityEquipmentTab = 0;
+                affinityNavigationElement = IntPtr.Zero; affinityNavigationDeadline = DateTime.UtcNow.AddSeconds(20);
+            }
+            if (!EnsureEquipmentDestination()) return false;
+            if (affinityOpenedPage != target.Page || FindSelectedStashPage(affinityStashRoot) != target.Page)
+                throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+            return true;
+        }
+
+        private void UpdateWaystoneCraft()
+        {
+            if (!waystoneCraftRunning) return;
+            try
+            {
+                var now = DateTime.UtcNow;
+                if ((AffinityGetAsyncKeyState(0x1B) & 0x8000) != 0) { StopWaystoneCraft(); return; }
+                if (!AffinityGetCursorPos(out var mouse) || Math.Abs(mouse.X - affinityCursor.X) > 2 || Math.Abs(mouse.Y - affinityCursor.Y) > 2)
+                    throw CraftFailure("mouse", "The mouse moved. Crafting stopped.");
+                if (new[] { 0x12, 0x5B, 0x5C, 0x01, 0x02 }.Any(key => (AffinityGetAsyncKeyState(key) & 0x8000) != 0) ||
+                    !affinityCtrlHeld && (AffinityGetAsyncKeyState(0x11) & 0x8000) != 0 ||
+                    !affinityShiftHeld && (AffinityGetAsyncKeyState(0x10) & 0x8000) != 0)
+                    throw CraftFailure("input", "Release the mouse buttons and modifier keys before starting.");
+                if (Core.Process.WindowArea != affinityWindow || Core.IsSettingsMenuOpen || Core.States.GameCurrentState != GameStateTypes.InGameState ||
+                    sortRunning || affinityTransferRunning || stashScanQueue.Count > 0 ||
+                    !TryGetAffinityInventory(out var inv, out var stash) || !CraftPersonalStashOpen() || inv != affinityInventoryRoot || stash != affinityStashRoot || ReadSortCursorItem() != IntPtr.Zero)
+                    throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                if (now < affinityNextAction) return;
+                if (craftPhase == 0)
+                {
+                    using var game = System.Diagnostics.Process.GetProcessById((int)Core.Process.Pid);
+                    AffinitySetForegroundWindow(game.MainWindowHandle);
+                    craftPhase = 1; affinityNextAction = now.AddMilliseconds(300); return;
+                }
+                if (!AffinityGameIsForeground()) throw CraftFailure("focus", "The game lost focus. Crafting stopped.");
+                if (craftInputPhase == 2)
+                {
+                    ReleaseAffinityControl();
+                    if (affinityCtrlHeld || affinityShiftHeld) throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
+                    craftInputPhase = 0;
+                    return;
+                }
+                if (craftPhase is 1 or 2 or 3 or 4 or 11)
+                {
+                    if (FindSelectedStashPage(stash) != craftSource.Page) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                }
+                else if (craftPhase is 6 or 7 or 8 or 9)
+                    if (FindSelectedStashPage(stash) != craftMoney.Page) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                if (craftPhase == 1)
+                {
+                    if (craftSpent >= Math.Clamp(Settings.WaystoneCraftCurrencyLimit, 1, 2000)) throw CraftFailure("budget", "Currency limit reached. Check the inventory before restarting.");
+                    if (!CraftInventoryUnchanged(CraftInventory())) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (craftItem == IntPtr.Zero)
+                    {
+                        if (craftQueue.Count == 0) { StopWaystoneCraft(); return; }
+                        craftItem = craftQueue.Dequeue();
+                    }
+                    if (!CraftVisibleSlots(craftSource.Page).TryGetValue(craftItem, out craftSlot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (!CraftPosition(craftSlot, craftItem)) return;
+                    if (craftInputPhase == 0)
+                    {
+                        craftIdentity = SortItemIdentity(ReadFreshItem(craftItem));
+                        craftClipboardSequence = GetClipboardSequenceNumber();
+                    }
+                    if (!CraftInput(control: true, copy: true)) return;
+                    craftPhase = 2; craftDeadline = now.AddSeconds(3);
+                }
+                else if (craftPhase is 2 or 9)
+                {
+                    if (GetClipboardSequenceNumber() == craftClipboardSequence)
+                    {
+                        if (now >= craftDeadline) throw CraftFailure("clipboard", "The game did not provide fresh item text. Crafting stopped.");
+                        return;
+                    }
+                    craftClipboardSequence = GetClipboardSequenceNumber();
+                    var stone = craftPhase == 9 ? CraftInventoryStone() : ReadFreshItem(craftItem);
+                    if (stone?.IsValid != true || !stone.TryGetComponent<Mods>(out var mods) || !stone.TryGetComponent<Base>(out var itemBase) ||
+                        craftPhase == 2 && SortItemIdentity(stone) != craftIdentity) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    string previousCurrency = craftCurrency;
+                    string copied = ImGui.GetClipboardText();
+                    craftCurrency = NextWaystoneCurrency(stone.Path, mods.Rarity, mods.ExplicitMods.Count, copied, itemBase.BaseItemName, Settings.WaystoneCraftCorrupt);
+                    if (craftPhase == 9 && previousCurrency == CraftVaal && (!CraftTextIsCorrupted(copied) || craftCurrency != null))
+                        throw CraftFailure("ack", "The game did not confirm the action. No retry was sent. Check the inventory and press Escape.");
+                    craftIdentity = SortItemIdentity(stone);
+                    if (craftPhase == 2)
+                    {
+                        if (craftCurrency == null) { craftSkipped++; craftItem = IntPtr.Zero; craftPhase = 1; }
+                        else craftPhase = 3;
+                    }
+                    else craftPhase = craftCurrency == null ? 10 : 6;
+                }
+                else if (craftPhase == 3)
+                {
+                    if (SortItemIdentity(ReadFreshItem(craftItem)) != craftIdentity || !CraftInventoryUnchanged(CraftInventory())) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (!CraftVisibleSlots(craftSource.Page).TryGetValue(craftItem, out craftSlot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (!CraftPosition(craftSlot, craftItem) || !CraftInput(control: true)) return;
+                    craftPhase = 4; craftDeadline = now.AddSeconds(3);
+                }
+                else if (craftPhase == 4)
+                {
+                    var items = CraftInventory();
+                    var added = items.Where(item => !craftInventoryBefore.Any(before => before.Address == item.Address)).ToList();
+                    if (added.Count == 1 && added[0].Identity == craftIdentity && CraftInventoryUnchanged(items, added[0].Address) &&
+                        !CraftVisibleSlots(craftSource.Page).ContainsKey(craftItem))
+                    {
+                        craftItem = added[0].Address; craftX = added[0].X; craftY = added[0].Y;
+                        CraftInventoryStone(); craftPhase = 5; craftRoute = null;
+                    }
+                    else if (now >= craftDeadline) throw CraftFailure("ack", "The game did not confirm the action. No retry was sent. Check the inventory and press Escape.");
+                }
+                else if (craftPhase == 5)
+                {
+                    CraftInventoryStone();
+                    if (CraftNavigate(craftMoney)) craftPhase = 6;
+                }
+                else if (craftPhase == 6)
+                {
+                    if (SortItemIdentity(CraftInventoryStone()) != craftIdentity) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (craftSpent >= Math.Clamp(Settings.WaystoneCraftCurrencyLimit, 1, 2000)) throw CraftFailure("budget", "Currency limit reached. The current waystone stays in the inventory.");
+                    var currencies = CraftVisibleSlots(craftMoney.Page).Where(pair =>
+                        ReadFreshItem(pair.Key)?.Path == "Metadata/Items/Currency/" + craftCurrency).ToList();
+                    var currencyItem = currencies.Count == 1 ? ReadFreshItem(currencies[0].Key) : null;
+                    if (currencyItem == null || !currencyItem.TryGetComponent<Stack>(out var stack) || stack.Count < 1)
+                        throw CraftFailure("currency", "The required currency is missing or ambiguous. The current waystone stays in the inventory.");
+                    craftCurrencyItem = currencies[0].Key;
+                    craftCurrencyCount = stack.Count;
+                    if (!CraftPosition(currencies[0].Value, craftCurrencyItem) || !CraftInput(right: true)) return;
+                    craftPhase = 7;
+                }
+                else if (craftPhase == 7)
+                {
+                    var stone = CraftInventoryStone();
+                    if (!CraftVisibleSlots(inv).TryGetValue(stone.Address, out var slot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (!CraftPosition(slot, stone.Address)) return;
+                    if (SortItemIdentity(stone) != craftIdentity) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (!stone.TryGetComponent<Mods>(out var beforeMods)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    craftBeforeRarity = beforeMods.Rarity; craftBeforeModCount = beforeMods.ExplicitMods.Count;
+                    if (!CraftInput()) return;
+                    craftSpent++; craftPhase = 8; craftDeadline = now.AddSeconds(3);
+                }
+                else if (craftPhase == 8)
+                {
+                    var stone = CraftInventoryStone();
+                    var currency = CraftVisibleSlots(craftMoney.Page).Keys.Select(ReadFreshItem).Where(item => item?.Path == "Metadata/Items/Currency/" + craftCurrency).ToList();
+                    int count = currency.Count == 0 ? 0 : currency.Count == 1 && currency[0].TryGetComponent<Stack>(out var stack) ? stack.Count : -1;
+                    if (stone.TryGetComponent<Mods>(out var afterMods) && CraftCurrencyAcknowledged(craftCurrency, craftBeforeRarity,
+                        craftBeforeModCount, afterMods.Rarity, afterMods.ExplicitMods.Count, craftCurrencyCount, count, SortItemIdentity(stone) != craftIdentity))
+                    {
+                        if (!CraftVisibleSlots(inv).TryGetValue(stone.Address, out var slot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                        if (!CraftPosition(slot, stone.Address)) return;
+                        if (craftInputPhase == 0) craftClipboardSequence = GetClipboardSequenceNumber();
+                        if (!CraftInput(control: true, copy: true)) return;
+                        craftPhase = 9; craftDeadline = now.AddSeconds(3);
+                    }
+                    else if (now >= craftDeadline) throw CraftFailure("ack", "The game did not confirm the action. No retry was sent. Check the inventory and press Escape.");
+                }
+                else if (craftPhase == 10)
+                {
+                    var stone = CraftInventoryStone();
+                    if (!CraftNavigate(craftSource)) return;
+                    if (!CraftVisibleSlots(inv).TryGetValue(stone.Address, out var slot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (!CraftPosition(slot, stone.Address) || !CraftInput(control: true, shift: true)) return;
+                    craftPhase = 11; craftDeadline = now.AddSeconds(3);
+                }
+                else if (craftPhase == 11)
+                {
+                    if (CraftInventoryUnchanged(CraftInventory())) { craftDone++; craftItem = IntPtr.Zero; craftPhase = 1; craftRoute = null; }
+                    else if (now >= craftDeadline) throw CraftFailure("ack", "The game did not confirm the action. No retry was sent. Check the inventory and press Escape.");
+                }
+            }
+            catch (Exception ex) { StopWaystoneCraft(ex.GetBaseException().Message); }
+        }
+
+        private void DrawWaystoneCraftOptions()
+        {
+            ImGui.TextWrapped(PluginText.T("stashutility.craft.help", "Scan the stash, then open the special waystone tab and the tier/page to process. Auto-craft processes only visible waystones, one at a time, through one free inventory cell. Alchemy replaces magic modifiers; exalted orbs fill six modifiers; optional Vaal corruption follows. Unique, unidentified, mirrored and corrupted items are skipped. The currency tab is identified by its contents, independently of its name. Escape, mouse movement or loss of focus stops crafting. On interruption, the current stone can stay in the inventory; press Escape to cancel any selected currency."));
+            if (ImGui.Checkbox(PluginText.T("stashutility.craft.corrupt", "Corrupt after six modifiers"), ref Settings.WaystoneCraftCorrupt)) SaveSettings();
+            ImGui.TextWrapped(PluginText.T("stashutility.craft.limit", "Maximum currency attempts per run"));
+            ImGui.SetNextItemWidth(-1);
+            if (ImGui.SliderInt("##waystoneCraftLimit", ref Settings.WaystoneCraftCurrencyLimit, 1, 2000)) SaveSettings();
+        }
+
+        private void DrawWaystoneCraftFeedback()
+        {
+            if ((!waystoneCraftRunning && DateTime.UtcNow > craftFeedbackUntil) || !Core.Process.Foreground || Core.IsSettingsMenuOpen) return;
+            var viewport = ImGui.GetMainViewport();
+            ImGui.SetNextWindowPos(viewport.Pos + new Vector2(viewport.Size.X / 2, 65), ImGuiCond.Always, new Vector2(.5f, 0));
+            ImGui.SetNextWindowSize(new Vector2(Math.Min(650, Math.Max(250, viewport.Size.X - 40)), 0));
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow("##waystoneCraftFeedback", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoInputs |
+                ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.AlwaysAutoResize))
+                ImGui.TextWrapped(waystoneCraftRunning ? PluginText.F("stashutility.craft.progress", "Auto-craft: {0} crafted · {1} skipped · {2} currency attempts. Escape stops crafting.", craftDone, craftSkipped, craftSpent) : craftStatus);
+            ImGui.End();
+        }
+
         private IntPtr FindPlayerInventoryAddress(InventoryName name)
         {
             var inventories = ReadPlayerInventoryList();
@@ -2093,7 +2514,7 @@ namespace StashUtility
 
         private void BeginGridSort(bool stash, bool gemLevelsOnly = false)
         {
-            if (sortRunning || affinityTransferRunning || stashScanQueue.Count > 0) return;
+            if (waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0) return;
             sortFromGemTransfer = gemLevelsOnly;
             try
             {
@@ -2558,7 +2979,7 @@ namespace StashUtility
 
         private void BeginAffinityTransfer()
         {
-            if (sortRunning || affinityTransferRunning) return;
+            if (waystoneCraftRunning || sortRunning || affinityTransferRunning) return;
             affinityCompletionSummary = string.Empty;
             affinityFeedbackUntil = DateTime.UtcNow.AddSeconds(10);
             try
@@ -3031,7 +3452,7 @@ namespace StashUtility
                 {
                     // Folder contents can lag behind selection. Keep the pending tablet
                     // without sending input; the existing navigation deadline bounds retries.
-                    if (affinityTabletCategory != null)
+                    if (affinityTabletCategory != null || waystoneCraftRunning)
                     {
                         affinityNextAction = DateTime.UtcNow.AddMilliseconds(100);
                         return false;
@@ -3056,7 +3477,7 @@ namespace StashUtility
                 string name = depth < folders.Count ? folders[depth] :
                     (affinityEquipmentTab == 0 ? destination.TabName : destination.OverflowTabNames[affinityEquipmentTab - 1]);
                 var matches = entries.Where(entry => string.Equals(entry.name, name, StringComparison.Ordinal)).ToList();
-                if (affinityTabletCategory != null && !string.IsNullOrWhiteSpace(name) && matches.Count == 0)
+                if ((affinityTabletCategory != null || waystoneCraftRunning) && !string.IsNullOrWhiteSpace(name) && matches.Count == 0)
                 {
                     affinityNextAction = DateTime.UtcNow.AddMilliseconds(100);
                     return false;
@@ -3065,7 +3486,7 @@ namespace StashUtility
                     throw new InvalidOperationException(PluginText.F("stashutility.transfer.destination_not_found", "Destination name not found or ambiguous: {0}", name));
                 var page = matches[0].page;
                 int visiblePages = entries.Count(entry => IsTabVisible(entry.page));
-                if (affinityTabletCategory != null && visiblePages != 1)
+                if ((affinityTabletCategory != null || waystoneCraftRunning) && visiblePages != 1)
                 {
                     affinityNextAction = DateTime.UtcNow.AddMilliseconds(100);
                     return false;
@@ -3080,7 +3501,7 @@ namespace StashUtility
                     if (!dropdownOpen || selected)
                     {
                         var toggle = ResolvePath(header, new int[] { 2 });
-                        if (affinityTabletCategory != null && !selected && !dropdownOpen && !IsElementVisible(toggle))
+                        if ((affinityTabletCategory != null || waystoneCraftRunning) && !selected && !dropdownOpen && !IsElementVisible(toggle))
                         {
                             // Small folders hide the dropdown toggle when their tabs fit
                             // on screen. Their visible buttons can be reordered: match names.
@@ -3724,7 +4145,7 @@ namespace StashUtility
             }
             try
             {
-                canTransfer = !affinityTransferRunning && !sortRunning && stashScanQueue.Count == 0 && TryGetAffinityInventory(out _, out _);
+                canTransfer = !waystoneCraftRunning && !affinityTransferRunning && !sortRunning && stashScanQueue.Count == 0 && TryGetAffinityInventory(out _, out _);
             }
             catch (Exception)
             {
@@ -3755,7 +4176,7 @@ namespace StashUtility
             var flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove |
                 ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing;
             if (Settings.InventoryTransferButtonLocked) flags |= ImGuiWindowFlags.NoBackground;
-            if (affinityTransferRunning || sortRunning) flags |= ImGuiWindowFlags.NoInputs;
+            if (waystoneCraftRunning || affinityTransferRunning || sortRunning) flags |= ImGuiWindowFlags.NoInputs;
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4));
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(4));
             if (ExileCenter.Ui.ImGuiTheme.BeginWindow("##stashInventoryTransfer", flags))
@@ -3905,7 +4326,7 @@ namespace StashUtility
 
         private void DrawStashSortButton()
         {
-            if ((!Settings.ShowStashSortButton && !Settings.EnableTabletManager) || (!Core.IsSettingsMenuOpen && !InventoryToolbarHasFocus()) ||
+            if ((!Settings.ShowStashSortButton && !Settings.EnableTabletManager && !Settings.EnableWaystoneManager) || (!Core.IsSettingsMenuOpen && !InventoryToolbarHasFocus()) ||
                 Core.States.GameCurrentState != GameStateTypes.InGameState || Core.GHSettings.EnableControllerMode ||
                 (handleObj == null && !InitReflection())) return;
             bool canSort = false;
@@ -3925,7 +4346,7 @@ namespace StashUtility
                 var inventory = FindPlayerInventoryAddress(InventoryName.StashInventoryId);
                 var dimensions = inventory == IntPtr.Zero ? (0, 0) : (ReadMemory<int>(inventory + 0x150), ReadMemory<int>(inventory + 0x154));
                 var surface = FindSortSurface(true);
-                canSort = !sortRunning && !affinityTransferRunning && stashScanQueue.Count == 0 &&
+                canSort = !waystoneCraftRunning && !sortRunning && !affinityTransferRunning && stashScanQueue.Count == 0 &&
                     (dimensions == (12, 12) || dimensions == (24, 24)) && surface != IntPtr.Zero;
                 canSort = canSort && IsActiveTab(surface, out var tabType) && tabType.StartsWith("Normal/Quad", StringComparison.Ordinal);
                 if (surface != IntPtr.Zero)
@@ -3937,7 +4358,8 @@ namespace StashUtility
             ref var toolbarOffset = ref (merchant ? ref Settings.MerchantToolbarOffset : ref Settings.StashToolbarOffset);
             ref var toolbarLocked = ref (merchant ? ref Settings.MerchantToolbarLocked : ref Settings.StashToolbarLocked);
             var viewport = ImGui.GetMainViewport();
-            var windowSize = new Vector2(4 + ((Settings.ShowStashSortButton ? 1 : 0) + (Settings.EnableTabletManager ? 1 : 0) + (toolbarLocked ? 1 : 2)) * 32, 36);
+            bool showCraft = Settings.EnableWaystoneManager && !merchant;
+            var windowSize = new Vector2(4 + ((Settings.ShowStashSortButton ? 1 : 0) + (Settings.EnableTabletManager ? 1 : 0) + (toolbarLocked ? 1 : 2)) * 32 + (showCraft ? 132 : 0), 36);
             bool hasGridBounds = size.X > 100 && size.Y > 100;
             var anchor = viewport.Pos + (hasGridBounds ? position + new Vector2(size.X - windowSize.X, size.Y + 4) : new Vector2(16, viewport.Size.Y * 0.83f));
             var offset = toolbarOffset;
@@ -3947,7 +4369,7 @@ namespace StashUtility
             ImGui.SetNextWindowSize(windowSize, ImGuiCond.Always);
             var flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing;
             if (toolbarLocked) flags |= ImGuiWindowFlags.NoBackground;
-            if (sortRunning || affinityTransferRunning) flags |= ImGuiWindowFlags.NoInputs;
+            if (waystoneCraftRunning || sortRunning || affinityTransferRunning) flags |= ImGuiWindowFlags.NoInputs;
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4));
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(4));
             if (ExileCenter.Ui.ImGuiTheme.BeginWindow(merchant ? "##sortMerchantStash" : "##sortCurrentStash", flags))
@@ -3973,6 +4395,14 @@ namespace StashUtility
                 }
                 ImGui.SameLine();
                 bool wasLocked = toolbarLocked;
+                if (showCraft)
+                {
+                    ImGui.BeginDisabled(waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0);
+                    if (ImGui.Button(PluginText.T("stashutility.craft.button", "Auto-craft TP"), new Vector2(128, 28))) BeginWaystoneCraft();
+                    ImGui.EndDisabled();
+                    ImGuiHelper.ToolTip(PluginText.T("stashutility.craft.button_help", "Craft visible waystones in the special stash tab using the currency tab detected by the stash scan. Leave one inventory cell free. Escape or mouse movement stops crafting. Settings: Filters > Waystones > Auto-crafting."));
+                    ImGui.SameLine();
+                }
                 DrawToolbarPositionControls(anchor, location, windowSize, ref toolbarOffset, ref toolbarLocked);
                 if (!hasGridBounds && wasLocked != toolbarLocked)
                 {
@@ -4071,7 +4501,7 @@ namespace StashUtility
 
         private void BeginStashScan()
         {
-            if (sortRunning || affinityTransferRunning) return;
+            if (waystoneCraftRunning || sortRunning || affinityTransferRunning) return;
             stashScanQueue.Clear();
             detectedStashTabs.Clear();
             transferDestinationChecks.Clear();
@@ -4183,6 +4613,8 @@ namespace StashUtility
                                     else if (rarity == Rarity.Unique && GetUniqueTabletCategory(item.Path) is string tabletCategory)
                                         kind = "UniqueTablets/" + tabletCategory;
                                     node.tab.ItemAddresses.Add(itemAddress);
+                                    if (kind == "Currency" && !string.IsNullOrEmpty(itemBase.InternalName))
+                                        node.tab.CurrencyIds.Add(itemBase.InternalName);
                                     var itemName = string.IsNullOrEmpty(itemBase.BaseItemName) ? itemBase.InternalName : itemBase.BaseItemName;
                                     node.tab.ItemKinds.TryAdd(kind, itemName);
                                     node.tab.Items.Add((itemName, rarity));
@@ -4695,13 +5127,15 @@ namespace StashUtility
             tabletTooltipVisible = false;
             UpdateGridSort();
             UpdateAffinityTransfer();
+            UpdateWaystoneCraft();
             DrawInventoryTransferButton();
             DrawStashSortButton();
+            DrawWaystoneCraftFeedback();
             DrawAffinityTransferFeedback();
             UpdateStashScan();
             // Transfers validate live item positions directly; decorative scans need not
             // compete with those checks. Resume highlighting as soon as the transfer ends.
-            if (affinityTransferRunning) return;
+            if (affinityTransferRunning || waystoneCraftRunning) return;
             if (!Settings.EnableWaystoneManager && !Settings.EnableTabletManager && !Settings.EnableJewelManager && !Settings.EnableDebugProbe && !Settings.EnableMerchantPurchasePanel) return;
 
             if (!Settings.ShowOverlayInBackground && !Core.Process.Foreground)
