@@ -18,6 +18,151 @@ using Newtonsoft.Json;
 internal static class TabletRankingCheck
 {
     private static int checks;
+
+    private static void CheckDynamicQuality()
+    {
+        var catalog = ModDatabase.TabletMeta;
+        Check(catalog.SourceFile == "POE2_055_Tablettes_Pour_Codex_COMPLET.json", "Primary source is the supplied JSON");
+        Check(catalog.Modifiers.Count == 254 && catalog.Types.Count == 8, "254 entries and eight types");
+        Check("SABCDEF".Select(g => catalog.Modifiers.Count(m => m.Rank == g.ToString())).SequenceEqual(new[] {15,27,44,47,67,46,8}), "Exact S-F distribution, including all 46 E and eight F");
+        Check(catalog.Modifiers.All(m => m.GameModIds.Count > 0 && m.Groups.Count > 0), "All native mappings and exclusion groups resolved");
+        var engine = new TabletRankingEngine(catalog);
+        var runtimeMatch = typeof(StashUtilityCore).GetMethod("MatchesTabletSelection", BindingFlags.Static | BindingFlags.NonPublic);
+        foreach (string rank in catalog.RankOrder)
+        {
+            int before = checks;
+            foreach (string type in catalog.Types.Values)
+            {
+                var available = catalog.ForType(type).ToArray();
+                var four = available.Where(m => m.Affix == "prefix").Take(2)
+                    .Concat(available.Where(m => m.Affix == "suffix").Take(2)).ToArray();
+                for (int count = 0; count <= 4; count++)
+                {
+                    var priorities = four.Take(count).ToDictionary(m => m.Id, _ => new TabletPriority(rank));
+                    for (int size = 0; size <= 4; size++)
+                    {
+                        var observation = new TabletObservation { TabletType = type, Mods = four.Take(size)
+                            .Select(m => new TabletDetectedMod { Modifier = m, RawId = m.GameModIds[0], Roll = 10000 }).ToList() };
+                        var result = engine.Evaluate(observation, priorities);
+                        int expected = Math.Min(count, size);
+                        Check(result.PriorityCount == expected && result.BestCount == expected, $"{type} {rank} selected={count} affixes={size}: custom counts");
+                        Check(result.Rank == (expected == 0 ? "" : rank), $"{type} {rank}: no reference promotion");
+                        Check(expected == 0 ? result.Label == "N/C" : result.Label.Contains('p') || result.Uncertain,
+                            $"{type} {rank}: no invented ordinal");
+                        observation.Mods.Reverse();
+                        Check(engine.Evaluate(observation, priorities) == result, "Permutation invariant");
+                        var roundtrip = JsonConvert.DeserializeObject<Dictionary<string, TabletPriority>>(JsonConvert.SerializeObject(priorities));
+                        Check(engine.Evaluate(observation, roundtrip) == result, "Priority configuration serialization is stable");
+                        var runtimeProfile = new TabletProfile { ModRanks = four.Take(count).ToDictionary(m => m.GameModIds[0], _ => rank) };
+                        var runtimeMods = new Mods(IntPtr.Zero);
+                        foreach (var modifier in four.Take(size)) runtimeMods.ExplicitMods.Add((modifier.GameModIds[0], (10000f,10000f)));
+                        foreach (bool all in new[] {false,true})
+                        {
+                            runtimeProfile.RequireAllRankedMods = all;
+                            bool actual = (bool)runtimeMatch.Invoke(null,new object[] { runtimeMods,runtimeProfile,type });
+                            Check(actual == (expected > 0 && (!all || expected == count)), $"{type} {rank} selected={count} affixes={size}: actual {(all ? "ET" : "OU")} filter");
+                        }
+                    }
+                }
+                var one = four[0];
+                var sample = new TabletObservation { TabletType = type, Mods = new() { new() { Modifier = one, RawId = one.GameModIds[0], Roll = 5 } } };
+                var limits = new Dictionary<string, TabletPriority> { [one.Id] = new(rank, 6) };
+                Check(engine.Evaluate(sample, limits).PriorityCount == 0, "Below minimum is secondary, never a priority");
+                limits[one.Id] = new(rank, 5);
+                Check(engine.Evaluate(sample, limits).Rank == rank, "Threshold edit immediately recalculates observed item");
+                limits[one.Id] = new("F", 5);
+                Check(engine.Evaluate(sample, limits).Rank == "F", "Rank edit immediately recalculates observed item");
+                limits.Clear();
+                Check(engine.Evaluate(sample, limits).Label == "N/C", "Removing selection immediately clears priority grade");
+                sample.Mods[0].Roll = null; limits[one.Id] = new(rank, 5);
+                Check(engine.Evaluate(sample, limits).Uncertain && engine.Evaluate(sample, limits).PriorityCount == 0, "Unknown roll never passes a threshold");
+                sample.Mods.Add(new() { RawId = "unknown" });
+                Check(engine.Evaluate(sample, limits).Uncertain, "Unknown modifier is explicit uncertainty");
+                foreach (string affix in new[] {"prefix","suffix"})
+                    for(int size=0;size<=4;size++)
+                    {
+                        var subset=available.Where(m=>m.Affix==affix).Take(size).ToArray();
+                        var groups=subset.SelectMany(m=>m.Groups).ToArray();
+                        bool expected=subset.Length<=2 && groups.Distinct().Count()==groups.Length;
+                        Check(TabletRankingEngine.Compatible(subset,2,2)==expected,$"{type} {rank}: supplied affix-budget model {affix} count={size}");
+                    }
+            }
+            Console.WriteLine($"VALIDATION {rank}: selected=0,1,2,3,4; affixes=0,1,2,3,4; 8 types; minima, edits, order, persistence: {checks-before} checks passed; global ordinal deliberately withheld.");
+        }
+
+        var toy = new TabletMetaCatalog { RankOrder = "SABCDEF".Select(c => c.ToString()).ToList() };
+        for (int i = 0; i < 8; i++) toy.Modifiers.Add(new() { Id = "toy:"+i, TabletType = "toy", Rank = i < 4 ? "S" : "A",
+            SubRank = i % 4 + 1, RankLabel = (i < 4 ? "S" : "A") + (i % 4 + 1), Affix = i % 2 == 0 ? "prefix" : "suffix", Groups = new() { "g"+i } });
+        var t = toy.Modifiers.ToArray(); var model = new TabletRankingEngine(toy);
+        TabletObservation Obs(params int[] ids) => new() { TabletType = "toy", Mods = ids.Select(i => new TabletDetectedMod { Modifier = t[i], RawId = t[i].Id }).ToList() };
+        var config = t.ToDictionary(m => m.Id, m => new TabletPriority(m.Rank));
+        TabletQuality Q(params int[] ids) => model.Evaluate(Obs(ids), config);
+        bool Before(TabletQuality a, TabletQuality b) => string.CompareOrdinal(a.OrderKey, b.OrderKey) < 0;
+        config[t[2].Id] = new("F"); config[t[3].Id] = new("F");
+        Check(Before(Q(0,1,2,3), Q(0,4,5,6)), "SSFF outranks SAAA: custom count precedes secondary quality");
+        Check(Q(0,2,3).Rank == "S", "Weak secondaries never lower S");
+        config.Remove(t[1].Id);
+        Check(Q(0,1).BestCount == 1 && Q(1).Rank == "", "Unselected reference S is never a custom S priority");
+        Check(Before(Q(0,1), Q(0,4)), "Unselected reference quality breaks secondary ties");
+        Check(Before(Q(0,4), Q(1,4)), "Selected S beats selected A even with an unselected reference S");
+        config = t.ToDictionary(m => m.Id, m => new TabletPriority(m.Rank));
+        Check(Before(Q(0,3), Q(1,2)), "S1+S4 outranks S2+S3 lexicographically, not by sum");
+        Check(Before(Q(0,4), Q(0)), "Real secondary F/A slots are not padded imaginary affixes");
+        var firstRoll=Obs(0); firstRoll.Mods[0].Roll=1;
+        var secondRoll=Obs(0); secondRoll.Mods[0].Roll=2;
+        Check(model.Evaluate(firstRoll,config)==model.Evaluate(secondRoll,config),"Rolls above the threshold are equivalent quality, not invented positions");
+        var forged=Obs(0);
+        forged.Mods[0].Modifier=new TabletMetaModifier {Id=t[0].Id,TabletType="toy",Rank="S",SubRank=1};
+        Check(model.Evaluate(forged,config).Uncertain && model.Evaluate(forged,config).Rank=="","A foreign definition cannot reuse a recognized observation's cached result");
+        var repeated=Obs(0,0); repeated.Mods[0].Roll=1; repeated.Mods[1].Roll=2;
+        var thresholds=new Dictionary<string,TabletPriority>{{t[0].Id,new("S",2)}};
+        var duplicateResult=model.Evaluate(repeated,thresholds);
+        repeated.Mods.Reverse();
+        Check(duplicateResult.Uncertain && duplicateResult.BestCount==1 && model.Evaluate(repeated,thresholds)==duplicateResult,"Duplicates remain uncertain, count once and do not depend on input order");
+        var nonfinite=Obs(0); nonfinite.Mods[0].Roll=float.NaN;
+        Check(model.Evaluate(nonfinite,thresholds).Uncertain && model.Evaluate(nonfinite,thresholds).BestCount==0,"Nonfinite roll cannot count as a priority");
+        var combos = new List<int[]>();
+        for (int mask = 1; mask < 256; mask++)
+        {
+            var indices = Enumerable.Range(0,8).Where(i => (mask & (1<<i)) != 0).ToArray();
+            if (indices.Length <= 4 && TabletRankingEngine.Compatible(indices.Select(i => t[i]).ToArray(),2,2)) combos.Add(indices);
+        }
+        // Independent oracle compares value sequences directly, never engine keys.
+        int Compare(int[] x, int[] y)
+        {
+            int bestX = x.Min(i => "SABCDEF".IndexOf(t[i].Rank)), bestY = y.Min(i => "SABCDEF".IndexOf(t[i].Rank));
+            int comparison = bestX.CompareTo(bestY); if (comparison != 0) return comparison;
+            comparison = y.Count(i => "SABCDEF".IndexOf(t[i].Rank)==bestY).CompareTo(x.Count(i => "SABCDEF".IndexOf(t[i].Rank)==bestX));
+            if (comparison != 0) return comparison;
+            int[] gx = x.Select(i => "SABCDEF".IndexOf(t[i].Rank)).Order().Concat(Enumerable.Repeat(7,4-x.Length)).ToArray();
+            int[] gy = y.Select(i => "SABCDEF".IndexOf(t[i].Rank)).Order().Concat(Enumerable.Repeat(7,4-y.Length)).ToArray();
+            for (int j=0;j<4;j++) { comparison=gx[j].CompareTo(gy[j]); if(comparison!=0)return comparison; }
+            var ix=x.OrderBy(i=>"SABCDEF".IndexOf(t[i].Rank)).ThenBy(i=>t[i].SubRank).ToArray();
+            var iy=y.OrderBy(i=>"SABCDEF".IndexOf(t[i].Rank)).ThenBy(i=>t[i].SubRank).ToArray();
+            for(int j=0;j<ix.Length;j++) { comparison=t[ix[j]].SubRank.CompareTo(t[iy[j]].SubRank); if(comparison!=0)return comparison; }
+            return 0;
+        }
+        foreach(var x in combos) foreach(var y in combos)
+            Check(Math.Sign(Compare(x,y)) == Math.Sign(string.CompareOrdinal(Q(x).OrderKey,Q(y).OrderKey)), "Independent admissible-combination ordering oracle");
+        Check(!TabletRankingEngine.Compatible(new[] {t[0],t[2],t[4]},2,2), "Three prefixes violate a supplied verified 2-prefix budget");
+        Check(!TabletRankingEngine.Compatible(new[] {t[1],t[3],t[5]},2,2), "Three suffixes violate a supplied verified 2-suffix budget");
+        Check(!TabletRankingEngine.Compatible(new[] {t[0],t[0]}), "Modifier uniqueness");
+        Check(!TabletRankingEngine.Compatible(t.Take(5).ToArray()), "At most four affixes");
+        var tooMany=model.Evaluate(Obs(0,1,2,3,4),config);
+        Check(tooMany.Uncertain && tooMany.Label.EndsWith('?'),"Excessive affixes never claim a complete quality or ordinal");
+        var shrine = catalog.ForType("Irradiated Tablet").Where(m=>m.Groups.Contains("MapAdditionalShrine")).ToArray();
+        Check(shrine.Length == 2 && !TabletRankingEngine.Compatible(shrine), "Real shrine chance and shrine count cannot coexist");
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        for(int i=0;i<5000;i++)
+        {
+            var varied = new Dictionary<string,TabletPriority> { [t[0].Id]=new("S",i) };
+            model.Evaluate(Obs(0),varied);
+        }
+        watch.Stop();
+        Check(model.CachedResults <= TabletRankingEngine.CacheLimit, "Bounded cache over 5000 different configurations");
+        Check(watch.Elapsed < TimeSpan.FromSeconds(15), "Bounded performance over configuration edits");
+        Console.WriteLine($"VALIDATION oracle: {combos.Count} admissible reference combinations, {combos.Count*combos.Count} pair comparisons; 5000 configuration edits in {watch.ElapsedMilliseconds} ms; cache={model.CachedResults}.");
+    }
     private static int nativeWindows;
     private static bool CountWindow(IntPtr window, IntPtr data) { nativeWindows++; return true; }
     private static bool StopWindows(IntPtr window, IntPtr data) { nativeWindows++; return false; }
@@ -124,7 +269,7 @@ internal static class TabletRankingCheck
             var testProfile = new TabletFilterProfile { TabletType = typeName, Rule = new() { Kind = TabletRuleKind.SubRank, RankLabel = "S1" } };
             var top = entries.Single(m => m.RankLabel == "S1");
             Check(TabletFilterEngine.Evaluate(testProfile, catalog, catalog.Recognize(typeName, new[] { top.GameModIds[0] + "1" })).State == TabletFilterState.Accepted, "Real game identifiers: " + typeName);
-            Check(top.SourceFields["Rang"].ToString() == top.RankLabel && top.SourceFields["Mod FR"].ToString() == top.FrenchText && top.SourceFields["Texte du jeu EN"].ToString() == top.EnglishText, "Original fields retained: " + typeName);
+            Check(top.SourceFields["rank"].ToString() == top.RankLabel && top.SourceFields["mod_fr"].ToString() == top.FrenchText && top.SourceFields["mod_en"].ToString() == top.EnglishText, "Original fields retained: " + typeName);
         }
 
         const string type = "Irradiated Tablet";
@@ -265,28 +410,36 @@ internal static class TabletRankingCheck
         Check(((TabletFilterResult)analyze.Invoke(fubgunCore, new object[] { type, rawFubgun })).State == TabletFilterState.Rejected, "Runtime adapter rejects low roll");
         Check(Evaluate(new() { Kind = TabletRuleKind.All, Children = new() { Sub("E1"), new() { Kind = TabletRuleKind.Any, Children = new() { Sub("F1"), Sub("A1") } } } }, "E1", "F1").State == TabletFilterState.Accepted, "E AND (F OR A) accepts E+F");
         Check(Evaluate(new() { Kind = TabletRuleKind.All, Children = new() { Sub("E1"), new() { Kind = TabletRuleKind.Any, Children = new() { Sub("F1"), Sub("A1") } } } }, "E1", "B1").State == TabletFilterState.Rejected, "E AND (F OR A) rejects wrong second modifier");
+        foreach (string native in new[] {"TowerDeliriumFogPersistence","TowerRitualRerollCostIncrease","TowerRitualDeferCostIncrease"})
+        {
+            string tabletType=ModDatabase.AllTabletMods.Single(m=>m.Id==native).TabletTypes[0];
+            var signedProfile=new TabletProfile {ModRanks=new(){[native]="S"},ModRequiredMinRolls=new(){[native]=25}};
+            var signedCore=new StashUtilityCore(); signedCore.Settings.TabletProfiles[tabletType]=signedProfile;
+            var definition=catalog.Recognize(tabletType,new[]{native}).Mods[0].Modifier;
+            var rule=new TabletFilterProfile {TabletType=tabletType,Rule=new(){Kind=TabletRuleKind.Modifier,ModifierId=definition.Id,MinimumRoll=25}};
+            signedProfile.MetaProfiles.Add(rule); signedProfile.ActiveMetaProfileId=rule.Id;
+            var signedMods=new Mods(IntPtr.Zero); signedMods.ExplicitMods.Add((native,(-25,0)));
+            var basic=typeof(StashUtilityCore).GetMethod("ClassifyTabletMods",BindingFlags.Static|BindingFlags.NonPublic);
+            Check(((TabletClassification)basic.Invoke(null,new object[]{signedMods,signedProfile,tabletType})).Rank=="S","Negative native reduction meets positive custom minimum: "+native);
+            Check(((TabletFilterResult)analyze.Invoke(signedCore,new object[]{tabletType,signedMods})).State==TabletFilterState.Accepted,"Negative native reduction meets advanced minimum: "+native);
+            signedMods.ExplicitMods[0]=(native,(-24,0));
+            Check(!((TabletClassification)basic.Invoke(null,new object[]{signedMods,signedProfile,tabletType})).IsRanked,"Below-minimum negative reduction remains unranked: "+native);
+            Check(((TabletFilterResult)analyze.Invoke(signedCore,new object[]{tabletType,signedMods})).State==TabletFilterState.Rejected,"Below-minimum reduction rejects advanced rule: "+native);
+        }
         if (workbookPath != null)
         {
-            Check(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(workbookPath))).Equals(catalog.SourceSha256, StringComparison.OrdinalIgnoreCase), "Source workbook unchanged and fingerprint matches embedded data");
-            using var zip = System.IO.Compression.ZipFile.OpenRead(workbookPath);
-            var ns = System.Xml.Linq.XNamespace.Get("http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-            System.Xml.Linq.XDocument Xml(string name) { using var stream = zip.GetEntry(name).Open(); return System.Xml.Linq.XDocument.Load(stream); }
-            var workbook = Xml("xl/workbook.xml");
-            var sheet = workbook.Descendants(ns + "sheet").Single(s => (string)s.Attribute("name") == "TOUS LES MODS");
-            string relationship = (string)sheet.Attribute(System.Xml.Linq.XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships") + "id");
-            string target = (string)Xml("xl/_rels/workbook.xml.rels").Root.Elements().Single(e => (string)e.Attribute("Id") == relationship).Attribute("Target");
-            target = target.TrimStart('/'); if (!target.StartsWith("xl/")) target = "xl/" + target;
-            var rows = Xml(target).Descendants(ns + "row").ToArray();
-            string Value(System.Xml.Linq.XElement cell) => (string)cell.Attribute("t") == "inlineStr" ? string.Concat(cell.Descendants(ns + "t").Select(e => e.Value)) : cell.Element(ns + "v")?.Value ?? "";
-            string[] columns = rows[0].Elements(ns + "c").Select(Value).ToArray();
-            Check(rows.Length - 1 == catalog.Modifiers.Count, "Independent XLSX extraction confirms row count");
-            for (int i = 1; i < rows.Length; i++)
-            {
-                string[] values = rows[i].Elements(ns + "c").Select(Value).ToArray();
-                var importedMod = catalog.Modifiers.Single(m => m.CanonicalType == values[0] && m.Code == values[1]);
-                for (int j = 0; j < columns.Length; j++)
-                    Check(Convert.ToString(importedMod.SourceFields[columns[j]], System.Globalization.CultureInfo.InvariantCulture) == values[j], "Exact XLSX field retained: row " + (i + 1) + " " + columns[j]);
-            }
+            Check(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(workbookPath))).Equals(catalog.SourceSha256, StringComparison.OrdinalIgnoreCase), "Primary JSON fingerprint matches embedded data");
+            var source = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(workbookPath));
+            int importedEntries = 0;
+            foreach(var tablet in source["tablet_types"])
+                foreach(var mod in tablet["mods"])
+                {
+                    var entry = catalog.Modifiers.Single(m => m.CanonicalType == (string)mod["tablet_type"] && m.Code == (string)mod["mod_code"]);
+                    foreach(var field in ((Newtonsoft.Json.Linq.JObject)mod).Properties())
+                        Check(Newtonsoft.Json.Linq.JToken.DeepEquals(entry.SourceFields[field.Name] == null ? Newtonsoft.Json.Linq.JValue.CreateNull() : Newtonsoft.Json.Linq.JToken.FromObject(entry.SourceFields[field.Name]), field.Value), "Exact primary JSON field: " + entry.Id + " " + field.Name);
+                    importedEntries++;
+                }
+            Check(importedEntries == 254, "Independent JSON extraction confirms every entry");
         }
     }
 
@@ -499,10 +652,10 @@ internal static class TabletRankingCheck
             var vertices = ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
             var actualBadge = Enumerable.Range(0, vertices.Size).Select(i => (vertices[i].pos, vertices[i].uv, vertices[i].col)).ToArray();
             ImGuiNET.ImGui.EndFrame(); ImGuiNET.ImGui.NewFrame();
-            typeof(StashUtilityCore).GetMethod("DrawTabletRankBadge", flags | BindingFlags.Static).Invoke(null, new object[] { new Vector2(200,40), new Vector2(52), "E1 · OK", 1f, Math.Max(2f, uiPlugin.Settings.BorderMargin) });
+            typeof(StashUtilityCore).GetMethod("DrawTabletRankBadge", flags | BindingFlags.Static).Invoke(null, new object[] { new Vector2(200,40), new Vector2(52), "E·3p · OK", 1f, Math.Max(2f, uiPlugin.Settings.BorderMargin) });
             vertices = ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
             var expectedBadge = Enumerable.Range(0, vertices.Size).Select(i => (vertices[i].pos, vertices[i].uv, vertices[i].col)).ToArray();
-            Check(actualBadge.Length > 0 && actualBadge.SequenceEqual(expectedBadge), "AND / OR overlay renders the best attainable E1 alongside OK");
+            Check(actualBadge.Length > 0 && actualBadge.SequenceEqual(expectedBadge), "AND / OR overlay renders priority count separately from OK");
             ImGuiNET.ImGui.EndFrame();
             uiProfile.ModRanks[badgeMods.ExplicitMods[0].name] = "S";
             uiPlugin.Settings.ShowTabletModBorder = true;
@@ -823,6 +976,24 @@ internal static class TabletRankingCheck
                 return helpCenter;
             }
             Pane(1200, "tablets-wide.png"); Pane(1200, "tablets-wide.png"); Pane(460, "tablets-compact.png");
+            var analysisObservation = ModDatabase.TabletMeta.Recognize("Breach Tablet",
+                new[] { ModDatabase.TabletMeta.FindSubRank("Breach Tablet","S1").GameModIds[0] });
+            analysisObservation.Mods[0].Roll=10000;
+            typeof(StashUtilityCore).GetField("lastMetaObservation",flags).SetValue(plugin,analysisObservation);
+            typeof(StashUtilityCore).GetField("lastMetaItemName",flags).SetValue(plugin,"Tablette de validation");
+            typeof(StashUtilityCore).GetField("lastMetaObservedUtc",flags).SetValue(plugin,DateTime.UtcNow);
+            var analysis=typeof(StashUtilityCore).GetMethod("DrawMetaAnalysis",flags);
+            string analysisSettings=JsonConvert.SerializeObject(profile);
+            for(int frame=0;frame<2;frame++)
+            {
+                ImGuiNET.ImGui.NewFrame();
+                ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16)); ImGuiNET.ImGui.SetNextWindowSize(new Vector2(1100,750));
+                ImGuiNET.ImGui.Begin("Analyse de tablette · ExileCenter");
+                analysis.Invoke(plugin,new object[]{"Breach Tablet",profile});
+                ImGuiNET.ImGui.End(); ImGuiNET.ImGui.Render();
+            }
+            if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"tablets-analysis.png"),pixels,atlasWidth,atlasHeight);
+            Check(JsonConvert.SerializeObject(profile)==analysisSettings,"Analysis renders ranking, selected/reference details, upper bound and filters without changing profiles");
             var helpCenter = Pane(460, "tablets-compact.png");
             Pane(460, "tablets-compact.png", helpCenter); Pane(460, "tablets-compact.png", helpCenter, true); Pane(460, "tablets-help-off.png", helpCenter);
             Check(!plugin.Settings.TabletHelpTooltips, "Actual help button disables tablet tooltips in one click");
@@ -951,58 +1122,11 @@ internal static class TabletRankingCheck
             enumerate.Invoke(null, new object[] { callback, IntPtr.Zero });
             Check(nativeWindows == 1, "Native callback can safely stop enumeration");
         }
+        CheckDynamicQuality();
         string[] grades = { "S", "A", "B", "C", "D", "E", "F" };
-        var inputs = (from a in grades from b in grades from c in grades from d in grades select new[] { a, b, c, d }).ToArray();
-        string Canonical(string[] values) => string.Concat(values.Select(v => Array.IndexOf(grades, v)).OrderBy(v => v).Select(v => (char)('0' + v)));
-        var compositions = inputs.Select(Canonical).Distinct().OrderBy(v => v, StringComparer.Ordinal).ToArray();
-        Check(compositions.Length == 210, "Exactly 210 order-independent compositions");
-        var numbers = new int[7];
-        var expected = new Dictionary<string, string>();
-        foreach (var composition in compositions)
-        {
-            int rank = composition[0] - '0';
-            expected.Add(composition, grades[rank] + ++numbers[rank]);
-        }
-        Check(numbers.SequenceEqual(new[] { 84, 56, 35, 20, 10, 4, 1 }), "84 / 56 / 35 / 20 / 10 / 4 / 1 categories");
-        var results = new Dictionary<string, TabletClassification>();
-        var colors = new[] { new Vector4(.92f, .76f, .32f, 1f), new Vector4(.84f, .25f, .28f, 1f),
-            new Vector4(.66f, .43f, .84f, 1f), new Vector4(.27f, .58f, .86f, 1f),
-            new Vector4(.27f, .69f, .43f, 1f), new Vector4(.93f, .47f, .19f, 1f), new Vector4(.95f, .95f, .95f, 1f) };
-        foreach (var input in inputs)
-        {
-            string canonical = Canonical(input);
-            var result = StashUtilityCore.ClassifyTabletRanks(input);
-            Check(result.IsRanked && result.RankLabel == expected[canonical], "Composition and permutation " + string.Join("+", input));
-            Check(result.Rank == grades[canonical[0] - '0'] && result.RankColor == colors[canonical[0] - '0'], "Best rank and reused color " + result.RankLabel);
-            Check(result.RankLabel == result.Rank + result.RankIndex, "Consistent index " + result.RankLabel);
-            if (results.TryGetValue(canonical, out var previous)) Check(result == previous, "All fields independent of mod order");
-            results[canonical] = result;
-        }
-        Check(results.Values.Select(v => v.RankLabel).Distinct().Count() == 210, "Every code unique");
-        Check(results.Values.OrderBy(v => v.SortScore).Select(v => v.RankLabel).SequenceEqual(compositions.Select(v => expected[v])), "Global numeric quality order");
-        Check(results.Values.Select(v => v.SortScore).OrderBy(v => v).SequenceEqual(Enumerable.Range(0, 210)), "Unique contiguous sort scores");
-        foreach (string grade in grades) Check(StashUtilityCore.ClassifyTabletRanks(Enumerable.Repeat(grade, 4).ToArray()).RankLabel == grade + "1", "Best combination " + grade + "1");
-        string[] bTable = { "BBBB", "BBBC", "BBBD", "BBCC", "BBCD", "BBDD", "BCCC", "BCCD", "BCDD", "BDDD" };
-        for (int i = 0; i < bTable.Length; i++) Check(StashUtilityCore.ClassifyTabletRanks(bTable[i].Select(c => c.ToString()).ToArray()).RankLabel == expected[Canonical(bTable[i].Select(c => c.ToString()).ToArray())], "Extended B table " + bTable[i]);
-        string[] cTable = { "CCCC", "CCCD", "CCDD", "CDDD" };
-        for (int i = 0; i < cTable.Length; i++) Check(StashUtilityCore.ClassifyTabletRanks(cTable[i].Select(c => c.ToString()).ToArray()).RankLabel == expected[Canonical(cTable[i].Select(c => c.ToString()).ToArray())], "Extended C table " + cTable[i]);
-        foreach (string grade in grades)
-        {
-            var single = StashUtilityCore.ClassifyTabletRanks(new[] { grade });
-            Check(single.IsRanked && single.Rank == grade && single.RankColor == colors[Array.IndexOf(grades, grade)], "One selected modifier is enough for every rank " + grade);
-            Check(StashUtilityCore.ClassifyTabletRanks(new[] { "", grade, null, "" }) == single, "Unchecked modifiers cannot suppress the best chosen rank " + grade);
-            Check(single.RankLabel == single.Rank + single.RankIndex && single.RankIndex > 0, "Partial tablets retain numbered subranks " + grade);
-        }
-        Check(!StashUtilityCore.ClassifyTabletRanks(new[] { "", null, "", "" }).IsRanked, "No chosen modifier stays unclassified");
-        foreach (var invalid in new string[][] { null, Array.Empty<string>(), new[] { "S", "A", "B", "C", "D" }, new[] { "S", "A", "B", "Z" },
-            new[] { "S", "A", "B", "S+++" }, new[] { "S", "A", "B", "d" }, new[] { "S", "A", "B", " D " } })
-        {
-            var result = StashUtilityCore.ClassifyTabletRanks(invalid);
-            Check(!result.IsRanked && result.RankIndex == 0 && result.RankLabel == "" && result.SortScore == int.MaxValue, "Invalid ranks never become D");
-        }
-        Check(results["0666"].SortScore < results["1111"].SortScore, "S84 outranks A1");
-        Check(results.Values.Single(v => v.RankLabel == "S2").SortScore < results.Values.Single(v => v.RankLabel == "S10").SortScore, "S2 before S10");
-        Check(results.Values.Single(v => v.RankLabel == "B2").SortScore < results.Values.Single(v => v.RankLabel == "B10").SortScore, "B2 before B10");
+        // Independent synthetic scores exercise the existing grid planner below.
+        var results = Enumerable.Range(0, 210).ToDictionary(i => i.ToString(),
+            i => new TabletClassification("S", 0, "S·1p", Vector4.One, i));
 
         var analyze = typeof(StashUtilityCore).GetMethod("ClassifyTabletMods", BindingFlags.Static | BindingFlags.NonPublic);
         var match = typeof(StashUtilityCore).GetMethod("MatchesTabletSelection", BindingFlags.Static | BindingFlags.NonPublic);
@@ -1025,14 +1149,14 @@ internal static class TabletRankingCheck
                 mods.ExplicitMods.Add((definitions[i].Id, (definitions[i].MinRoll * definitions[i].RollDivisor, definitions[i].MinRoll * definitions[i].RollDivisor)));
             }
             var result = Analyze(mods, profile, tabletType);
-            Check(result.RankLabel == "A1", "Best attainable A+B+C+D is A1 without impossible repeated A mods " + tabletType);
+            Check(result.Rank == "A" && result.RankIndex == 0, "Best custom grade A without a claimed ordinal " + tabletType);
             Check(!profile.RequireAllRankedMods && Matches(mods, profile, tabletType), "Existing choices default to OU " + tabletType);
             profile.RequireAllRankedMods = true;
             Check(Matches(mods, profile, tabletType), "ET accepts all four selected modifiers " + tabletType);
             var missing = new Mods(IntPtr.Zero);
             missing.ExplicitMods.AddRange(mods.ExplicitMods.Take(3));
             Check(!Matches(missing, profile, tabletType), "ET rejects a missing selected modifier " + tabletType);
-            Check(Analyze(missing, profile, tabletType).Rank == "A", "ET rejection preserves the best rank and numbered code " + tabletType);
+            Check(Analyze(missing, profile, tabletType).Rank == "A", "ET rejection preserves the best rank independently of rejection " + tabletType);
             profile.RequireAllRankedMods = false;
             Check(Matches(missing, profile, tabletType), "OU accepts a partial selection " + tabletType);
             foreach (bool all in new[] { false, true })
@@ -1051,24 +1175,24 @@ internal static class TabletRankingCheck
             var top = new Mods(IntPtr.Zero);
             top.ExplicitMods.Add((definitions[2].Id, (10000f, 10000f)));
             isolated.ModRanks[definitions[2].Id] = "S";
-            Check(Analyze(top, isolated, tabletType).RankLabel == "S1", "Only one available S can attain S1 " + tabletType);
+            Check(Analyze(top, isolated, tabletType).Rank == "S" && Analyze(top, isolated, tabletType).RankIndex == 0, "One S keeps grade S without a fabricated ordinal " + tabletType);
             isolated.ModRanks[definitions[3].Id] = "S";
-            Check(Analyze(top, isolated, tabletType).RankLabel == "S2", "Two distinct available S modifiers distinguish one S from both " + tabletType);
+            Check(Analyze(top, isolated, tabletType).Rank == "S" && Analyze(top, isolated, tabletType).RankIndex == 0, "Selecting another S does not invent a global position " + tabletType);
             top.ExplicitMods.Add((definitions[3].Id, (10000f, 10000f)));
-            Check(Analyze(top, isolated, tabletType).RankLabel == "S1", "Two available S reach the best S combination " + tabletType);
+            Check(Analyze(top, isolated, tabletType).Rank == "S" && Analyze(top, isolated, tabletType).RankIndex == 0, "Two S matches retain S without a claimed ordinal " + tabletType);
             var thirdSuffix = available.First(m => m.Affix == "suffix" && m.Id != definitions[2].Id && m.Id != definitions[3].Id);
             isolated.ModRanks[thirdSuffix.Id] = "S";
-            Check(Analyze(top, isolated, tabletType).RankLabel == "S1", "Third S suffix does not invent an impossible third suffix slot " + tabletType);
+            Check(Analyze(top, isolated, tabletType).Rank == "S" && Analyze(top, isolated, tabletType).RankIndex == 0, "Selecting an absent S does not invent an ordinal " + tabletType);
             isolated.ModRanks[definitions[0].Id] = "A";
             isolated.ModRanks[definitions[1].Id] = "A";
             top.ExplicitMods.Add((definitions[0].Id, (10000f, 10000f)));
             top.ExplicitMods.Add((definitions[1].Id, (10000f, 10000f)));
-            Check(Analyze(top, isolated, tabletType).RankLabel == "S1", "Two S suffixes and two A prefixes attain S1 " + tabletType);
+            Check(Analyze(top, isolated, tabletType).Rank == "S" && Analyze(top, isolated, tabletType).RankIndex == 0, "Two S and two A retain S " + tabletType);
             var singleA = new Mods(IntPtr.Zero);
             singleA.ExplicitMods.Add((definitions[0].Id, (10000f, 10000f)));
-            Check(Analyze(singleA, isolated, tabletType).RankLabel == "A2", "A subranks exclude unavailable AAA and AAAA combinations " + tabletType);
+            Check(Analyze(singleA, isolated, tabletType).Rank == "A" && Analyze(singleA, isolated, tabletType).RankIndex == 0, "Partial A retains A without claiming an exact global position " + tabletType);
             isolated.ModRanks.Remove(definitions[1].Id);
-            Check(Analyze(singleA, isolated, tabletType).RankLabel == "A1", "Changing selection invalidates the cached achievable ranks " + tabletType);
+            Check(Analyze(singleA, isolated, tabletType).Rank == "A" && Analyze(singleA, isolated, tabletType).RankIndex == 0, "Selection changes are evaluated without restart " + tabletType);
             Check(Analyze(mods, reloaded, tabletType) == result, "Another preset cannot contaminate a restored profile's ranking " + tabletType);
             profile.ModRanks[definitions[0].Id] = "unknown";
             Check(Analyze(mods, profile, tabletType).Rank == "B", "Invalid rank cannot suppress another matching rank " + tabletType);
@@ -1138,5 +1262,21 @@ internal static class TabletRankingCheck
         }
         var moved = type.GetMethod("At").Invoke(items[0], new object[] { 4, 5 });
         Check((bool)type.GetField("IsTablet").GetValue(moved) && (int)type.GetField("TabletSortScore").GetValue(moved) == reverse[0].SortScore, "Rank retained across planned moves");
+        for(int i=0;i<items.Count;i++)
+        {
+            type.GetField("TabletSortScore").SetValue(items[i],0);
+            type.GetField("TabletOrderKey").SetValue(items[i],(items.Count-1-i).ToString("D4"));
+        }
+        foreach(bool byType in new[]{true,false})
+        {
+            var targets=(Dictionary<IntPtr,(int x,int y)>)planner.Invoke(null,new object[]{items,12,18,new HashSet<int>(),byType});
+            for(int i=0;i<items.Count;i++)
+            {
+                var target=targets[new IntPtr(i+1)];
+                Check(target.y*12+target.x==items.Count-1-i,"Actual grid uses full quality order within one letter");
+            }
+        }
+        moved=type.GetMethod("At").Invoke(items[0],new object[]{4,5});
+        Check((string)type.GetField("TabletOrderKey").GetValue(moved)=="0209","Full quality key survives planned moves");
     }
 }

@@ -11,12 +11,14 @@ namespace StashUtility.Models
         public string Justification, RankOrigin, Source, AffixSource, Strategy, Family, Availability;
         public int SubRank, SourceRow;
         public List<string> GameModIds = new(), MatchEvidence = new();
+        public List<string> Groups = new();
         public Dictionary<string, object> SourceFields = new();
     }
 
     public sealed class TabletMetaCatalog
     {
         public string Version, SourceFile, SourceSha256;
+        public string AffixDataSource, AffixDataSha256;
         public List<string> RankOrder = new();
         public Dictionary<string, string> Types = new();
         public List<Dictionary<string, string>> MethodAndSources = new();

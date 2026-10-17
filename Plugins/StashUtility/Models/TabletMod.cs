@@ -23,6 +23,8 @@ namespace StashUtility.Models
     public readonly record struct TabletClassification(
         string Rank, int RankIndex, string RankLabel, System.Numerics.Vector4 RankColor, int SortScore)
     {
-        public bool IsRanked => RankIndex > 0;
+        // A quality grade need not have a certified global ordinal.
+        public bool IsRanked => Rank?.Length == 1 && "SABCDEF".Contains(Rank);
+        public string OrderKey { get; init; }
     }
 }

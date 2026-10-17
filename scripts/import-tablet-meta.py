@@ -63,6 +63,8 @@ def text_key(text):
 
 
 def import_catalog(source, legacy_path):
+    if source.suffix.lower() == ".json":
+        return import_json_catalog(source, legacy_path)
     workbook = sheets(source)
     table = workbook["TOUS LES MODS"]
     header = table[0]
@@ -120,14 +122,82 @@ def import_catalog(source, legacy_path):
     }
 
 
+def import_json_catalog(source, legacy_path):
+    """Import the user's primary JSON while preserving established native mappings.
+
+    Match by canonical type/code AND exact text/grade/affix, never by fuzzy names.
+    Unknown or changed entries fail closed for review instead of guessing IDs.
+    """
+    raw = json.loads(source.read_text(encoding="utf-8-sig"))
+    if raw["game"] != "Path of Exile 2" or raw["version"] != "0.5.5" or len(raw["tablet_types"]) != 8:
+        raise ValueError("Unexpected game, revision or tablet-type count")
+    embedded = Path(__file__).resolve().parents[1] / "Plugins/StashUtility/Data/tablet_meta_rankings.json"
+    catalog = json.loads(embedded.read_text(encoding="utf-8-sig"))
+    previous = {(m["CanonicalType"], m["Code"]): m for m in catalog["Modifiers"]}
+    entries, seen = [], set()
+    for tablet in raw["tablet_types"]:
+        if tablet["type"] not in TYPES or tablet["count"] != len(tablet["mods"]):
+            raise ValueError("Invalid tablet type/count")
+        for item in tablet["mods"]:
+            identity = (item["tablet_type"], item["mod_code"])
+            if item["id"] != identity[0] + "::" + identity[1]:
+                raise ValueError("Inconsistent source identity: " + str(identity))
+            if identity in seen or identity[0] != tablet["type"]:
+                raise ValueError("Duplicate or misplaced entry: " + str(identity))
+            seen.add(identity)
+            old = previous[identity]
+            affix = {"Préfixe": "prefix", "Suffixe": "suffix"}[item["affix"]]
+            if (old["RankLabel"], old["EnglishText"], old["FrenchText"], old["Affix"]) != (
+                    item["rank"], item["mod_en"], item["mod_fr"], affix):
+                raise ValueError("Native mapping needs review: " + str(identity))
+            if item["rank"] != item["rank_letter"] + str(item["rank_number"]) or item["rank_strength"] != 7 - "SABCDEF".index(item["rank_letter"]):
+                raise ValueError("Inconsistent rank: " + str(identity))
+            entry = dict(old, SourceFields=item, Justification=item["rank_reason"],
+                         RankOrigin=item["rank_origin"], Source=item["player_guide_source"],
+                         AffixSource=item["affix_database_source"], Strategy=item["main_strategy"], Family=item["family"])
+            entries.append(entry)
+    counts = dict(Counter(m["Rank"] for m in entries))
+    expected = dict(zip("SABCDEF", [15, 27, 44, 47, 67, 46, 8]))
+    type_counts = dict(Counter(m["CanonicalType"] for m in entries))
+    if (len(entries) != 254 or raw["total_mod_entries"] != 254 or counts != expected or
+            counts != raw["counts_by_rank"] or type_counts != raw["counts_by_tablet_type"] or
+            set(type_counts) != set(TYPES) or raw["ranking_order"] != list("SABCDEF")):
+        raise ValueError("Reference totals differ (including E/F)")
+    return dict(catalog, SourceFile=source.name, SourceSha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+                Modifiers=entries)
+
+
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser()
     parser.add_argument("source", type=Path)
     parser.add_argument("--output", type=Path, default=Path("Plugins/StashUtility/Data/tablet_meta_rankings.json"))
     parser.add_argument("--legacy", type=Path, default=Path("Plugins/StashUtility/Data/tablet_mod_ranges.json"))
+    parser.add_argument("--affixes", type=Path, help="RePoE PoE2 mods export; snapshot groups without inferring unverified budgets")
     args = parser.parse_args()
     catalog = import_catalog(args.source, args.legacy)
+    if args.affixes:
+        affixes = json.loads(args.affixes.read_text(encoding="utf-8-sig"))
+        for definition in json.loads(args.legacy.read_text(encoding="utf-8-sig"))["mods"]:
+            if definition["MinRoll"] == definition["MaxRoll"]:
+                continue
+            ident = definition["Id"]
+            variants = [v for k, v in affixes.items() if k == ident or k.startswith(ident) and k[len(ident):].isdigit()]
+            stats = [v["stats"][definition.get("RollValueIndex", 0)] for v in variants]
+            values = [abs(s[bound]) / definition.get("RollDivisor", 1) for s in stats for bound in ("min", "max")]
+            if not values or (min(values), max(values)) != (definition["MinRoll"], definition["MaxRoll"]):
+                raise ValueError("Native roll range needs review: " + ident)
+        for entry in catalog["Modifiers"]:
+            matches = [v for k, v in affixes.items() if any(k == ident or
+                       k.startswith(ident) and k[len(ident):].isdigit() for ident in entry["GameModIds"])]
+            if not matches or any(v["domain"] != "tablet" or v["generation_type"] != entry["Affix"] for v in matches):
+                raise ValueError("Unverified affix data: " + entry["Id"])
+            groups = {tuple(sorted(v["groups"])) for v in matches}
+            if len(groups) != 1 or not next(iter(groups)):
+                raise ValueError("Ambiguous exclusion groups: " + entry["Id"])
+            entry["Groups"] = list(next(iter(groups)))
+        catalog["AffixDataSource"] = "https://repoe-fork.github.io/poe2/mods.min.json (4.5.5.2)"
+        catalog["AffixDataSha256"] = hashlib.sha256(args.affixes.read_bytes()).hexdigest()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(catalog, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print("Imported", len(catalog["Modifiers"]), "modifiers across", len(TYPES), "tablet types.")

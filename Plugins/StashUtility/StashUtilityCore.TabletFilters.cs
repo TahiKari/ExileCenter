@@ -104,6 +104,7 @@ namespace StashUtility
                 }
             }
             TabletHelp(MT("mode_help", "Automatic modes apply their own ranks. Custom restores your choices and enables presets 1 to 5. Resale uses the reference ranking, without live prices. A specific strategy adds its conditions to the relevant tablet type; other types keep farming ranks."));
+            MetaText(MT("quality_legend", "S·2p = two matching S priorities, not position 2. Secondary grades and individual reference ranks break ties. No match: N/C. Global positions are withheld because all combination restrictions are not verified. See Analysis."));
         }
 
         private void EnsureTabletPresetSlots()
@@ -536,7 +537,8 @@ namespace StashUtility
             if (lastMetaObservation?.TabletType == type)
             {
                 ImGui.TextUnformatted(MT("last_hover", "Last observed tablet") + " : " + lastMetaItemName + " · " + lastMetaObservedUtc.ToLocalTime().ToString("HH:mm:ss"));
-                DrawMetaResult(TabletFilterEngine.Evaluate(active, MetaCatalog, lastMetaObservation));
+                DrawTabletQuality(lastMetaObservation, settings);
+                if (active != null) DrawMetaResult(TabletFilterEngine.Evaluate(active, MetaCatalog, lastMetaObservation));
                 if (ImGui.SmallButton(MT("copy_manual", "Copy known modifiers to manual analysis")))
                 { settings.ManualMetaModifiers = lastMetaObservation.Mods.Where(m => m.Modifier != null).Select(m => m.Modifier.Id).Distinct().Take(4).ToList(); SaveSettings(); }
             }
@@ -546,8 +548,32 @@ namespace StashUtility
                 DrawMetaCatalog(type, settings, true);
                 var observation = new TabletObservation { TabletType = type };
                 foreach (string id in settings.ManualMetaModifiers) observation.Mods.Add(new() { RawId = id, Modifier = MetaCatalog.Find(type, id) });
-                DrawMetaResult(TabletFilterEngine.Evaluate(active, MetaCatalog, observation));
+                DrawTabletQuality(observation, settings);
+                if (active != null) DrawMetaResult(TabletFilterEngine.Evaluate(active, MetaCatalog, observation));
             }
+        }
+
+        private void DrawTabletQuality(TabletObservation observation, TabletProfile settings)
+        {
+            var priorities = TabletPriorities(settings, observation.TabletType);
+            var quality = TabletQualityEngine.Evaluate(observation, priorities);
+            MetaText(observation.TabletType + " · " + quality.Label);
+            MetaText(MT("quality_counts", "Matching priorities / best grade / upper bound for that grade") + " : " +
+                quality.PriorityCount + " / " + quality.BestCount + " / <= " + quality.MaximumBestCountUpperBound);
+            MetaText(MT("quality_limit", "The upper bound respects known exclusion groups and four affixes. Prefix/suffix budgets, item-level availability and special crafting restrictions are not fully verified: no exact maximum or global ordinal is claimed. Rolls only determine whether a minimum is met; this is not a price estimate."));
+            foreach (var detected in observation.Mods)
+            {
+                if (detected?.Modifier == null) { MetaText(MT("unknown", "Unknown modifier") + " : " + detected?.RawId); continue; }
+                var modifier = detected.Modifier;
+                string selection = priorities.TryGetValue(modifier.Id, out var priority) ?
+                    MT("quality_selected", "Selected") + " " + priority.Rank + (priority.Minimum.HasValue ? " · min " + priority.Minimum +
+                    " · " + (detected.Roll.HasValue ? detected.Roll.Value.ToString() : "?") : "") :
+                    MT("quality_secondary", "Not selected: secondary reference quality only");
+                MetaText(modifier.RankLabel + " · " + selection + " · " + MetaDisplayText(modifier));
+            }
+            bool accepted = quality.PriorityCount > 0 && (!settings.RequireAllRankedMods || quality.PriorityCount == priorities.Count);
+            MetaText((settings.RequireAllRankedMods ? "ET / AND" : "OU / OR") + " : " + (quality.Uncertain ? "?" : accepted ? "OK" : "NON"));
+            if (quality.Uncertain) MetaText(MT("quality_uncertain", "Incomplete or incompatible observation: the letter uses only confirmed matches, and no complete quality comparison is guaranteed."));
         }
 
         private void DrawMetaResult(TabletFilterResult result)
@@ -607,6 +633,12 @@ namespace StashUtility
         private TabletFilterResult AnalyzeMetaTablet(string type, Mods mods)
         {
             Settings.TabletProfiles.TryGetValue(type ?? "", out var settings);
+            return TabletFilterEngine.Evaluate(settings == null ? null : ActiveMetaProfile(settings), MetaCatalog,
+                ObserveMetaTablet(type, mods));
+        }
+
+        private static TabletObservation ObserveMetaTablet(string type, Mods mods)
+        {
             var observation = MetaCatalog.Recognize(type, mods?.ExplicitMods.Select(m => m.name),
                 mods != null && mods.Rarity != ExileCenter.RemoteEnums.Rarity.Unique);
             for (int i = 0; mods != null && i < observation.Mods.Count; i++)
@@ -615,11 +647,12 @@ namespace StashUtility
                 var definition = Data.ModDatabase.AllTabletMods.FirstOrDefault(m =>
                     m.TabletTypes.Contains(type) && MatchesModId(raw.name, m.Id));
                 float value = definition?.RollValueIndex == 1 ? raw.values.value1 : raw.values.value0;
-                value /= definition?.RollDivisor ?? 1f;
+                // Cost reductions and slower fog have negative native stats, but
+                // user minimums use their positive magnitude, as in PassesModRoll.
+                value = Math.Abs(value) / (definition?.RollDivisor ?? 1f);
                 observation.Mods[i].Roll = float.IsFinite(value) ? value : null;
             }
-            return TabletFilterEngine.Evaluate(settings == null ? null : ActiveMetaProfile(settings), MetaCatalog,
-                observation);
+            return observation;
         }
 
         private void DrawMetaTabletHighlight(string name, string type, Vector2 pos, Vector2 size, Mods mods)
