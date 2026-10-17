@@ -8,7 +8,7 @@
     <Product>ExileCenter</Product>
     <AssemblyTitle>ExileCenter Migration</AssemblyTitle>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <ExileCenterReleaseTag Condition="'$(ExileCenterReleaseTag)' == ''">v1.5.11-personnalise.46</ExileCenterReleaseTag>
+    <ExileCenterReleaseTag Condition="'$(ExileCenterReleaseTag)' == ''">v1.5.11-personnalise.47</ExileCenterReleaseTag>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />

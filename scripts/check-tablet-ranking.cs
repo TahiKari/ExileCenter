@@ -908,21 +908,37 @@ internal static class TabletRankingCheck
         for(int i=0;i<4;i++){profile.ModRanks[four[i].GameModIds[0]]=i<2?"S":"A";mods.ExplicitMods.Add((four[i].GameModIds[0],(10000f,10000f)));}
         var classify=typeof(StashUtilityCore).GetMethod("ClassifyTabletMods",flags);
         TabletClassification Classify()=>(TabletClassification)classify.Invoke(null,new object[]{mods,profile,"Irradiated Tablet"});
+        foreach(var composition in TabletComposition.Generate())
+        {
+            for(int i=0;i<4;i++)profile.ModRanks[four[i].GameModIds[0]]=composition.Ranks[i];
+            Check(Classify().RankColor==colors["SABCDEF".IndexOf(composition.Ranks[0])],"Runtime color follows strongest effective grade: "+composition.Label);
+        }
+        for(int i=0;i<4;i++)profile.ModRanks[four[i].GameModIds[0]]=i<2?"S":"A";
         Check(Classify().RankLabel=="S2A2"&&Classify().RankIndex==0,"Runtime classifier supplies composition independently of disabled positions");
         profile.ModRanks[four[0].GameModIds[0]]="F";
         Check(Classify().RankLabel=="SA2F","Runtime classifier updates the same tablet immediately after a preference edit");
         profile.ModRanks.Clear();
         Check(!Classify().IsRanked&&Classify().RankLabel==TabletComposition.Format(four.Select(m=>m.Rank).ToArray()).Label,"Runtime can display four reference grades without inventing a global priority grade");
+        string bestReference=TabletComposition.Format(four.Select(m=>m.Rank).ToArray()).Ranks[0];
+        Check(Classify().RankColor==colors["SABCDEF".IndexOf(bestReference)],"Unselected modifiers retain their strongest reference color without becoming priorities");
+        var referenceS=available.First(m=>m.Rank=="S"&&m.Id!=four[0].Id);
+        var savedMods=mods.ExplicitMods.ToArray();
+        mods.ExplicitMods.Clear();
+        mods.ExplicitMods.Add((referenceS.GameModIds[0],(10000f,10000f)));
+        mods.ExplicitMods.Add((four[0].GameModIds[0],(10000f,10000f)));
+        profile.ModRanks[four[0].GameModIds[0]]="A";
+        Check(Classify().Rank=="A"&&Classify().RankColor==colors[0],"Reference S beats matching priority A for color, including incomplete compositions");
+        mods.ExplicitMods.Clear();mods.ExplicitMods.AddRange(savedMods);
         profile.ModRanks[four[0].GameModIds[0]]="A";
         var originalFourth=mods.ExplicitMods[3];mods.ExplicitMods[3]=("unknown",(0f,0f));
         Check(Classify().RankLabel=="N/C"&&Classify().Uncertain,"Runtime unknown modifiers retain an explicit uncertain composition state");
         mods.ExplicitMods[3]=originalFourth;
         ImGuiNET.ImGui.NewFrame();
-        var red=new TabletClassification("A",0,"S2A2",colors[1],1);
-        badge.Invoke(null,new object[]{new Vector2(100,60),new Vector2(52),red,1f,2f});
+        var gold=new TabletClassification("A",0,"S2A2",colors[0],1);
+        badge.Invoke(null,new object[]{new Vector2(100,60),new Vector2(52),gold,1f,2f});
         var buffer=ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
-        Check(Enumerable.Range(0,buffer.Size).Any(i=>buffer[i].col==ExileCenter.Utils.ImGuiHelper.Color(colors[1]))&&
-            !Enumerable.Range(0,buffer.Size).Any(i=>buffer[i].col==ExileCenter.Utils.ImGuiHelper.Color(colors[0])),"Badge color uses global priority A, not secondary reference S");
+        Check(Enumerable.Range(0,buffer.Size).Any(i=>buffer[i].col==ExileCenter.Utils.ImGuiHelper.Color(colors[0]))&&
+            !Enumerable.Range(0,buffer.Size).Any(i=>buffer[i].col==ExileCenter.Utils.ImGuiHelper.Color(colors[1])),"Badge color uses strongest effective S independently of global priority A");
         ImGuiNET.ImGui.EndFrame();
         var itemType=typeof(ExileCenter.RemoteObjects.States.InGameStateObjects.Item);var entityType=itemType.BaseType;
         var item=Activator.CreateInstance(itemType,flags,null,new object[]{IntPtr.Zero},null);
@@ -1448,7 +1464,7 @@ internal static class TabletRankingCheck
                 partial.ExplicitMods.Add(("UnknownExplicit", (0f, 0f)));
                 var choice = new TabletProfile(); choice.ModRanks[variable.Id] = "S";
                 choice.ModRequiredMinRolls[variable.Id] = variable.MaxRoll;
-                Check(!Analyze(partial, choice, tabletType).IsRanked, "Below-minimum S does not color a tablet " + tabletType);
+                Check(!Analyze(partial, choice, tabletType).IsRanked, "Below-minimum S does not become a matching priority " + tabletType);
                 Check(!Matches(partial, choice, tabletType), "OU rejects a below-minimum match " + tabletType);
                 choice.RequireAllRankedMods = true;
                 Check(!Matches(partial, choice, tabletType), "ET rejects a below-minimum match " + tabletType);
@@ -1466,7 +1482,7 @@ internal static class TabletRankingCheck
                 choice.ModRequiredMinRolls[variable.Id] = variable.MinRoll;
                 Check(Analyze(partial, choice, tabletType).Rank == "S", "One qualifying S wins despite unrelated unknown modifiers " + tabletType);
                 choice.ModRanks.Remove(variable.Id);
-                Check(!Analyze(partial, choice, tabletType).IsRanked, "Unchecking the only ranked modifier removes its color " + tabletType);
+                Check(!Analyze(partial, choice, tabletType).IsRanked, "Unchecking the only ranked modifier removes its priority " + tabletType);
             }
         }
 

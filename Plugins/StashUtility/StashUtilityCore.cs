@@ -894,7 +894,7 @@ namespace StashUtility
             if (ImGui.CollapsingHeader(PluginText.T("stashutility.filters.highlight_rules", "Highlight rules")))
             {
                 DrawFilterThreshold("stashutility.filter_tablet_great", "Excellent highlight", "tabletGreat", ref Settings.FilterTabletGreat, ref Settings.MinTabletGoodMods, 4);
-                TabletHelp(PluginText.T("stashutility.filters.tablet_rank_conditions", "Color follows your best matching priority. The badge describes four effective grades, e.g. S2A2, independently of priority counts. Unselected modifiers keep their reference quality. Global positions remain unverified."));
+                TabletHelp(PluginText.T("stashutility.filters.tablet_rank_conditions", "Color follows the strongest effective modifier grade, including reference grades. The badge describes four effective grades, e.g. S2A2, independently of priority counts. Global positions remain unverified."));
             }
             ImGui.Separator();
             ImGui.TextColored(ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark], MT("rank_settings", "Modifier ranks S to F"));
@@ -6980,7 +6980,8 @@ namespace StashUtility
             var classification = index < 0 ? UnclassifiedTablet :
                 new Models.TabletClassification(quality.Rank, quality.RankingValidation == Models.TabletRankingValidation.Verified ? quality.GlobalPosition ?? 0 : 0,
                     "", TabletModRankColors[index], index);
-            return classification with { RankLabel = quality.BadgeLabel, OrderKey = quality.OrderKey, Uncertain = quality.Uncertain };
+            return classification with { RankLabel = quality.BadgeLabel, OrderKey = quality.OrderKey, Uncertain = quality.Uncertain,
+                RankColor = TabletItemRankColor(quality.Modifiers.FirstOrDefault()?.Rank) };
         }
 
         private static IEnumerable<Models.TabletMod> SelectedTabletMods(TabletProfile profile, string type) =>

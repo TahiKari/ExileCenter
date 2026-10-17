@@ -104,7 +104,7 @@ namespace StashUtility
                 }
             }
             TabletHelp(MT("mode_help", "Automatic modes apply their own ranks. Custom restores your choices and enables presets 1 to 5. Resale uses the reference ranking, without live prices. A specific strategy adds its conditions to the relevant tablet type; other types keep farming ranks."));
-            MetaText(MT("quality_legend", "S2A2 = two S modifiers and two A modifiers. Composition is separate from your matching priorities and global grade. Reference grades describe unselected modifiers; no global ordinal is claimed. Hover a tablet for details."));
+            MetaText(MT("quality_legend", "S2A2 = two S modifiers and two A modifiers. Color follows the strongest effective modifier grade, including reference grades. Hover for priority details. No unverified global ordinal."));
         }
 
         private void EnsureTabletPresetSlots()
