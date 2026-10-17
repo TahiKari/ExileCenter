@@ -1090,7 +1090,9 @@ namespace StashUtility
         {
             ImGui.PushID(scope);
             ImGui.SetNextItemWidth(-1);
-            ImGui.InputTextWithHint("##modSearch", PluginText.T("stashutility.filters.search", "Search a modifier in French or English..."), ref search, 160);
+            ImGui.InputTextWithHint("##modSearch", scope == "tablet"
+                ? PluginText.T("stashutility.filters.search_highlight", "Type a modifier name to highlight matching rows...")
+                : PluginText.T("stashutility.filters.search", "Search a modifier in French or English..."), ref search, 160);
             ImGui.Checkbox(PluginText.T("stashutility.filters.configured_only", "Configured rules only"), ref configuredOnly);
             string[] affixes = { "all", "prefix", "suffix", "corruption", "desecrated" };
             if (scope == "tablet")
@@ -1122,9 +1124,13 @@ namespace StashUtility
             bool onlySelected = configuredOnly;
             int affix = affixFilter;
             string query = search;
-            var filtered = mods.Where(m => (!onlySelected || selected.Contains(m.Id)) && (affix == 0 || m.Affix == affixes[affix]) && MatchesModSearch(query, m.Id, m.Name))
+            var filtered = mods.Where(m => (!onlySelected || selected.Contains(m.Id)) && (affix == 0 || m.Affix == affixes[affix]) &&
+                (scope == "tablet" || MatchesModSearch(query, m.Id, m.Name)))
                 .OrderBy(m => scope == "tablet" && m.Affix == "suffix" ? 1 : 0).ThenBy(m => ModDisplayName(m.Id, m.Name), StringComparer.CurrentCultureIgnoreCase).ToList();
             ImGui.TextDisabled(PluginText.F("stashutility.filters.catalog_summary", "{0} modifiers shown · {1} configured rules", filtered.Count, selected.Count));
+            bool highlightSearch = scope == "tablet" && !string.IsNullOrWhiteSpace(NormalizeModSearch(query));
+            if (highlightSearch)
+                ImGui.TextDisabled(PluginText.F("stashutility.filters.search_matches", "{0} matching modifiers", filtered.Count(m => MatchesModSearch(query, m.Id, m.Name))));
             float height = Math.Clamp(ImGui.GetContentRegionAvail().Y - 8, 160, 460);
             bool rankGrid = ranks != null && ImGui.GetContentRegionAvail().X >= 620;
             int columns = rankGrid ? TabletModRanks.Length + 2 : 3;
@@ -1173,6 +1179,8 @@ namespace StashUtility
                     ImGui.BeginDisabled(scope == "tablet" && Settings.TabletMode != "custom");
                     DrawModConfigRow(mod, good, bad, priority, rolls, ranks, rankGrid);
                     ImGui.EndDisabled();
+                    if (highlightSearch && MatchesModSearch(query, mod.Id, mod.Name))
+                        ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGuiHelper.Color(new Vector4(.95f, .75f, .2f, .28f)));
                 }
                 ImGui.EndTable();
             }

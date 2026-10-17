@@ -17,7 +17,7 @@
     <AssemblyName>ExileCenterDownloader</AssemblyName>
     <Product>ExileCenter</Product>
     <AssemblyTitle>ExileCenter Downloader</AssemblyTitle>
-    <ExileCenterReleaseTag Condition="'$(ExileCenterReleaseTag)' == ''">v1.5.11-personnalise.48</ExileCenterReleaseTag>
+    <ExileCenterReleaseTag Condition="'$(ExileCenterReleaseTag)' == ''">v1.5.11-personnalise.49</ExileCenterReleaseTag>
 
     <RootNamespace>Downloader</RootNamespace>
 

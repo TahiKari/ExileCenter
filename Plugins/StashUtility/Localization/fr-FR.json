@@ -1421,6 +1421,8 @@
   "stashutility.filters.profile_summary": "Ce profil exige {0} mod(s) correspondant(s) ; {1} règle(s) configurée(s).",
   "stashutility.filters.incomplete_profile": "Ce profil est incomplet : ajoute des mods recherchés ou réduis le nombre exigé.",
   "stashutility.filters.search": "Rechercher un mod en français ou en anglais…",
+  "stashutility.filters.search_highlight": "Rechercher un mod pour le surligner (français ou anglais)…",
+  "stashutility.filters.search_matches": "{0} mods correspondants",
   "stashutility.filters.configured_only": "Afficher uniquement mes règles",
   "stashutility.filters.catalog_summary": "{0} mods affichés · {1} règles configurées",
   "stashutility.filters.modifier": "Modificateur",

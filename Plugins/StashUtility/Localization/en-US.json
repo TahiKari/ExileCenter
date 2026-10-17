@@ -1413,6 +1413,8 @@
   "stashutility.filters.profile_summary": "This profile requires {0} matching modifier(s); {1} rule(s) configured.",
   "stashutility.filters.incomplete_profile": "This profile cannot match yet: add wanted modifiers or reduce the required count.",
   "stashutility.filters.search": "Search a modifier in French or English…",
+  "stashutility.filters.search_highlight": "Find a modifier to highlight (French or English)…",
+  "stashutility.filters.search_matches": "{0} matching modifiers",
   "stashutility.filters.configured_only": "Show configured rules only",
   "stashutility.filters.catalog_summary": "{0} modifiers shown · {1} configured rules",
   "stashutility.filters.modifier": "Modifier",

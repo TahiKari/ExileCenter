@@ -1243,6 +1243,39 @@ internal static class TabletRankingCheck
                 return helpCenter;
             }
             Pane(1200, "tablets-wide.png"); Pane(1200, "tablets-wide.png"); Pane(460, "tablets-compact.png");
+            var catalogDraw=typeof(StashUtilityCore).GetMethod("DrawModCatalog",flags);
+            var searchProfile=new TabletProfile();searchProfile.ModRanks["TowerMonsterEffectiveness"]="A";
+            var searchMods=ModDatabase.AllTabletMods.Where(m=>m.TabletTypes.Contains("Irradiated Tablet")&&
+                new[]{"TowerMonsterEffectiveness","TowerPackSizeIncrease","TowerMapAdditionalModifier","TowerAdditionalSpiritChance"}.Contains(m.Id)).ToList();
+            string searchSettings=JsonConvert.SerializeObject(searchProfile);
+            uint searchColor=ExileCenter.Utils.ImGuiHelper.Color(new Vector4(.95f,.75f,.2f,.28f));
+            (float height,int highlights) SearchFrame(string query,float width)
+            {
+                io.AddMousePosEvent(-100,-100);ImGuiNET.ImGui.NewFrame();
+                ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width,750));
+                ImGuiNET.ImGui.Begin("Recherche des mods##search-fixture",ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                object[] arguments={"tablet",searchMods,searchProfile.GoodModPatterns,searchProfile.BadModPatterns,searchProfile.GodModPatterns,
+                    searchProfile.ModRequiredMinRolls,query,false,0,searchProfile.ModRanks};
+                catalogDraw.Invoke(plugin,arguments);
+                float height=ImGuiNET.ImGui.GetCursorPosY();
+                ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
+                var data=ImGuiNET.ImGui.GetDrawData();
+                int highlights=Enumerable.Range(0,data.CmdListsCount).Sum(i=>Enumerable.Range(0,data.CmdLists[i].VtxBuffer.Size).Count(j=>data.CmdLists[i].VtxBuffer[j].col==searchColor));
+                return(height,highlights);
+            }
+            foreach(float width in new[]{460f,1000f})
+            {
+                SearchFrame("introuvable",width);var missing=SearchFrame("introuvable",width);
+                foreach(string query in new[]{"efficacite","EFFICACITÉ","effectiveness"})
+                {
+                    var found=SearchFrame(query,width);
+                    Check(found.highlights>0&&missing.highlights==0,"Search highlights French/English names regardless of case or accents: "+query+width);
+                    Check(found.height==missing.height,"Search keeps every modifier row visible: "+query+width);
+                }
+                if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"tablet-search-"+width+".png"),pixels,atlasWidth,atlasHeight);
+                Check(SearchFrame("",width).highlights==0,"Clearing search removes the highlight: "+width);
+            }
+            Check(JsonConvert.SerializeObject(searchProfile)==searchSettings,"Searching never changes ranks, minima or selected rules");
             var analysisObservation = ModDatabase.TabletMeta.Recognize("Breach Tablet",
                 new[] { ModDatabase.TabletMeta.FindSubRank("Breach Tablet","S1").GameModIds[0] });
             analysisObservation.Mods[0].Roll=10000;
