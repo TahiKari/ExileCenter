@@ -1545,7 +1545,7 @@
   "stashutility.tablet.selector.Abyss": "Abyss",
   "stashutility.tablet.selector.Temple": "Temple",
   "stashutility.tablet.selector.Boss": "Overseer",
-  "stashutility.filters.tablet_rank_conditions": "The best matching modifier sets the rank color. One is enough. Minimum rolls are respected and S1, S2, A1… subranks are preserved.",
+  "stashutility.filters.tablet_rank_conditions": "The best qualifying modifier sets the color. Index 1 is the best attainable grade combination for this tablet type and your selected ranks, with up to 2 distinct prefixes and 2 distinct suffixes. Impossible combinations are excluded. Minimum rolls apply; rolls above the minimum do not change the index.",
   "stashutility.filters.farm_preset": "Workbook ranks - PoE 2 0.5.5",
   "stashutility.filters.farm_preset_help": "Apply the reference workbook's S to F ranks to all eight tablet types. E and F remain distinct. The workbook reserves S for one or two modifiers per type. Your minimum rolls and AND / OR profiles are retained.",
   "stashutility.filters.farm_preset_apply": "Apply workbook ranks to all 8 tablet types",

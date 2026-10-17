@@ -892,7 +892,7 @@ namespace StashUtility
             if (ImGui.CollapsingHeader(PluginText.T("stashutility.filters.highlight_rules", "Highlight rules")))
             {
                 DrawFilterThreshold("stashutility.filter_tablet_great", "Excellent highlight", "tabletGreat", ref Settings.FilterTabletGreat, ref Settings.MinTabletGoodMods, 4);
-                TabletHelp(PluginText.T("stashutility.filters.tablet_rank_conditions", "The best matching modifier sets the rank color. One is enough; numbered subranks are preserved."));
+                TabletHelp(PluginText.T("stashutility.filters.tablet_rank_conditions", "The best qualifying modifier sets the color. Index 1 is the best attainable grade combination for this tablet type and your selected ranks (up to two prefixes and two suffixes). Minimum rolls apply; rolls above the minimum do not change the index."));
             }
             ImGui.Separator();
             ImGui.TextColored(ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark], MT("rank_settings", "Modifier ranks S to F"));
@@ -6966,8 +6966,75 @@ namespace StashUtility
             return TabletRankLookup.TryGetValue(key, out var result) ? result : UnclassifiedTablet;
         }
 
+        private static readonly Dictionary<string, (string Signature, Dictionary<int, Models.TabletClassification> Ranks)>
+            TabletTypeRankLookups = new();
+
+        private static Dictionary<int, Models.TabletClassification> GetTabletTypeRankLookup(TabletProfile profile, string type)
+        {
+            // A modifier can occur only once. Enumerate up to two prefixes and two
+            // suffixes from this type's selected pool, rather than four arbitrary S-F grades.
+            var definitions = SelectedTabletMods(profile, type).GroupBy(mod => mod.Id).Select(group => group.First());
+            int[] Ranks(string affix) => definitions.Where(mod => mod.Affix == affix &&
+                    (mod.MinRoll == mod.MaxRoll || profile.ModRequiredMinRolls == null ||
+                     !profile.ModRequiredMinRolls.TryGetValue(mod.Id, out float minimum) || minimum <= mod.MaxRoll))
+                .Select(mod => Array.IndexOf(TabletModRanks, GetTabletModRank(mod.Id, profile.ModRanks,
+                    profile.GoodModPatterns, profile.BadModPatterns, profile.GodModPatterns)))
+                .OrderBy(rank => rank).ToArray();
+            var prefixes = Ranks("prefix");
+            var suffixes = Ranks("suffix");
+            string signature = string.Join(",", prefixes) + "|" + string.Join(",", suffixes);
+            lock (TabletTypeRankLookups)
+            {
+                if (TabletTypeRankLookups.TryGetValue(type, out var cached) && cached.Signature == signature)
+                    return cached.Ranks;
+
+                int Weight(int rank)
+                {
+                    int weight = 1;
+                    for (int i = rank + 1; i < TabletModRanks.Length; i++) weight *= 5;
+                    return weight;
+                }
+                HashSet<(int Key, int Count)> Options(int[] ranks)
+                {
+                    var options = new HashSet<(int Key, int Count)> { (0, 0) };
+                    for (int i = 0; i < ranks.Length; i++)
+                    {
+                        options.Add((Weight(ranks[i]), 1));
+                        for (int j = i + 1; j < ranks.Length; j++)
+                            options.Add((Weight(ranks[i]) + Weight(ranks[j]), 2));
+                    }
+                    return options;
+                }
+                var reachable = new HashSet<int>();
+                var prefixOptions = Options(prefixes);
+                var suffixOptions = Options(suffixes);
+                foreach (var prefix in prefixOptions)
+                    foreach (var suffix in suffixOptions)
+                        if (prefix.Count + suffix.Count > 0)
+                            reachable.Add(prefix.Key + suffix.Key + 4 - prefix.Count - suffix.Count);
+
+                var result = new Dictionary<int, Models.TabletClassification>();
+                var numbers = new int[TabletModRanks.Length];
+                foreach (var entry in TabletRankLookup.Where(entry => reachable.Contains(entry.Key)).OrderBy(entry => entry.Value.SortScore))
+                {
+                    var classification = entry.Value;
+                    int number = ++numbers[Array.IndexOf(TabletModRanks, classification.Rank)];
+                    result.Add(classification.SortScore, classification with { RankIndex = number, RankLabel = classification.Rank + number });
+                }
+                // Keep at most one immutable lookup per tablet type; edits and preset
+                // loads replace it without writing derived data into saved settings.
+                TabletTypeRankLookups[type] = (signature, result);
+                return result;
+            }
+        }
+
         private static Models.TabletClassification ClassifyTabletMods(Mods mods, TabletProfile profile, string type)
-            => ClassifyTabletRanks(MatchingTabletRanks(mods, profile, type).Values.ToArray());
+        {
+            var classification = ClassifyTabletRanks(MatchingTabletRanks(mods, profile, type).Values.ToArray());
+            if (!classification.IsRanked) return classification;
+            return GetTabletTypeRankLookup(profile, type).TryGetValue(classification.SortScore, out var result)
+                ? result : UnclassifiedTablet;
+        }
 
         private static IEnumerable<Models.TabletMod> SelectedTabletMods(TabletProfile profile, string type) =>
             TabletRankingDefinitions.Where(mod => mod.TabletTypes.Contains(type) &&

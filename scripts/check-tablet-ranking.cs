@@ -431,10 +431,10 @@ internal static class TabletRankingCheck
             var vertices = ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
             var actualBadge = Enumerable.Range(0, vertices.Size).Select(i => (vertices[i].pos, vertices[i].uv, vertices[i].col)).ToArray();
             ImGuiNET.ImGui.EndFrame(); ImGuiNET.ImGui.NewFrame();
-            typeof(StashUtilityCore).GetMethod("DrawTabletRankBadge", flags | BindingFlags.Static).Invoke(null, new object[] { new Vector2(200,40), new Vector2(52), "E2 · OK", 1f, Math.Max(2f, uiPlugin.Settings.BorderMargin) });
+            typeof(StashUtilityCore).GetMethod("DrawTabletRankBadge", flags | BindingFlags.Static).Invoke(null, new object[] { new Vector2(200,40), new Vector2(52), "E1 · OK", 1f, Math.Max(2f, uiPlugin.Settings.BorderMargin) });
             vertices = ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
             var expectedBadge = Enumerable.Range(0, vertices.Size).Select(i => (vertices[i].pos, vertices[i].uv, vertices[i].col)).ToArray();
-            Check(actualBadge.Length > 0 && actualBadge.SequenceEqual(expectedBadge), "AND / OR overlay actually renders E2 alongside OK");
+            Check(actualBadge.Length > 0 && actualBadge.SequenceEqual(expectedBadge), "AND / OR overlay renders the best attainable E1 alongside OK");
             ImGuiNET.ImGui.EndFrame();
             uiProfile.ModRanks[badgeMods.ExplicitMods[0].name] = "S";
             uiPlugin.Settings.ShowTabletModBorder = true;
@@ -898,7 +898,9 @@ internal static class TabletRankingCheck
             (TabletClassification)analyze.Invoke(null, new object[] { mods, profile, type });
         foreach (string tabletType in StashUtilitySettings.TabletTypes)
         {
-            var definitions = ModDatabase.AllTabletMods.Where(m => m.TabletTypes.Contains(tabletType)).GroupBy(m => m.Id).Select(g => g.First()).Take(4).ToArray();
+            var available = ModDatabase.AllTabletMods.Where(m => m.TabletTypes.Contains(tabletType)).GroupBy(m => m.Id).Select(g => g.First()).ToArray();
+            var definitions = available.Where(m => m.Affix == "prefix").Take(2)
+                .Concat(available.Where(m => m.Affix == "suffix").Take(2)).ToArray();
             Check(definitions.Length == 4, "Catalog coverage " + tabletType);
             var profile = new TabletProfile();
             var mods = new Mods(IntPtr.Zero);
@@ -909,10 +911,8 @@ internal static class TabletRankingCheck
                 profile.ModRequiredMinRolls[definitions[i].Id] = definitions[i].MinRoll;
                 mods.ExplicitMods.Add((definitions[i].Id, (definitions[i].MinRoll * definitions[i].RollDivisor, definitions[i].MinRoll * definitions[i].RollDivisor)));
             }
-            // A+B+C+D = A15, by the independent composition oracle.
-            string expectedCode = expected[Canonical(grades.Skip(1).Take(4).ToArray())];
             var result = Analyze(mods, profile, tabletType);
-            Check(result.RankLabel == expectedCode, "Actual mod IDs and category " + tabletType);
+            Check(result.RankLabel == "A1", "Best attainable A+B+C+D is A1 without impossible repeated A mods " + tabletType);
             Check(!profile.RequireAllRankedMods && Matches(mods, profile, tabletType), "Existing choices default to OU " + tabletType);
             profile.RequireAllRankedMods = true;
             Check(Matches(mods, profile, tabletType), "ET accepts all four selected modifiers " + tabletType);
@@ -934,6 +934,29 @@ internal static class TabletRankingCheck
             Check(JsonConvert.SerializeObject(profile) == saved, "Ranks and minimum filters untouched " + tabletType);
             var reloaded = JsonConvert.DeserializeObject<TabletProfile>(saved);
             Check(Analyze(mods, reloaded, tabletType) == result, "Save and reload " + tabletType);
+            var isolated = new TabletProfile();
+            var top = new Mods(IntPtr.Zero);
+            top.ExplicitMods.Add((definitions[2].Id, (10000f, 10000f)));
+            isolated.ModRanks[definitions[2].Id] = "S";
+            Check(Analyze(top, isolated, tabletType).RankLabel == "S1", "Only one available S can attain S1 " + tabletType);
+            isolated.ModRanks[definitions[3].Id] = "S";
+            Check(Analyze(top, isolated, tabletType).RankLabel == "S2", "Two distinct available S modifiers distinguish one S from both " + tabletType);
+            top.ExplicitMods.Add((definitions[3].Id, (10000f, 10000f)));
+            Check(Analyze(top, isolated, tabletType).RankLabel == "S1", "Two available S reach the best S combination " + tabletType);
+            var thirdSuffix = available.First(m => m.Affix == "suffix" && m.Id != definitions[2].Id && m.Id != definitions[3].Id);
+            isolated.ModRanks[thirdSuffix.Id] = "S";
+            Check(Analyze(top, isolated, tabletType).RankLabel == "S1", "Third S suffix does not invent an impossible third suffix slot " + tabletType);
+            isolated.ModRanks[definitions[0].Id] = "A";
+            isolated.ModRanks[definitions[1].Id] = "A";
+            top.ExplicitMods.Add((definitions[0].Id, (10000f, 10000f)));
+            top.ExplicitMods.Add((definitions[1].Id, (10000f, 10000f)));
+            Check(Analyze(top, isolated, tabletType).RankLabel == "S1", "Two S suffixes and two A prefixes attain S1 " + tabletType);
+            var singleA = new Mods(IntPtr.Zero);
+            singleA.ExplicitMods.Add((definitions[0].Id, (10000f, 10000f)));
+            Check(Analyze(singleA, isolated, tabletType).RankLabel == "A2", "A subranks exclude unavailable AAA and AAAA combinations " + tabletType);
+            isolated.ModRanks.Remove(definitions[1].Id);
+            Check(Analyze(singleA, isolated, tabletType).RankLabel == "A1", "Changing selection invalidates the cached achievable ranks " + tabletType);
+            Check(Analyze(mods, reloaded, tabletType) == result, "Another preset cannot contaminate a restored profile's ranking " + tabletType);
             profile.ModRanks[definitions[0].Id] = "unknown";
             Check(Analyze(mods, profile, tabletType).Rank == "B", "Invalid rank cannot suppress another matching rank " + tabletType);
             profile.ModRanks.Remove(definitions[0].Id);

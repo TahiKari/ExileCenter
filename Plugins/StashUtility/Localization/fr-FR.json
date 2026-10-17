@@ -1595,7 +1595,7 @@
   "stashutility.tablet.selector.Abyss": "Abysse",
   "stashutility.tablet.selector.Temple": "Temple",
   "stashutility.tablet.selector.Boss": "Superviseur",
-  "stashutility.filters.tablet_rank_conditions": "Le meilleur modificateur retenu fixe la couleur du rang. Un seul suffit. Les minimums sont respectés et les sous-rangs S1, S2, A1… restent affichés.",
+  "stashutility.filters.tablet_rank_conditions": "Le meilleur modificateur retenu fixe la couleur. Le numéro 1 correspond à la meilleure combinaison de rangs accessible pour ce type de tablette et tes choix, avec au plus 2 préfixes et 2 suffixes distincts. Les combinaisons impossibles sont exclues. Les minimums sont respectés ; un jet supérieur au minimum ne change pas le numéro.",
   "stashutility.filters.farm_preset": "Rangs du classeur - PoE 2 0.5.5",
   "stashutility.filters.farm_preset_help": "Applique les rangs S à F du classeur de référence aux huit types de tablettes. E et F restent distincts. Le classeur réserve S à un ou deux mods par type. Tes minimums et tes profils ET / OU sont conservés.",
   "stashutility.filters.farm_preset_apply": "Appliquer les rangs du classeur aux 8 tablettes",
