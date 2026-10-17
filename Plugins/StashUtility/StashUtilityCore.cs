@@ -2066,8 +2066,7 @@ namespace StashUtility
             foreach (var node in StashUiNodes(ReadStashUiBranch(ResolvePath(header, new[] { 0 }))))
             {
                 var label = ResolvePath(node.Address, new[] { 0, 1 });
-                if (IsElementVisible(node.Address) && TryReadUiString(label, 0x98, out var id) && id == "label" &&
-                    TryReadUiString(label, 0x360, out var text) && !string.IsNullOrWhiteSpace(text))
+                if (IsElementVisible(node.Address) && TryReadUiString(label, 0x360, out var text) && !string.IsNullOrWhiteSpace(text))
                     candidates.Add((node.Address, text));
             }
             if (name != null)

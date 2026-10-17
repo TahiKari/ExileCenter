@@ -133,6 +133,12 @@ internal static class TabletRankingCheck
             Text(grouped,0x98,"buttons_container");
             var groupedHeader=Node(grouped,Node(tiers),Node(),Node(),Node());
             for(int i=0;i<16;i++)Check((IntPtr)Call("CraftPageButton",groupedHeader,i,16)==originalButtons[i],"Two rows with reordered button children still resolve the intended Roman tier: "+roman[i]);
+            for(int i=0;i<16;i++)
+            {
+                var label=(IntPtr)Call("ResolvePath",originalButtons[i],new[]{0,1});
+                Text(label,0x98,"waystone_tier_label");
+                Check((IntPtr)Call("CraftPageButton",groupedHeader,i,16)==originalButtons[i],"A specialized native label ID still resolves the exact Roman tier: "+roman[i]);
+            }
             Console.WriteLine("VALIDATION waystone navigation: real native-memory fixture; nested open dropdowns, renamed special tabs and all 96 tier/page confirmations; no game input executed.");
         }
         finally{foreach(var allocation in allocations)Marshal.FreeHGlobal(allocation);((IDisposable)reader).Dispose();}
