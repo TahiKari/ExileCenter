@@ -17,7 +17,7 @@
   "meter.duration": "Durée du combat",
   "meter.history": "Les 10 derniers combats",
   "meter.no_history": "Aucun combat terminé.",
-  "meter.all_sources": "Pertes de vie + bouclier · toutes sources confondues",
+  "meter.all_sources": "Dégâts observés · toutes sources. Le DPS individuel des membres du groupe n’est pas disponible : l’auteur des dégâts n’est pas lu.",
   "meter.live": "En direct",
   "meter.compare": "Comparer",
   "meter.history_tab": "Historique",
@@ -124,5 +124,18 @@
   "meter.map_all_short": "Map entière",
   "meter.map_single_short": "Mono",
   "meter.map_multi_short": "Multi",
-  "meter.new_test": "Nouvel essai"
+  "meter.new_test": "Nouvel essai",
+  "meter.monsters.normal": "Normaux",
+  "meter.monsters.magic": "Magiques",
+  "meter.monsters.rare": "Rares",
+  "meter.monsters.unique": "Boss uniques",
+  "meter.monsters.unknown": "Non classés",
+  "meter.monsters.category": "Monstres",
+  "meter.monsters.hit": "Touchés",
+  "meter.monsters.dead": "Morts observées",
+  "meter.monsters.hit_dead": "Touchés / morts",
+  "meter.monsters.columns": "Catégories de monstres · touchés / morts",
+  "meter.monsters.help": "Ennemis distincts touchés / morts confirmées après une observation vivante. « Boss uniques » regroupe tous les monstres uniques, dont les boss de carte et les exilés. Toutes les sources de dégâts sont incluses. Une disparition ne suffit pas à compter une mort ; les ennemis hors de portée de lecture ne sont pas comptés.",
+  "meter.monsters.partial": "Les anciens rapports conservent leurs totaux. Les catégories et les morts confirmées couvrent uniquement les observations depuis cette mise à jour ; les compteurs historiques manquants ne sont pas reconstitués.",
+  "meter.monsters.unavailable": "Compteurs par catégorie indisponibles pour cet ancien rapport."
 }

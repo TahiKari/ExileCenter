@@ -12,12 +12,17 @@ internal sealed class DamageTracker
         public IntPtr Address;
         public long Frame;
         public int LastHealth;
+        public bool WasAlive;
+        public ExileCenter.RemoteEnums.Rarity? Rarity;
     }
 
     private readonly Dictionary<uint, DpsState> states = new();
     private readonly Queue<(double Time, long Damage, uint Id, IntPtr Address)> samples = new();
     private readonly Dictionary<(uint Id, IntPtr Address), long> frameTargets = new();
     private readonly Dictionary<(uint Id, IntPtr Address), long> rollingTargets = new();
+    private readonly HashSet<(uint Id, IntPtr Address)> frameDeaths = new();
+    private readonly Dictionary<(uint Id, IntPtr Address), KikiMeterSettings.DamageMeterEnemy> combatEnemies = new();
+    public IReadOnlyCollection<KikiMeterSettings.DamageMeterEnemy> CombatEnemies => combatEnemies.Values;
     private string skillSignature = "", pendingSkills = "";
     private double pendingSkillsSince;
     private readonly List<CombatSummary> history = new();
@@ -190,12 +195,18 @@ internal sealed class DamageTracker
         if (!MapActive) return;
         RecordMapFrame(CurrentMap!);
         if (currentSubArea != null) RecordMapFrame(currentSubArea);
-        if (frameDamage > 0) MapDirty = true;
+        if (frameDamage > 0 || frameDeaths.Count > 0) MapDirty = true;
         mapFrameSeconds = 0;
     }
 
     private void RecordMapFrame(KikiMeterSettings.DamageMeterMap map)
     {
+        if (map.MonsterCountsVersion == 0)
+        {
+            map.MonsterCountsPartial = map.Overall.Damage > 0 || (map.Overall.Enemies?.Count ?? 0) > 0;
+            map.MonsterCountsVersion = 1;
+            MapDirty = true;
+        }
         if (map.EnemySampleVersion == 0)
         {
             // Existing reports keep their totals. Their enemy cohorts start here,
@@ -217,6 +228,17 @@ internal sealed class DamageTracker
             mode.LargestSample = Math.Max(mode.LargestSample, frameDamage);
             RecordEnemySamples(mode);
         }
+        // A death can follow earlier damage after the enemy left the current
+        // single/multi cohort. Update each existing cohort without adding hits.
+        foreach (var stats in new[] { map.Overall, map.Single, map.Multi })
+            if (mapEnemyIndices.TryGetValue(stats, out var indices))
+                foreach (var target in frameDeaths)
+                    if (indices.TryGetValue((currentAreaHash, target.Id, target.Address.ToInt64()), out int index))
+                    {
+                        stats.Enemies[index].DeathObserved = true;
+                        if (states.TryGetValue(target.Id, out var state) && state.Address == target.Address && state.Rarity.HasValue)
+                            stats.Enemies[index].Rarity = state.Rarity;
+                    }
     }
 
     private void RecordEnemySamples(KikiMeterSettings.DamageMeterMapStats stats)
@@ -251,6 +273,10 @@ internal sealed class DamageTracker
                 stats.Enemies.Add(new KikiMeterSettings.DamageMeterEnemy { AreaHash = key.Area, Id = key.Id, Address = key.Address });
             }
             stats.Enemies[index].Damage += target.Value;
+            if (states.TryGetValue(target.Key.Id, out var state) && state.Address == target.Key.Address && state.Rarity.HasValue)
+                stats.Enemies[index].Rarity = state.Rarity;
+            stats.Enemies[index].DeathObserved ??= false;
+            if (frameDeaths.Contains(target.Key)) stats.Enemies[index].DeathObserved = true;
             stats.LargestImpact = Math.Max(stats.LargestImpact, target.Value);
             for (int sample = 0; sample < stats.EnemySampleDamage.Count; sample++)
                 if (index < KikiMeterSettings.DamageMeterEnemySampleSizes[sample])
@@ -327,6 +353,7 @@ internal sealed class DamageTracker
         TotalDamage = 0;
         PeakDps = 0;
         MaxTargets = 0;
+        combatEnemies.Clear();
         combatStart = lastDamageTime = 0;
     }
 
@@ -347,6 +374,8 @@ internal sealed class DamageTracker
         trialDamage = 0;
         trialPeak = 0;
         states.Clear();
+        combatEnemies.Clear();
+        frameDeaths.Clear();
         samples.Clear();
         history.Clear();
         frameTargets.Clear();
@@ -365,6 +394,7 @@ internal sealed class DamageTracker
         InterruptTrial();
         FinishCombat();
         states.Clear();
+        frameDeaths.Clear();
         samples.Clear();
         rollingDamage = 0;
         frameTargets.Clear();
@@ -385,20 +415,28 @@ internal sealed class DamageTracker
         frame++;
         frameDamage = 0;
         frameTargets.Clear();
+        frameDeaths.Clear();
     }
 
     public void Observe(uint entityId, IntPtr address, int health, int shield)
+        => ObserveMonster(entityId, address, health, shield, null, health > 0);
+
+    public void ObserveMonster(uint entityId, IntPtr address, int health, int shield,
+        ExileCenter.RemoteEnums.Rarity? rarity, bool isAlive)
     {
         if (address == IntPtr.Zero || health < 0 || shield < 0) return;
+        if (rarity.HasValue && !Enum.IsDefined(rarity.Value)) rarity = null;
         long pool = (long)health + shield;
         if (!states.TryGetValue(entityId, out var state))
         {
-            states[entityId] = new DpsState { Address = address, Frame = frame, LastPool = pool, LastHealth = health };
+            states[entityId] = new DpsState { Address = address, Frame = frame, LastPool = pool, LastHealth = health,
+                WasAlive = isAlive, Rarity = rarity };
             return;
         }
         if (state.Frame == frame) return;
         if (state.Frame == frame - 1 && state.Address == address)
         {
+            if (state.WasAlive && !isAlive) frameDeaths.Add((entityId, address));
             long damage = Math.Max(0L, state.LastPool - pool);
             if (damage > 0)
             {
@@ -407,6 +445,8 @@ internal sealed class DamageTracker
                 frameTargets[(entityId, address)] = damage;
             }
         }
+        state.Rarity = state.Address == address ? rarity ?? state.Rarity : rarity;
+        state.WasAlive = isAlive;
         state.Address = address;
         state.Frame = frame;
         state.LastPool = pool;
@@ -414,7 +454,7 @@ internal sealed class DamageTracker
     }
 
     public bool NeedsFinalSample(uint entityId, IntPtr address) => states.TryGetValue(entityId, out var state) &&
-        state.Address == address && state.Frame == frame - 1 && state.LastHealth > 0;
+        state.Address == address && state.Frame == frame - 1 && state.WasAlive;
 
     public void EndFrame()
     {
@@ -426,6 +466,7 @@ internal sealed class DamageTracker
                 TotalDamage = 0;
                 PeakDps = 0;
                 MaxTargets = 0;
+                combatEnemies.Clear();
                 combatStart = previousTime > 0 ? previousTime : frameTime - 0.1;
                 inCombat = true;
             }
@@ -453,6 +494,24 @@ internal sealed class DamageTracker
         if (inCombat) MaxTargets = Math.Max(MaxTargets, CurrentTargets);
         CurrentDps = rollingDamage; // Damage observed over a fixed one-second window.
         PeakDps = Math.Max(PeakDps, CurrentDps);
+        foreach (var target in frameTargets)
+        {
+            if (!combatEnemies.TryGetValue(target.Key, out var enemy))
+            {
+                enemy = new() { Id = target.Key.Id, Address = target.Key.Address.ToInt64(), DeathObserved = false };
+                combatEnemies[target.Key] = enemy;
+            }
+            enemy.Damage += target.Value;
+            if (states.TryGetValue(target.Key.Id, out var state) && state.Address == target.Key.Address && state.Rarity.HasValue)
+                enemy.Rarity = state.Rarity;
+        }
+        foreach (var target in frameDeaths)
+            if (combatEnemies.TryGetValue(target, out var enemy))
+            {
+                enemy.DeathObserved = true;
+                if (states.TryGetValue(target.Id, out var state) && state.Address == target.Address && state.Rarity.HasValue)
+                    enemy.Rarity = state.Rarity;
+            }
         RecordMapFrame();
         // A fixed wall-clock window includes pauses between attacks. It is separate
         // from automatic combats, which finish after three idle seconds.

@@ -17,7 +17,7 @@
   "meter.duration": "Combat duration",
   "meter.history": "Last 10 combats",
   "meter.no_history": "No completed combat yet.",
-  "meter.all_sources": "Health + shield loss · all sources combined",
+  "meter.all_sources": "Observed damage · all sources. Individual party-member DPS is unavailable: damage attribution is not read.",
   "meter.live": "Live",
   "meter.compare": "Compare",
   "meter.history_tab": "History",
@@ -124,5 +124,18 @@
   "meter.map_all_short": "Whole map",
   "meter.map_single_short": "Single",
   "meter.map_multi_short": "Multi",
-  "meter.new_test": "New test"
+  "meter.new_test": "New test",
+  "meter.monsters.normal": "Normal",
+  "meter.monsters.magic": "Magic",
+  "meter.monsters.rare": "Rare",
+  "meter.monsters.unique": "Unique bosses",
+  "meter.monsters.unknown": "Unclassified",
+  "meter.monsters.category": "Monsters",
+  "meter.monsters.hit": "Hit",
+  "meter.monsters.dead": "Observed deaths",
+  "meter.monsters.hit_dead": "Hit / deaths",
+  "meter.monsters.columns": "Monster categories · hit / deaths",
+  "meter.monsters.help": "Distinct enemies hit / confirmed deaths after a live observation. Unique includes map bosses, rogue exiles and other unique monsters. All damage sources are included. Disappearance alone is not a death; enemies outside reading range are not counted.",
+  "meter.monsters.partial": "Older reports retain their totals. Monster categories and confirmed deaths cover only observations made after this feature was enabled; missing historical counts are not reconstructed.",
+  "meter.monsters.unavailable": "Monster counts are unavailable for this older report."
 }

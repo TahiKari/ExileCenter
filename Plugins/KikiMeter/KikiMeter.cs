@@ -191,7 +191,12 @@ namespace KikiMeter
                         // The core stops refreshing dormant components before their final hit.
                         if (finalSample) life.Address = life.Address;
                         if (!finalSample || !life.IsAlive)
-                            this.damageMeter.Observe(entity.Id, entity.Address, life.Health.Current, life.EnergyShield.Current);
+                        {
+                            Rarity? rarity = entity.TryGetComponent<ObjectMagicProperties>(out var properties, false) &&
+                                properties.IsParentValid(entity.Address) ? properties.Rarity : null;
+                            this.damageMeter.ObserveMonster(entity.Id, entity.Address, life.Health.Current, life.EnergyShield.Current,
+                                rarity, life.IsAlive);
+                        }
                     }
                     this.damageMeter.EndFrame();
                     if (area.SekhemaRun.Completed && this.damageMeter.CurrentMap?.Hash == area.SekhemaRun.RunKey)

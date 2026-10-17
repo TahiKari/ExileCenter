@@ -42,6 +42,7 @@ public sealed class KikiMeterSettings : IPSettings
         public bool DamageMeterMapShowTime = true, DamageMeterMapShowAverage = true;
         public bool DamageMeterMapShowPeak = true, DamageMeterMapShowImpact = true;
         public bool DamageMeterMapShowDamage = true, DamageMeterMapShowEnemies = true;
+        public bool DamageMeterMapShowMonsterTypes = true;
         public bool DamageMeterMapShowStatus = true;
         [Newtonsoft.Json.JsonProperty(ObjectCreationHandling = Newtonsoft.Json.ObjectCreationHandling.Replace)]
         public List<int> DamageMeterMapSampleColumns = new() { 10, 50, 100, 200 };
@@ -58,6 +59,8 @@ public sealed class KikiMeterSettings : IPSettings
             public bool Finished, ReadingInterrupted, SkillsChanged;
             public int EnemySampleVersion;
             public bool EnemySamplesPartial;
+            public int MonsterCountsVersion;
+            public bool MonsterCountsPartial;
             public DamageMeterMapStats Overall = new(), Single = new(), Multi = new();
             public List<DamageMeterMap> SubAreas = new();
         }
@@ -78,6 +81,8 @@ public sealed class KikiMeterSettings : IPSettings
             public uint Id;
             public string AreaHash = "";
             public long Address, Damage;
+            public ExileCenter.RemoteEnums.Rarity? Rarity;
+            public bool? DeathObserved;
         }
 
         public sealed class DamageMeterReference

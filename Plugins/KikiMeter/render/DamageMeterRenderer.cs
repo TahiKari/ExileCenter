@@ -129,7 +129,7 @@ internal sealed class DamageMeterRenderer
                         ImGui.EndTabBar();
                     }
                     ImGui.Separator();
-                    ImGui.TextWrapped(text.T("meter.all_sources", "Observed damage · all sources"));
+                    ImGui.TextWrapped(text.T("meter.all_sources", "Observed damage · all sources. Individual party-member DPS is unavailable: damage attribution is not read."));
                 }
                 ImGui.EndChild();
             }
@@ -195,6 +195,7 @@ internal sealed class DamageMeterRenderer
             ImGui.EndTable();
         }
         ImGui.PopStyleVar();
+        DrawMonsterCounts(meter.CombatEnemies, text);
         if (ImGui.CollapsingHeader(text.T("meter.live_guide", "Understand the measurements")))
         {
             ImGui.TextWrapped(text.T("meter.live_help", "Single-target: one enemy hit. Multi-target: two or more within one second. The average and peak cover the whole combat; after 3 seconds without damage, the combat ends."));
@@ -298,7 +299,7 @@ internal sealed class DamageMeterRenderer
         => before > 0 && double.IsFinite(before) && double.IsFinite(after)
             ? $"{(after / before - 1) * 100:+0.0;-0.0;0.0} %" : "—";
 
-    private static void DrawMapMetrics(KikiMeterSettings.DamageMeterMapStats stats, KikiMeterSettings settings, PluginLocalization text)
+    private static void DrawMapMetrics(KikiMeterSettings.DamageMeterMapStats stats, KikiMeterSettings settings, PluginLocalization text, bool countsAvailable)
     {
         int columns = ImGui.GetContentRegionAvail().X >= 480 ? 3 : 1;
         if (ImGui.BeginTable("MapMetrics", columns, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchSame))
@@ -311,6 +312,45 @@ internal sealed class DamageMeterRenderer
             ImGui.TableNextColumn(); DrawDamageMetric(text.T("meter.map_enemies", "Distinct enemies hit"), (stats.Enemies?.Count ?? 0).ToString(), settings.DpsTextColor);
             ImGui.EndTable();
         }
+        if (countsAvailable) DrawMonsterCounts(stats.Enemies ?? new(), text);
+        else ImGui.TextWrapped(text.T("meter.monsters.unavailable", "Monster counts are unavailable for this older report."));
+    }
+
+    private static string MonsterCategory(int category, PluginLocalization text) => category switch
+    {
+        0 => text.T("meter.monsters.normal", "Normal"),
+        1 => text.T("meter.monsters.magic", "Magic"),
+        2 => text.T("meter.monsters.rare", "Rare"),
+        3 => text.T("meter.monsters.unique", "Unique bosses"),
+        _ => text.T("meter.monsters.unknown", "Unclassified")
+    };
+
+    private static string MonsterCount(IEnumerable<KikiMeterSettings.DamageMeterEnemy> enemies, int category)
+    {
+        int hit = 0, dead = 0;
+        foreach (var enemy in enemies)
+            if ((enemy.Rarity.HasValue ? (int)enemy.Rarity.Value : 4) == category)
+            { hit++; if (enemy.DeathObserved == true) dead++; }
+        return hit + " / " + dead;
+    }
+
+    private static void DrawMonsterCounts(IEnumerable<KikiMeterSettings.DamageMeterEnemy> enemies, PluginLocalization text)
+    {
+        var observed = enemies.ToArray();
+        if (!ImGui.BeginTable("MonsterCounts", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp)) return;
+        ImGui.TableSetupColumn(text.T("meter.monsters.category", "Monster category"), ImGuiTableColumnFlags.WidthStretch, 2);
+        ImGui.TableSetupColumn(text.T("meter.monsters.hit", "Hit"));
+        ImGui.TableSetupColumn(text.T("meter.monsters.dead", "Observed deaths"));
+        ImGui.TableHeadersRow();
+        for (int category = 0; category < (observed.Any(e => !e.Rarity.HasValue) ? 5 : 4); category++)
+        {
+            ImGui.TableNextColumn(); ImGui.TextUnformatted(MonsterCategory(category, text));
+            var group = observed.Where(e => (e.Rarity.HasValue ? (int)e.Rarity.Value : 4) == category).ToArray();
+            ImGui.TableNextColumn(); ImGui.TextUnformatted(group.Length.ToString());
+            ImGui.TableNextColumn(); ImGui.TextUnformatted(group.Count(e => e.DeathObserved == true).ToString());
+        }
+        ImGui.EndTable();
+        if (ImGui.IsItemHovered()) DrawDamageTooltip(text.T("meter.monsters.help", "Distinct enemies hit / confirmed deaths after a live observation. Unique includes map bosses, rogue exiles and other unique monsters. All damage sources are included. Disappearance alone is not a death; enemies outside reading range are not counted."));
     }
 
     private bool DrawDamageMaps(DamageTracker meter, KikiMeterSettings settings, PluginLocalization text)
@@ -348,7 +388,7 @@ internal sealed class DamageMeterRenderer
                 ImGui.TextWrapped(active.Name + " · " + text.T(active.Finished ? "meter.map_finished" : meter.MapActive ? "meter.map_running" : "meter.map_paused",
                     active.Finished ? "Finished" : meter.MapActive ? "Recording" : "Paused"));
                 var stats = MapStats(active, mapMode);
-                DrawMapMetrics(stats, settings, text);
+                DrawMapMetrics(stats, settings, text, active.MonsterCountsVersion > 0);
                 ImGui.TextWrapped(text.T("meter.map_time", "Time in map") + " : " + MapTime(active.Overall.Seconds));
                 ImGui.TextUnformatted(text.T("meter.map_label", "Setup / note"));
                 ImGui.SetNextItemWidth(-1);
@@ -412,6 +452,8 @@ internal sealed class DamageMeterRenderer
             ImGui.EndPopup();
         }
         if (maps.Count == 0) { ImGui.TextWrapped(text.T("meter.map_none", "Enter a map to start a report.")); return save; }
+        if (maps.Any(map => map.MonsterCountsVersion == 0 || map.MonsterCountsPartial || map.SubAreas.Any(a => a.MonsterCountsPartial)))
+            ImGui.TextWrapped(text.T("meter.monsters.partial", "Older reports retain their totals. Monster categories and confirmed deaths cover only observations made after this feature was enabled; missing historical counts are not reconstructed."));
         var columns = new List<int>();
         if (settings.DamageMeterMapShowTime) columns.Add(0);
         if (settings.DamageMeterMapShowAverage) columns.Add(1);
@@ -419,6 +461,11 @@ internal sealed class DamageMeterRenderer
         if (settings.DamageMeterMapShowImpact) columns.Add(3);
         if (settings.DamageMeterMapShowDamage) columns.Add(4);
         if (settings.DamageMeterMapShowEnemies) columns.Add(5);
+        if (settings.DamageMeterMapShowMonsterTypes)
+        {
+            columns.AddRange(new[] { -1, -2, -3, -4 });
+            if (maps.SelectMany(m => new[] { m }.Concat(m.SubAreas)).Any(m => MapStats(m, mapMode).Enemies?.Any(e => !e.Rarity.HasValue) == true)) columns.Add(-5);
+        }
         if (settings.DamageMeterMapShowStatus) columns.Add(6);
         columns.AddRange(KikiMeterSettings.DamageMeterEnemySampleSizes.Where(n => settings.DamageMeterMapSampleColumns?.Contains(n) == true));
         float height = Math.Max(ImGui.GetTextLineHeightWithSpacing() * 2, ImGui.GetContentRegionAvail().Y - 4);
@@ -452,11 +499,12 @@ internal sealed class DamageMeterRenderer
                         5 => map.EnemySampleVersion > 0 ? (stats.Enemies?.Count ?? 0).ToString() : "—",
                         6 => text.T(row.Parent.Finished ? "meter.map_finished" : meter.MapActive && row.Parent == meter.CurrentMap &&
                             (map == row.Parent || map.Hash == meter.CurrentSubAreaHash) ? "meter.map_running" : "meter.map_paused", row.Parent.Finished ? "Finished" : "Paused"),
+                        < 0 => map.MonsterCountsVersion == 0 ? "—" : MonsterCount(stats.Enemies ?? new(), -column - 1),
                         _ => map.EnemySampleVersion == 0 ? "—" : SampleDamage(stats, column) is { } damage
                             ? NumberFormatter.Format(damage) : $"{Math.Min(stats.Enemies?.Count ?? 0, column)} / {column}"
                     };
                     ImGui.TextUnformatted(value);
-                    if (ImGui.IsItemHovered()) DrawDamageTooltip(column == 3 ? text.T("meter.map_impact_help", "Largest observed loss on a single enemy between readings. Always retains the map maximum; several hits may be combined and overkill damage is not visible.") :
+                    if (ImGui.IsItemHovered()) DrawDamageTooltip(column < 0 ? text.T("meter.monsters.help", "Distinct enemies hit / confirmed deaths after a live observation. Unique includes map bosses, rogue exiles and other unique monsters. All damage sources are included. Disappearance alone is not a death; enemies outside reading range are not counted.") : column == 3 ? text.T("meter.map_impact_help", "Largest observed loss on a single enemy between readings. Always retains the map maximum; several hits may be combined and overkill damage is not visible.") :
                         column >= 10 ? text.T("meter.map_samples_help", "Total observed damage on the first N distinct enemies in the selected mode. Repeated hits add damage without counting the enemy twice. A value appears once N enemies have been reached; otherwise progress is shown. These are damage totals, not DPS.") : MapCaption(map));
                 }
             }
@@ -485,6 +533,7 @@ internal sealed class DamageMeterRenderer
         4 => text.T("meter.map_damage", "Total damage"),
         5 => text.T("meter.map_enemies", "Distinct enemies hit"),
         6 => text.T("meter.map_state", "Status"),
+        < 0 => MonsterCategory(-column - 1, text) + "\n" + text.T("meter.monsters.hit_dead", "Hit / deaths"),
         _ => SampleLabel(column, text)
     };
 
@@ -502,6 +551,7 @@ internal sealed class DamageMeterRenderer
         save |= ImGui.Checkbox(MapColumnLabel(3, text), ref settings.DamageMeterMapShowImpact);
         save |= ImGui.Checkbox(MapColumnLabel(4, text), ref settings.DamageMeterMapShowDamage);
         save |= ImGui.Checkbox(MapColumnLabel(5, text), ref settings.DamageMeterMapShowEnemies);
+        save |= ImGui.Checkbox(text.T("meter.monsters.columns", "Monster categories · hit / deaths"), ref settings.DamageMeterMapShowMonsterTypes);
         save |= ImGui.Checkbox(MapColumnLabel(6, text), ref settings.DamageMeterMapShowStatus);
         ImGui.SeparatorText(text.T("meter.map_samples", "Enemy samples"));
         settings.DamageMeterMapSampleColumns ??= new();
