@@ -1471,6 +1471,57 @@ internal static class TabletRankingCheck
             }
             finally {offerField.SetValue(null,previousOffer);selectedPageField.SetValue(null,previousPage);io.FontGlobalScale=previousToolbarFontScale;}
             io.AddMousePosEvent(-100,-100);io.AddMouseButtonEvent(0,false);
+            var beforeRealWindowSize=io.DisplaySize;float beforeRealWindowFont=io.FontGlobalScale;
+            var managerType=typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Plugin.PManager",true);
+            var containers=(IList)managerType.GetField("Plugins",flags).GetValue(null);var previousContainers=containers.Cast<object>().ToArray();
+            try
+            {
+                io.FontGlobalScale=18f/13f;
+                var containerType=typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Plugin.PluginContainer",true);
+                var metadataType=typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Plugin.PluginMetadata",true);
+                containers.Clear();
+                // Populate the real list/table without enabling plugins or attaching to a game.
+                var listPlugin=new StashUtilityCore{DllDirectory=isolated};listPlugin.GetDescription();
+                foreach(var pluginName in names)containers.Add(Activator.CreateInstance(containerType,new object[]{pluginName,listPlugin,Activator.CreateInstance(metadataType),null}));
+                foreach(var displaySize in new[]{new Vector2(1824,976),new Vector2(1920,1010),new Vector2(1100,800)})
+                {
+                    io.DisplaySize=displaySize;Vector4 stableFrame=Vector4.Zero;
+                    for(int frame=0;frame<120;frame++)
+                    {
+                        if(frame==40||frame==50)
+                        {
+                            io.AddMousePosEvent(displaySize.X*(frame==40?.6f:.2f),displaySize.Y*.5f);
+                            io.AddMouseWheelEvent(0,-3);
+                        }
+                        ImGuiNET.ImGui.NewFrame();settingsType.GetMethod("DrawWindow",flags).Invoke(null,new object[]{true});ImGuiNET.ImGui.Render();
+                        var data=ImGuiNET.ImGui.GetDrawData();Vector4 bounds=Vector4.Zero;
+                        for(int listIndex=0;listIndex<data.CmdListsCount;listIndex++)
+                        {
+                            var list=data.CmdLists[listIndex];
+                            for(int commandIndex=0;commandIndex<list.CmdBuffer.Size;commandIndex++)
+                            {
+                                var command=list.CmdBuffer[commandIndex];if(command.TextureId!=new IntPtr(2))continue;
+                                for(int offset=0;offset<command.ElemCount;offset+=3)
+                                {
+                                    var vertices=Enumerable.Range(0,3).Select(i=>list.VtxBuffer[(int)command.VtxOffset+list.IdxBuffer[(int)command.IdxOffset+offset+i]]).ToArray();
+                                    if(vertices.Min(v=>v.uv.X)==0&&vertices.Min(v=>v.uv.Y)==0&&vertices.Max(v=>v.uv.X)==1&&vertices.Max(v=>v.uv.Y)==1)
+                                        bounds=new Vector4(vertices.Min(v=>v.pos.X),vertices.Min(v=>v.pos.Y),vertices.Max(v=>v.pos.X),vertices.Max(v=>v.pos.Y));
+                                }
+                            }
+                        }
+                        if(frame==16)stableFrame=bounds;
+                        if(frame>16)Check(bounds!=Vector4.Zero&&Vector4.Distance(bounds,stableFrame)<.1f,
+                            "The real settings layout keeps the original frame stationary across consecutive renders: viewport="+displaySize+", frame="+frame+", before="+stableFrame+", now="+bounds);
+                        if(frame==119&&previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,$"settings-stable-{displaySize.X}x{displaySize.Y}.png"),pixels,atlasWidth,atlasHeight);
+                    }
+                }
+            }
+            finally
+            {
+                containers.Clear();foreach(var container in previousContainers)containers.Add(container);
+                io.DisplaySize=beforeRealWindowSize;io.FontGlobalScale=beforeRealWindowFont;selectedPageField.SetValue(null,previousPage);
+                io.AddMousePosEvent(-100,-100);
+            }
             var ornate=typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("DrawOrnateWindow",flags);
             foreach(var panelFlags in new[]{ImGuiNET.ImGuiWindowFlags.None,ImGuiNET.ImGuiWindowFlags.NoBackground,ImGuiNET.ImGuiWindowFlags.NoInputs})
             {
@@ -1549,8 +1600,7 @@ internal static class TabletRankingCheck
                     {
                         var list=ImGuiNET.ImGui.GetWindowDrawList();
                         int wholeImageTriangles=0;
-                        var viewport=windowSize-new Vector2(ImGuiNET.ImGui.GetScrollMaxY()>0?ImGuiNET.ImGui.GetStyle().ScrollbarSize+1:0,
-                            ImGuiNET.ImGui.GetScrollMaxX()>0?ImGuiNET.ImGui.GetStyle().ScrollbarSize+1:0);
+                        var viewport=windowSize;
                         float menuHeight=ImGuiNET.ImGui.GetFrameHeight();
                         float imageHeight=Math.Min(viewport.Y-menuHeight,viewport.X*framePreviewHeight/framePreviewWidth);
                         float imageWidth=imageHeight*framePreviewWidth/framePreviewHeight;
@@ -1585,7 +1635,7 @@ internal static class TabletRankingCheck
                         Check(cursor.Y>=imageStart.Y+imageHeight*.16f&&cursor.Y+available.Y<=imageStart.Y+imageHeight*(1-.15f)+1,
                             "The work rectangle reserves both the cartouche and the carved footer: "+windowSize);
                     }
-                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.57");ImGuiNET.ImGui.EndMenuBar();}
+                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.58");ImGuiNET.ImGui.EndMenuBar();}
                     ImGuiNET.ImGui.BeginChild("Navigation",new Vector2(Math.Min(220,ImGuiNET.ImGui.GetContentRegionAvail().X*.3f),0),ImGuiNET.ImGuiChildFlags.Borders);
                     foreach(var label in new[]{"Application","General","Plugins","Mises a jour","Plugins actifs","Auto-craft TP"})ImGuiNET.ImGui.Selectable(label,label=="Plugins");
                     ImGuiNET.ImGui.EndChild();ImGuiNET.ImGui.SameLine();

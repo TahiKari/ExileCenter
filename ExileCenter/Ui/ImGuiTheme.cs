@@ -29,11 +29,13 @@ namespace ExileCenter.Ui
 
         internal static bool BeginSettingsWindow(string name, ref bool open, ImGuiWindowFlags flags)
         {
+            // SettingsSidebar and SettingsContent own their scrolling. Keep the outer
+            // artwork and menu fixed instead of feeding scrollbar changes back into its size.
+            flags |= ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse;
             float scale = PushFramePadding(name, flags, true);
-            if (scale > 0) flags |= ImGuiWindowFlags.HorizontalScrollbar;
             bool visible = ImGui.Begin(name, ref open, flags);
             ImGui.PopStyleVar();
-            RememberFrameSize(name);
+            RememberFrameSize(name, flags);
             if (visible && !DrawOrnateWindow("ExileCenter", flags, true, true, scale)) DrawWindowBackground(flags, .80f);
             return visible;
         }
@@ -45,7 +47,7 @@ namespace ExileCenter.Ui
             if (scale > 0) flags |= ImGuiWindowFlags.HorizontalScrollbar;
             bool visible = ImGui.Begin(name, flags);
             ImGui.PopStyleVar();
-            RememberFrameSize(name);
+            RememberFrameSize(name, flags);
             if (visible && !DrawOrnateWindow(name, flags, false, scale: scale)) DrawWindowBackground(flags);
             return visible;
         }
@@ -57,7 +59,7 @@ namespace ExileCenter.Ui
             if (scale > 0) flags |= ImGuiWindowFlags.HorizontalScrollbar;
             bool visible = ImGui.Begin(name, ref open, flags);
             ImGui.PopStyleVar();
-            RememberFrameSize(name);
+            RememberFrameSize(name, flags);
             if (visible && !DrawOrnateWindow(name, flags, true, scale: scale)) DrawWindowBackground(flags);
             return visible;
         }
@@ -68,14 +70,15 @@ namespace ExileCenter.Ui
             return (ImGui.GetCurrentContext(), id < 0 ? name : name[id..]);
         }
 
-        private static void RememberFrameSize(string name)
+        private static void RememberFrameSize(string name, ImGuiWindowFlags flags)
         {
-            if (!ImGui.IsWindowCollapsed()) frameSizes[FrameKey(name)] = FrameViewport();
+            if (!ImGui.IsWindowCollapsed()) frameSizes[FrameKey(name)] = FrameViewport(flags);
         }
 
-        private static Vector2 FrameViewport() => ImGui.GetWindowSize() - new Vector2(
-            ImGui.GetScrollMaxY() > 0 ? ImGui.GetStyle().ScrollbarSize + 1 : 0,
-            ImGui.GetScrollMaxX() > 0 ? ImGui.GetStyle().ScrollbarSize + 1 : 0);
+        private static Vector2 FrameViewport(ImGuiWindowFlags flags) =>
+            (flags & ImGuiWindowFlags.NoScrollbar) != 0 ? ImGui.GetWindowSize() : ImGui.GetWindowSize() - new Vector2(
+                ImGui.GetScrollMaxY() > 0 ? ImGui.GetStyle().ScrollbarSize + 1 : 0,
+                ImGui.GetScrollMaxX() > 0 ? ImGui.GetStyle().ScrollbarSize + 1 : 0);
 
         private static (Vector2 Offset, Vector2 Size) FrameLayout(Vector2 viewport, ImGuiWindowFlags flags)
         {
@@ -133,7 +136,7 @@ namespace ExileCenter.Ui
             int id = name.IndexOf("##", StringComparison.Ordinal);
             string title = (id < 0 ? name : name[..id]).ToUpperInvariant();
             bool heading = title.Length > 0 && (forceHeading || (flags & ImGuiWindowFlags.NoTitleBar) == 0);
-            var frame = FrameLayout(FrameViewport(), flags);
+            var frame = FrameLayout(FrameViewport(flags), flags);
             var position = ImGui.GetWindowPos() + frame.Offset;
             var imageSize = frame.Size;
             var end = position + imageSize;
