@@ -1624,7 +1624,12 @@ internal static class TabletRankingCheck
                                 Check(vertices.All(v=>v.col==0xffffffff),"The original frame colors have no tint or opacity modification: "+windowSize);
                                 artworkMin=Vector2.Min(artworkMin,new Vector2(vertices.Min(v=>v.pos.X),vertices.Min(v=>v.pos.Y)));
                                 artworkMax=Vector2.Max(artworkMax,new Vector2(vertices.Max(v=>v.pos.X),vertices.Max(v=>v.pos.Y)));
-                                if(Math.Abs(du-1)<.0001f&&Math.Abs(vertices.Min(v=>v.uv.Y))<.0001f&&Math.Abs(dv-56f/941)<.0001f)headerTriangles++;
+                                if(du>.5f&&Math.Abs(vertices.Min(v=>v.uv.Y))<.0001f&&Math.Abs(dv-54f/941)<.0001f)
+                                {
+                                    headerTriangles++;
+                                    Check(Math.Abs(dx-imageWidth*(1592f/1672))<1&&Math.Abs(dy-imageWidth*(54f/1672)*1.35f)<1,
+                                        "The upper frieze is enlarged uniformly by 35 percent between the unchanged pillars: "+windowSize);
+                                }
                                 if(Math.Abs(du-1)<.0001f&&Math.Abs(vertices.Min(v=>v.uv.Y)-875f/941)<.0001f&&Math.Abs(vertices.Max(v=>v.uv.Y)-1)<.0001f)footerTriangles++;
                                 Check(vertices.All(v=>v.pos.X>=command.ClipRect.X-.01f&&v.pos.X<=command.ClipRect.Z+.01f&&
                                     v.pos.Y>=command.ClipRect.Y-.01f&&v.pos.Y<=command.ClipRect.W+.01f),
@@ -1632,16 +1637,19 @@ internal static class TabletRankingCheck
                                 artworkTriangles++;
                             }
                         }
-                        Check(artworkTriangles>=10&&headerTriangles==2&&footerTriangles==2,"Complete header and footer each span the full width once, with preserved corners: "+windowSize);
+                        Check(artworkTriangles>=14&&headerTriangles==2&&footerTriangles==2,"The enlarged upper frieze and complete footer each span their width once, with preserved corners: "+windowSize);
                         Check(Vector2.Distance(artworkMin,imageStart)<1&&Vector2.Distance(artworkMax,imageStart+new Vector2(imageWidth,imageHeight))<1,
                             "Artwork fills all viewport edges without black lateral margins: "+windowSize);
                         var cursor=ImGuiNET.ImGui.GetCursorScreenPos();var available=ImGuiNET.ImGui.GetContentRegionAvail();
                         Check(cursor.X>=imageStart.X+imageWidth*(40f/1672)-1&&cursor.X+available.X<=imageStart.X+imageWidth*(1-40f/1672)+1,
                             "Content and fill-width controls fit between the proportional pillars: "+windowSize);
-                        Check(cursor.Y>=imageStart.Y+imageWidth*(56f/1672)&&cursor.Y+available.Y<=imageStart.Y+imageHeight-imageWidth*(56f/1672)+1,
+                        Check(cursor.Y>=imageStart.Y+imageWidth*(54f/1672)*1.35f&&cursor.Y+available.Y<=imageStart.Y+imageHeight-imageWidth*(56f/1672)+1,
                             "The work rectangle reserves both the cartouche and the carved footer: "+windowSize);
+                        Check(cursor.X-imageStart.X-imageWidth*(40f/1672)<=8&&imageStart.X+imageWidth*(1-40f/1672)-cursor.X-available.X<=8&&
+                            cursor.Y-imageStart.Y-imageWidth*(54f/1672)*1.35f<=8&&imageStart.Y+imageHeight-imageWidth*(56f/1672)-cursor.Y-available.Y<=8,
+                            "Settings content stays within eight pixels of every protected ornamental border: "+windowSize);
                     }
-                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.60");ImGuiNET.ImGui.EndMenuBar();}
+                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.62");ImGuiNET.ImGui.EndMenuBar();}
                     ImGuiNET.ImGui.BeginChild("Navigation",new Vector2(Math.Min(220,ImGuiNET.ImGui.GetContentRegionAvail().X*.3f),0),ImGuiNET.ImGuiChildFlags.Borders);
                     foreach(var label in new[]{"Application","General","Plugins","Mises a jour","Plugins actifs","Auto-craft TP"})ImGuiNET.ImGui.Selectable(label,label=="Plugins");
                     ImGuiNET.ImGui.EndChild();ImGuiNET.ImGui.SameLine();
