@@ -32,6 +32,7 @@ Open **Plugins** in the ExileCenter menu. The plugin table preserves each plugin
 | Plugin | Author / upstream | Notes |
 |--------|-------------------|-------|
 | Atlas | Nekkoy / [yokkenUA](https://github.com/MordWraith/Gamehelper) (synced **v0.1.4**) | Chevron routes, hide available maps, expedition targets, Grand Mirror badge, content icons |
+| Atlas zoom-out research | [syrairc/ExileMaps — AtlasHacks.cs](https://github.com/syrairc/ExileMaps/blob/main/AtlasHacks.cs) | Atlas-only clamp signatures; independently implemented validation, limited zoom range and restoration |
 | Radar | Gordin | GameHelper2 |
 | RitualHelper | caio | Based on AutoRitualPricer ([Queuete/GameHelper](https://github.com/MordWraith/Gamehelper) lineage) |
 | RuneforgeHelper | Nekkoy / [yokkenUA](https://github.com/MordWraith/Gamehelper) | Runeshape rewards overlay |

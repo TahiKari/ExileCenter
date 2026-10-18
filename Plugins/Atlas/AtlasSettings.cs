@@ -184,6 +184,8 @@ namespace Atlas
         public float BaseHeight = 1080f;
         public Vector2 AnchorNudge = new(0f, 28f);
         public float ScaleMultiplier = 1.0f;
+        public bool ExtendedAtlasZoom;
+        public float AtlasZoomOutFactor = 2f;
 
         // Persisted in its own config/mapgroups.json (loaded/saved by the plugin), not settings.txt.
         // Seeded with the default set of map styles, used when no mapgroups.json exists yet.

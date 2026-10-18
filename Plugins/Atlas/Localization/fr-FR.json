@@ -1,4 +1,13 @@
 {
+  "atlas.zoom.title": "Dézoom de l’Atlas",
+  "atlas.zoom.help": "Active cette option, puis dézoome avec la molette sur la carte de l’Atlas. Le facteur étend la limite du jeu : 2× permet d’aller deux fois plus loin. Désactive l’option pour rétablir les limites d’origine.",
+  "atlas.zoom.enable": "Activer le dézoom étendu de l’Atlas",
+  "atlas.zoom.factor": "Facteur de dézoom",
+  "atlas.zoom.idle": "Dézoom d’origine.",
+  "atlas.zoom.waiting": "En attente du jeu.",
+  "atlas.zoom.active": "Dézoom étendu actif. Utilise la molette sur l’Atlas.",
+  "atlas.zoom.unsupported": "Dézoom non activé : la version du jeu n’est pas reconnue, l’accès est refusé ou le zoom a déjà été modifié. Désactive puis réactive l’option pour réessayer.",
+  "atlas.zoom.restore_failed": "La restauration du zoom a échoué. Désactive l’option pour réessayer la restauration.",
   "atlas.settings": "Paramètres",
   "atlas.input": "Entrée",
   "atlas.controller_mode": "Mode manette",

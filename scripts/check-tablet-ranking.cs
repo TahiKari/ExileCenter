@@ -627,6 +627,7 @@ internal static class TabletRankingCheck
             RunMetaFilters(args.Length > 1 && args[1] != "none" ? args[1] : null);
             CheckWorkbookPreset();
             CheckTooltipGeometry(root, args.Length > 2 ? args[2] : null);
+            CheckAtlasZoom(root, args.Length > 3 ? args[3] : null);
             CheckFontReload(root);
             CheckTabletSettingsUi(root, args.Length > 2 ? args[2] : null);
             Console.WriteLine(checks + " tablet classification checks passed.");
@@ -1380,6 +1381,101 @@ internal static class TabletRankingCheck
         Console.WriteLine($"VALIDATION composition UI: 210 labels at 32/40/52/104px; bounds, quantity space, colors, live edits and hover/help switches: {checks-before} checks passed.");
     }
 
+    private static void CheckAtlasZoom(string root, string gameExecutable)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
+        var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(root, "Plugins", "Atlas", "Atlas.dll"));
+        var controllerType = assembly.GetType("Atlas.Atlas", true).GetNestedType("AtlasZoomController", flags);
+        var locate = controllerType.GetMethod("Locate", flags);
+        var patterns = (string[])controllerType.GetField("Patterns", flags).GetValue(null);
+        var image = new byte[0x3000];
+        void I(int at, int value) => BitConverter.GetBytes(value).CopyTo(image, at);
+        I(0, 0x5A4D); I(0x3c, 0x80); I(0x80, 0x4550); I(0x84, 0x00018664); // x64, one executable section
+        I(0x94, 0xe0); I(0x178 + 12, 0x1000); I(0x178 + 16, 0x2000); I(0x178 + 20, 0x1000); I(0x178 + 36, 0x20000000);
+        int[] shifts = { 12, 16, 3, 3 };
+        for (int k = 0; k < 4; k++)
+        {
+            var bytes = patterns[k].Split(' ').Select(b => b == "??" ? (byte)0 : Convert.ToByte(b, 16)).ToArray();
+            bytes.CopyTo(image, 0x1100 + k * 0x100);
+            if (k < 2) I(0x1100 + k * 0x100 + shifts[k] + 4, 0x2100 + k * 4 - (0x1100 + k * 0x100 + shifts[k] + 8));
+        }
+        var found = ((ValueTuple<int,int>[])locate.Invoke(null, new object[] { image }));
+        Check(found.Length == 4 && found.Select(p => p.Item1).Distinct().Count() == 4, "Atlas zoom finds all four distinct executable sites");
+        void Rejected(byte[] bad, string message)
+        {
+            try { locate.Invoke(null, new object[] { bad }); throw new Exception("Invalid Atlas image accepted"); }
+            catch (TargetInvocationException ex) when (ex.InnerException is InvalidDataException) { Check(true, message); }
+        }
+        var duplicate = (byte[])image.Clone(); Array.Copy(image, 0x1100, duplicate, 0x1800, patterns[0].Split(' ').Length);
+        Rejected(duplicate, "Ambiguous Atlas zoom signatures are rejected");
+        var missing = (byte[])image.Clone(); missing[0x1400] = 0; Rejected(missing, "Missing Atlas zoom signature is rejected");
+        Rejected(new byte[32], "Malformed executable is rejected before any process write");
+        foreach (var pair in new[] { (float.NaN,2f), (float.PositiveInfinity,2f), (-4f,1f), (4f,3f), (2.5f,2.5f) })
+            Check((float)controllerType.GetMethod("Factor", flags).Invoke(null, new object[] { pair.Item1 }) == pair.Item2, "Atlas zoom factor is finite and bounded: " + pair.Item1);
+        if (!string.IsNullOrEmpty(gameExecutable))
+        {
+            var actual = ((ValueTuple<int,int>[])locate.Invoke(null, new object[] { File.ReadAllBytes(gameExecutable) }));
+            Check(actual.Length == 4, "The user's executable has four unique verified Atlas zoom sites (file read only)");
+        }
+        var controller = Activator.CreateInstance(controllerType, true);
+        object Call(string method, params object[] args) => controllerType.GetMethod(method, flags).Invoke(controller, args);
+        void Set(string field, object value) => controllerType.GetField(field, flags).SetValue(controller, value);
+        Call("Tick", false, 2f, 0u); Call("Tick", true, 2f, 0u);
+        Check((IntPtr)controllerType.GetField("handle", flags).GetValue(controller) == IntPtr.Zero, "Disabled or waiting Atlas zoom never opens a process");
+        var native = controllerType.GetNestedType("Native", flags);
+        object Native(string name, params object[] args) => native.GetMethod(name, flags).Invoke(null, args);
+        var process = (IntPtr)Native("OpenProcess", 0x1038u, false, (uint)Environment.ProcessId);
+        Check(process != IntPtr.Zero, "Native zoom fixture opens only its own test process");
+        IntPtr code = IntPtr.Zero, scratch = IntPtr.Zero;
+        try
+        {
+            code = (IntPtr)Native("VirtualAllocEx", process, IntPtr.Zero, (nuint)0x4000, 0x3000u, 4u);
+            scratch = (IntPtr)Native("VirtualAllocEx", process, IntPtr.Zero, (nuint)4096, 0x3000u, 4u);
+            Check(code != IntPtr.Zero && scratch != IntPtr.Zero, "Zoom fixture allocates non-executing test data pages");
+            Marshal.Copy(image, 0, code, image.Length);
+            Set("handle", process); Set("owner", (uint)Environment.ProcessId); Set("scratch", scratch);
+            var siteType = controllerType.GetNestedType("Site", flags);
+            var sites = (IList)controllerType.GetField("sites", flags).GetValue(controller);
+            for (int k = 0; k < 4; k++)
+            {
+                var site = Activator.CreateInstance(siteType, true); int length = k < 2 ? 8 : 4;
+                var original = image.AsSpan(found[k].Item2, length).ToArray(); var patched = (byte[])original.Clone();
+                var address = code + found[k].Item1;
+                if (k < 2) BitConverter.GetBytes(checked((int)(scratch.ToInt64() + k * 4 - address.ToInt64() - 8))).CopyTo(patched, 4);
+                else Array.Fill(patched, (byte)0x90);
+                void Field(string name, object value) => siteType.GetField(name, flags).SetValue(site, value);
+                Field("Address", address); Field("Original", original); Field("Patched", patched); Field("Skip", k < 2 ? 4 : 0);
+                Field("Stock", k == 0 ? 85f : .85f); sites.Add(site);
+            }
+            Call("WriteFactor", 2f);
+            Check(Math.Abs(BitConverter.Int32BitsToSingle(Marshal.ReadInt32(scratch)) - 42.5f) < .001f, "Two-times zoom writes only the private floor constant");
+            foreach (var site in sites) { siteType.GetField("Owned", flags).SetValue(site, true); Call("WriteSite", site, true); }
+            Set("active", true); Call("Tick", true, 3f, (uint)Environment.ProcessId);
+            Check(Math.Abs(BitConverter.Int32BitsToSingle(Marshal.ReadInt32(scratch)) - 85f / 3f) < .001f, "Factor changes update the private values while active");
+            var last = sites[3]; var lastAddress = (IntPtr)siteType.GetField("Address", flags).GetValue(last);
+            Marshal.WriteByte(lastAddress, 0xCC);
+            Check(!(bool)Call("Stop") && Marshal.ReadByte(lastAddress) == 0xCC, "Restoration refuses to overwrite a conflicting modification");
+            Call("Tick", true, 2f, (uint)Environment.ProcessId);
+            Check(Marshal.ReadByte(lastAddress) == 0xCC && Math.Abs(BitConverter.Int32BitsToSingle(Marshal.ReadInt32(scratch)) - 85f / 3f) < .001f,
+                "A restoration conflict blocks subsequent activation and constant writes");
+            Marshal.Copy((byte[])siteType.GetField("Patched", flags).GetValue(last), 0, lastAddress, 4);
+            Check((bool)Call("Stop"), "Restoration succeeds once owned bytes are restored");
+            scratch = IntPtr.Zero; process = IntPtr.Zero;
+            for (int k = 0; k < 4; k++)
+            {
+                int length = k < 2 ? 8 : 4; var actual = new byte[length]; Marshal.Copy(code + found[k].Item1, actual, 0, length);
+                Check(actual.SequenceEqual(image.AsSpan(found[k].Item2, length).ToArray()), "Disabling zoom restores the exact original instruction: " + k);
+            }
+            Check((IntPtr)controllerType.GetField("handle", flags).GetValue(controller) == IntPtr.Zero && (uint)controllerType.GetField("attempted", flags).GetValue(controller) == 0, "Restoration releases resources and allows reactivation");
+        }
+        finally
+        {
+            if (process != IntPtr.Zero) Call("Stop");
+            if (code != IntPtr.Zero) Native("VirtualFreeEx", new IntPtr(-1), code, (nuint)0, 0x8000u);
+        }
+        Console.WriteLine("VALIDATION Atlas zoom: unique signatures, factor limits, native patch/restore round-trip and conflict refusal passed; only test-process memory was written.");
+    }
+
     private static unsafe void CheckFontReload(string root)
     {
         const BindingFlags flags = BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
@@ -1745,7 +1841,7 @@ internal static class TabletRankingCheck
                             cursor.Y-imageStart.Y-imageWidth*(48f/1672)*1.35f<=4&&imageStart.Y+imageHeight-imageWidth*(52f/1672)-cursor.Y-available.Y<=4,
                             "Settings content stays within four pixels of every protected ornamental border: "+windowSize);
                     }
-                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter 1.6.1");ImGuiNET.ImGui.EndMenuBar();}
+                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter 1.7.0");ImGuiNET.ImGui.EndMenuBar();}
                     ImGuiNET.ImGui.BeginChild("Navigation",new Vector2(Math.Min(220,ImGuiNET.ImGui.GetContentRegionAvail().X*.3f),0),ImGuiNET.ImGuiChildFlags.Borders);
                     foreach(var label in new[]{"Application","General","Plugins","Mises a jour","Plugins actifs","Auto-craft TP"})ImGuiNET.ImGui.Selectable(label,label=="Plugins");
                     ImGuiNET.ImGui.EndChild();ImGuiNET.ImGui.SameLine();

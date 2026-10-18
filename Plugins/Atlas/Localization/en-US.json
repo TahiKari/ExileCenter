@@ -1,4 +1,13 @@
 {
+  "atlas.zoom.title": "Atlas zoom-out",
+  "atlas.zoom.help": "Enable this option, then scroll out on the Atlas. The factor extends the game limit: 2× allows twice the normal range. Disable it to restore the original limits.",
+  "atlas.zoom.enable": "Enable extended Atlas zoom-out",
+  "atlas.zoom.factor": "Zoom-out factor",
+  "atlas.zoom.idle": "Original zoom limits.",
+  "atlas.zoom.waiting": "Waiting for the game.",
+  "atlas.zoom.active": "Extended zoom-out is active. Use the mouse wheel on the Atlas.",
+  "atlas.zoom.unsupported": "Zoom-out was not activated: unsupported game version, access denied, or zoom already modified. Disable and enable the option to retry.",
+  "atlas.zoom.restore_failed": "Zoom restoration failed. Disable the option to retry restoration.",
   "atlas.settings": "Settings",
   "atlas.input": "Input",
   "atlas.controller_mode": "Controller Mode",

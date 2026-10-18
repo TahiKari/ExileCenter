@@ -294,6 +294,8 @@ namespace Atlas
         private int cacheFrameCounter = int.MaxValue;   // force refresh on first frame
         private int cachedAtlasCount = -1;
         private const int CacheRefreshFrames = 20;       // rebuild static data ~3×/sec at 60fps
+        private readonly AtlasZoomController atlasZoom = new();
+        private bool atlasZoomExitSubscribed;
 
         // Per-frame memo for GetFinalTopLeft's parent-chain reads: every atlas node shares the
         // same ancestors, so without this each node re-reads the whole chain. Cleared each frame.
@@ -306,12 +308,22 @@ namespace Atlas
 
         public override void OnDisable()
         {
+            if (atlasZoom.Stop() && atlasZoomExitSubscribed)
+            {
+                AppDomain.CurrentDomain.ProcessExit -= OnAtlasZoomExit;
+                atlasZoomExitSubscribed = false;
+            }
             UniversalFont.Restore();
             CloseAndResetHandle();
         }
 
         public override void OnEnable(bool isGameOpened)
         {
+            if (!atlasZoomExitSubscribed)
+            {
+                AppDomain.CurrentDomain.ProcessExit += OnAtlasZoomExit;
+                atlasZoomExitSubscribed = true;
+            }
             if (File.Exists(SettingPathname))
             {
                 var content = File.ReadAllText(SettingPathname);
@@ -454,6 +466,18 @@ namespace Atlas
                 }),
                 ("appearance", "Appearance", () =>
                 {
+                    ImGui.SeparatorText(this.L("atlas.zoom.title", "Atlas zoom-out"));
+                    ImGui.TextWrapped(this.L("atlas.zoom.help", "Enable extended Atlas zoom-out, then use the mouse wheel on the Atlas. Disable it to restore the original limits."));
+                    bool zoomChanged = ImGui.Checkbox(this.L("atlas.zoom.enable", "Enable extended Atlas zoom-out"), ref Settings.ExtendedAtlasZoom);
+                    Settings.AtlasZoomOutFactor = AtlasZoomController.Factor(Settings.AtlasZoomOutFactor);
+                    zoomChanged |= ImGui.SliderFloat(this.L("atlas.zoom.factor", "Zoom-out range"), ref Settings.AtlasZoomOutFactor, 1f, 3f, "%.2fx");
+                    if (zoomChanged)
+                    {
+                        SaveSettings();
+                        atlasZoom.Tick(Settings.ExtendedAtlasZoom, Settings.AtlasZoomOutFactor, Core.Process.Pid);
+                    }
+                    ImGui.TextWrapped(this.L("atlas.zoom." + atlasZoom.Status, atlasZoom.Status));
+                    if (atlasZoom.Error.Length > 0) ImGui.TextWrapped(atlasZoom.Error);
                     ImGui.SeparatorText(this.L("atlas.atlas_settings", "Atlas Settings"));
                     ImGui.Checkbox(this.L("atlas.hide_completed", "Hide Completed Maps"), ref Settings.HideCompletedMaps);
                     ImGui.Checkbox(this.L("atlas.hide_not_accessible", "Hide Not Accessible Maps"), ref Settings.HideNotAccessibleMaps);
@@ -1090,6 +1114,7 @@ namespace Atlas
 
         public override void DrawUI()
         {
+            atlasZoom.Tick(Settings.ExtendedAtlasZoom, Settings.AtlasZoomOutFactor, Core.Process.Pid);
             var inventoryPanel = InventoryPanel();
 
             var isExileCenterForeground = Process.GetCurrentProcess().MainWindowHandle == GetForegroundWindow();
@@ -5709,6 +5734,236 @@ namespace Atlas
             var baseBoundsTowers = new RectangleF(0, 0, ImGui.GetIO().DisplaySize.X, ImGui.GetIO().DisplaySize.Y);
 
             return RectangleF.Inflate(baseBoundsTowers, baseBoundsTowers.Width * (range - 1.0f), baseBoundsTowers.Height * (range - 1.0f));
+        }
+
+        private void OnAtlasZoomExit(object sender, EventArgs args) => atlasZoom.Stop();
+
+        // Atlas clamp signatures documented by syrairc/ExileMaps (AtlasHacks.cs).
+        // They are resolved afresh against the executable and checked against live bytes.
+        // Only Atlas zoom clamps are changed; the floating-point constants live in our RW page.
+        private sealed class AtlasZoomController
+        {
+            private static readonly string[] Patterns = {
+                "F3 0F 5C C8 F3 0F 11 4C 24 ?? 75 ?? F3 0F 10 05 ?? ?? ?? ?? 48 8D 54 24 ?? 0F 2F C8",
+                "48 8B 4A 08 0F 28 C8 80 B9 ?? ?? ?? ?? 0A 75 ?? F3 0F 10 05 ?? ?? ?? ??",
+                "0F 28 C8 F3 0F 5F F1 F3 0F 5D F0 48 89 AC 24",
+                "0F 28 C8 F3 0F 5F F1 F3 0F 5D F0 0F 28 DE"
+            };
+            private sealed class Site
+            {
+                internal IntPtr Address;
+                internal byte[] Original, Patched;
+                internal int Skip;
+                internal bool Owned;
+                internal float Stock;
+            }
+            private readonly object gate = new();
+            private readonly List<Site> sites = new();
+            private IntPtr handle, scratch;
+            private uint owner, attempted;
+            private bool active, restoreBlocked;
+            private float writtenFactor;
+            private DateTime nextVerify;
+            internal string Status { get; private set; } = "idle";
+            internal string Error { get; private set; } = "";
+            internal static float Factor(float value) => Math.Clamp(float.IsFinite(value) ? value : 2f, 1f, 3f);
+
+            internal void Tick(bool enabled, float factor, uint pid)
+            {
+                lock (gate)
+                {
+                    if (handle != IntPtr.Zero && owner != pid && !Restore()) return;
+                    if (!enabled)
+                    {
+                        attempted = 0;
+                        if (restoreBlocked && DateTime.UtcNow < nextVerify) return;
+                        nextVerify = DateTime.UtcNow.AddSeconds(1);
+                        if (Restore()) { Status = "idle"; Error = ""; }
+                        return;
+                    }
+                    if (restoreBlocked) return;
+                    if (pid == 0) { Status = "waiting"; return; }
+                    try
+                    {
+                        factor = Factor(factor);
+                        if (!active)
+                        {
+                            if (attempted == pid) return;
+                            attempted = pid;
+                            Prepare(pid, factor);
+                            foreach (var site in sites) { site.Owned = true; WriteSite(site, true); }
+                            active = true;
+                        }
+                        if (writtenFactor != factor) WriteFactor(factor);
+                        if (DateTime.UtcNow >= nextVerify)
+                        {
+                            foreach (var site in sites)
+                                if (!Read(site.Address, site.Patched.Length).SequenceEqual(site.Patched)) throw new InvalidOperationException("Atlas zoom instructions changed.");
+                            nextVerify = DateTime.UtcNow.AddSeconds(1);
+                        }
+                        Status = "active"; Error = "";
+                    }
+                    catch (Exception ex)
+                    {
+                        active = false;
+                        Console.WriteLine("[Atlas.Zoom] " + ex.Message);
+                        if (Restore()) { Status = "unsupported"; Error = ""; }
+                    }
+                }
+            }
+
+            // Return executable RVA/file-offset pairs, refusing missing or ambiguous matches.
+            private static (int Rva, int File)[] Locate(byte[] image)
+            {
+                if (image.Length < 4096 || BitConverter.ToUInt16(image, 0) != 0x5A4D) throw new InvalidDataException("Invalid executable.");
+                int pe = BitConverter.ToInt32(image, 0x3C);
+                if (pe < 64 || pe > image.Length - 256 || BitConverter.ToUInt32(image, pe) != 0x4550 || BitConverter.ToUInt16(image, pe + 4) != 0x8664)
+                    throw new InvalidDataException("Invalid x64 executable.");
+                int count = BitConverter.ToUInt16(image, pe + 6), table = pe + 24 + BitConverter.ToUInt16(image, pe + 20);
+                if (count < 1 || count > 96 || table > image.Length - count * 40) throw new InvalidDataException("Invalid section table.");
+                var matches = new (int Rva, int File)[4];
+                int[] shifts = { 12, 16, 3, 3 };
+                for (int k = 0; k < Patterns.Length; k++)
+                {
+                    var pattern = Patterns[k].Split(' ').Select(b => b == "??" ? -1 : Convert.ToInt32(b, 16)).ToArray();
+                    int hits = 0;
+                    for (int section = 0; section < count; section++)
+                    {
+                        int entry = table + section * 40;
+                        if ((BitConverter.ToUInt32(image, entry + 36) & 0x20000000) == 0) continue;
+                        int offset = BitConverter.ToInt32(image, entry + 20), length = BitConverter.ToInt32(image, entry + 16), rva = BitConverter.ToInt32(image, entry + 12);
+                        if (offset < 0 || length < 0 || offset > image.Length - length || rva < 0 || (long)rva + length > int.MaxValue)
+                            throw new InvalidDataException("Invalid code section.");
+                        for (int i = offset; i <= offset + length - pattern.Length; i++)
+                        {
+                            if (image[i] != pattern[0] || image[i + 1] != pattern[1]) continue;
+                            int j = 2; for (; j < pattern.Length; j++) if (pattern[j] >= 0 && image[i + j] != pattern[j]) break;
+                            if (j == pattern.Length) { hits++; matches[k] = (rva + i - offset + shifts[k], i + shifts[k]); }
+                        }
+                    }
+                    if (hits != 1) throw new InvalidDataException("Atlas zoom signature missing or ambiguous.");
+                }
+                return matches;
+            }
+
+            private void Prepare(uint pid, float factor)
+            {
+                using var process = Process.GetProcessById(checked((int)pid));
+                var module = process.MainModule ?? throw new InvalidOperationException("Game module unavailable.");
+                var image = File.ReadAllBytes(module.FileName);
+                var locations = Locate(image);
+                handle = Native.OpenProcess(0x1038, false, pid);
+                if (handle == IntPtr.Zero) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                owner = pid;
+                long start = module.BaseAddress.ToInt64(), end = checked(start + module.ModuleMemorySize);
+                for (int k = 0; k < locations.Length; k++)
+                {
+                    int length = k < 2 ? 8 : 4;
+                    var address = new IntPtr(checked(start + locations[k].Rva));
+                    if (address.ToInt64() < start || address.ToInt64() > end - length) throw new InvalidDataException("Atlas instruction out of bounds.");
+                    var original = image.AsSpan(locations[k].File, length).ToArray();
+                    if (!Read(address, length).SequenceEqual(original)) throw new InvalidOperationException("Atlas instructions already modified.");
+                    var site = new Site { Address = address, Original = original, Patched = (byte[])original.Clone(), Skip = k < 2 ? 4 : 0 };
+                    if (k < 2)
+                    {
+                        var target = checked(address.ToInt64() + 8 + BitConverter.ToInt32(original, 4));
+                        if (target < start || target > end - 4) throw new InvalidDataException("Atlas constant out of bounds.");
+                        site.Stock = BitConverter.ToSingle(Read(new IntPtr(target), 4));
+                        if (!float.IsFinite(site.Stock) || site.Stock <= 0 || site.Stock > 1000) throw new InvalidDataException("Invalid Atlas zoom floor.");
+                    }
+                    else Array.Fill(site.Patched, (byte)0x90);
+                    sites.Add(site);
+                }
+                if (Math.Abs(sites[0].Stock / sites[1].Stock - 100f) > 1f) throw new InvalidDataException("Inconsistent Atlas zoom floors.");
+                long anchor = (end + 65535) & ~65535L;
+                for (long delta = 0; delta < 0x20000000 && scratch == IntPtr.Zero; delta += 65536)
+                    scratch = Native.VirtualAllocEx(handle, new IntPtr(anchor + delta), 4096, 0x3000, 4);
+                if (scratch == IntPtr.Zero) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                for (int k = 0; k < 2; k++)
+                {
+                    int displacement = checked((int)(scratch.ToInt64() + k * 4 - sites[k].Address.ToInt64() - 8));
+                    BitConverter.GetBytes(displacement).CopyTo(sites[k].Patched, 4);
+                }
+                WriteFactor(factor);
+            }
+
+            private void WriteFactor(float factor)
+            {
+                var values = new byte[8];
+                BitConverter.GetBytes(sites[0].Stock / factor).CopyTo(values, 0);
+                BitConverter.GetBytes(sites[1].Stock / factor).CopyTo(values, 4);
+                Write(scratch, values);
+                writtenFactor = factor;
+            }
+
+            private void WriteSite(Site site, bool enable)
+            {
+                var expected = enable ? site.Original : site.Patched;
+                if (!Read(site.Address, expected.Length).SequenceEqual(expected)) throw new InvalidOperationException("Atlas instruction verification failed.");
+                var address = site.Address + site.Skip;
+                if (!Native.VirtualProtectEx(handle, address, 4, 0x40, out uint protection)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                try
+                {
+                    Write(address, (enable ? site.Patched : site.Original).AsSpan(site.Skip, 4).ToArray());
+                    if (!Native.FlushInstructionCache(handle, address, 4)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                }
+                finally { if (!Native.VirtualProtectEx(handle, address, 4, protection, out _)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()); }
+            }
+
+            internal bool Stop() { lock (gate) { if (!Restore()) return false; attempted = 0; Status = "idle"; Error = ""; return true; } }
+            private bool Restore()
+            {
+                if (handle == IntPtr.Zero) return true;
+                try
+                {
+                    if (!Native.GetExitCodeProcess(handle, out uint code)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                    if (code == 259)
+                    {
+                        foreach (var site in sites.AsEnumerable().Reverse())
+                        {
+                            if (!site.Owned) continue;
+                            if (!Read(site.Address, site.Original.Length).SequenceEqual(site.Original)) WriteSite(site, false);
+                            site.Owned = false;
+                        }
+                        if (scratch != IntPtr.Zero && !Native.VirtualFreeEx(handle, scratch, 0, 0x8000)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                    }
+                    Native.CloseHandle(handle); handle = scratch = IntPtr.Zero;
+                    sites.Clear(); owner = 0; active = restoreBlocked = false; writtenFactor = 0;
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    restoreBlocked = true;
+                    Status = "restore_failed"; Error = "Atlas : " + ex.Message;
+                    Console.WriteLine("[Atlas.Zoom.Restore] " + ex.Message); return false;
+                }
+            }
+
+            private byte[] Read(IntPtr address, int length)
+            {
+                var bytes = new byte[length];
+                if (!Native.ReadProcessMemory(handle, address, bytes, (nuint)length, out nuint read) || read != (nuint)length)
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                return bytes;
+            }
+            private void Write(IntPtr address, byte[] bytes)
+            {
+                if (!Native.WriteProcessMemory(handle, address, bytes, (nuint)bytes.Length, out nuint written) || written != (nuint)bytes.Length)
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                if (!Read(address, bytes.Length).SequenceEqual(bytes)) throw new InvalidOperationException("Atlas zoom write verification failed.");
+            }
+            private static class Native
+            {
+                [DllImport("kernel32.dll", SetLastError = true)] internal static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+                [DllImport("kernel32.dll")] internal static extern bool CloseHandle(IntPtr handle);
+                [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool GetExitCodeProcess(IntPtr handle, out uint code);
+                [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool ReadProcessMemory(IntPtr handle, IntPtr address, byte[] bytes, nuint count, out nuint read);
+                [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool WriteProcessMemory(IntPtr handle, IntPtr address, byte[] bytes, nuint count, out nuint written);
+                [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool VirtualProtectEx(IntPtr handle, IntPtr address, nuint length, uint protection, out uint original);
+                [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool FlushInstructionCache(IntPtr handle, IntPtr address, nuint length);
+                [DllImport("kernel32.dll", SetLastError = true)] internal static extern IntPtr VirtualAllocEx(IntPtr handle, IntPtr address, nuint length, uint allocation, uint protection);
+                [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool VirtualFreeEx(IntPtr handle, IntPtr address, nuint length, uint freeType);
+            }
         }
 
         [DllImport("user32.dll")]
