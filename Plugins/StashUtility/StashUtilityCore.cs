@@ -1853,6 +1853,7 @@ namespace StashUtility
         private readonly List<string> craftSourceFolders = new(), craftMoneyFolders = new();
         private int craftSelectedTier = -1, craftSelectedPage = -1;
         private string craftSelectedPageName;
+        private string craftPresetName = string.Empty;
         private bool craftNamedPageResolved, craftNamedPageClicked;
         private int craftNamedProbePage = -1;
         private DateTime craftNamedPageReady;
@@ -2292,6 +2293,14 @@ namespace StashUtility
         private bool DrawWaystoneCraftSelectionContents()
         {
             ImGui.TextWrapped(PluginText.T("stashutility.craft.selection_help", "Choose the waystone page and currency stash for this run. No crafting starts before confirmation."));
+            Settings.WaystoneCraftPresets ??= new();
+            ImGui.SetNextItemWidth(-1);
+            if (ImGui.BeginCombo("##craftPresets", PluginText.T("stashutility.craft.presets", "Load a preset")))
+            {
+                foreach (var pair in Settings.WaystoneCraftPresets.Where(pair => pair.Value != null && pair.Value.FromInventory == craftSelectionFromInventory).OrderBy(pair => pair.Key))
+                    if (ImGui.Selectable(pair.Key)) LoadCraftPreset(pair.Key);
+                ImGui.EndCombo();
+            }
             if (!craftSelectionFromInventory)
             {
                 var previous = craftSelectedSource;
@@ -2306,6 +2315,7 @@ namespace StashUtility
                 ImGui.TextUnformatted(PluginText.T("stashutility.craft.subpage_choice", "Sub-tab (one of six)"));
                 ImGui.SetNextItemWidth(-1);
                 var names = CraftSelectionPageNames();
+                craftSelectedPage = Array.IndexOf(names, craftSelectedPageName);
                 if (ImGui.BeginCombo("##craftPage", craftSelectedPageName ?? PluginText.T("stashutility.craft.choose", "Choose...")))
                 {
                     for (int i = 0; i < names.Length; i++)
@@ -2318,6 +2328,18 @@ namespace StashUtility
                 ImGui.EndDisabled(); ImGui.EndDisabled();
             }
             DrawCraftTabChoice(PluginText.T("stashutility.craft.money_choice", "Currency stash"), ref craftSelectedMoney, craftMoneyFolders);
+            ImGui.TextUnformatted(PluginText.T("stashutility.craft.preset_name", "Preset name"));
+            ImGui.SetNextItemWidth(-1);
+            ImGui.InputText("##craftPresetName", ref craftPresetName, 96);
+            ImGui.BeginDisabled(string.IsNullOrWhiteSpace(craftPresetName) || craftSelectedMoney == null ||
+                !craftSelectionFromInventory && (craftSelectedSource == null || craftSelectedTier < 0 || craftSelectedPage < 0));
+            if (ImGui.Button(PluginText.T("stashutility.craft.preset_save", "Save preset")) && SaveCraftPreset(craftPresetName)) SaveSettings();
+            ImGui.EndDisabled();
+            ImGui.SameLine();
+            ImGui.BeginDisabled(!Settings.WaystoneCraftPresets.ContainsKey(craftPresetName.Trim()));
+            if (ImGui.Button(PluginText.T("stashutility.craft.preset_delete", "Delete preset")))
+            { Settings.WaystoneCraftPresets.Remove(craftPresetName.Trim()); craftPresetName = string.Empty; SaveSettings(); }
+            ImGui.EndDisabled();
             ImGui.TextWrapped(PluginText.T("stashutility.craft.selection_safety", "Keep one inventory cell free. After starting, keep the mouse still. Escape stops crafting."));
             ImGui.BeginDisabled(waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0 ||
                 craftSelectedMoney == null || !craftSelectionFromInventory &&
@@ -2327,6 +2349,42 @@ namespace StashUtility
             ImGui.SameLine();
             if (ImGui.Button(PluginText.T("stashutility.craft.cancel", "Cancel"))) craftSelectionOpen = false;
             return start;
+        }
+
+        private bool SaveCraftPreset(string name)
+        {
+            name = name?.Trim();
+            if (string.IsNullOrEmpty(name) || craftSelectedMoney == null || !craftSelectionFromInventory &&
+                (craftSelectedSource == null || craftSelectedTier is < 0 or >= 16 || string.IsNullOrEmpty(craftSelectedPageName))) return false;
+            StashDestination Destination(DetectedStashTab tab) => tab == null ? new() :
+                new() { TabName = tab.Name, FolderPath = tab.Folders.ToList() };
+            Settings.WaystoneCraftPresets ??= new();
+            Settings.WaystoneCraftPresets[name] = new WaystoneCraftPreset { FromInventory = craftSelectionFromInventory,
+                Source = Destination(craftSelectedSource), Money = Destination(craftSelectedMoney),
+                Tier = craftSelectedTier, PageName = craftSelectedPageName ?? string.Empty };
+            craftPresetName = name;
+            return true;
+        }
+
+        private void LoadCraftPreset(string name)
+        {
+            if (Settings.WaystoneCraftPresets == null || !Settings.WaystoneCraftPresets.TryGetValue(name, out var preset) ||
+                preset == null || preset.FromInventory != craftSelectionFromInventory) return;
+            DetectedStashTab Resolve(StashDestination destination)
+            {
+                var matches = craftTabChoices.Where(tab => destination?.FolderPath != null &&
+                    tab.Name == destination.TabName && tab.Folders.SequenceEqual(destination.FolderPath)).ToList();
+                return matches.Count == 1 ? matches[0] : null;
+            }
+            craftSelectedSource = Resolve(preset.Source);
+            craftSelectedMoney = Resolve(preset.Money);
+            craftSourceFolders.Clear(); craftMoneyFolders.Clear();
+            if (craftSelectedSource != null) craftSourceFolders.AddRange(craftSelectedSource.Folders);
+            if (craftSelectedMoney != null) craftMoneyFolders.AddRange(craftSelectedMoney.Folders);
+            craftSelectedTier = preset.Tier is >= 0 and < 16 ? preset.Tier : -1;
+            craftSelectedPageName = preset.PageName;
+            craftSelectedPage = Array.IndexOf(CraftSelectionPageNames(), craftSelectedPageName);
+            craftPresetName = name;
         }
 
         private void BeginWaystoneCraft(bool fromInventory = false, bool selectedDestinations = false)
@@ -2441,6 +2499,10 @@ namespace StashUtility
             }
             if (craftInputPhase < 2)
             {
+                // Never send C or a transfer click after another operation released our modifiers.
+                if (control && (!affinityCtrlHeld || (AffinityGetAsyncKeyState(0x11) & 0x8000) == 0) ||
+                    shift && (!affinityShiftHeld || (AffinityGetAsyncKeyState(0x10) & 0x8000) == 0) || copy && !control)
+                    throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
                 var inputs = copy ? new[] { AffinityKeyInput(0, 0x43), AffinityKeyInput(2, 0x43) } :
                     new[] { AffinityMouseInput(right ? 0x0008u : 0x0002u), AffinityMouseInput(right ? 0x0010u : 0x0004u) };
                 if (AffinitySendInput(2, inputs, Marshal.SizeOf<AffinityInput>()) != 2)
@@ -3565,7 +3627,7 @@ namespace StashUtility
         {
             if (!affinityTransferRunning)
             {
-                ReleaseAffinityControl();
+                if (!waystoneCraftRunning) ReleaseAffinityControl();
                 return;
             }
             try

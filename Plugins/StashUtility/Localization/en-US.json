@@ -1,4 +1,8 @@
 {
+  "stashutility.craft.presets": "Load a preset",
+  "stashutility.craft.preset_name": "Preset name",
+  "stashutility.craft.preset_save": "Save preset",
+  "stashutility.craft.preset_delete": "Delete preset",
   "stashutility.craft.selection_unavailable": "The stash tab names could not be verified. Keep your personal stash open and reopen the selection.",
   "stashutility.craft.cancel": "Cancel",
   "stashutility.craft.start": "Start crafting",

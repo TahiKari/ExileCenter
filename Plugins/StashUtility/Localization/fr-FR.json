@@ -1,4 +1,8 @@
 {
+  "stashutility.craft.presets": "Charger un préréglage",
+  "stashutility.craft.preset_name": "Nom du préréglage",
+  "stashutility.craft.preset_save": "Enregistrer le préréglage",
+  "stashutility.craft.preset_delete": "Supprimer le préréglage",
   "stashutility.craft.selection_title": "Auto-craft TP - choix des coffres",
   "stashutility.craft.selection_help": "Choisir les emplacements pour ce lancement. Aucun craft ne commence avant confirmation.",
   "stashutility.craft.choose": "Choisir...",

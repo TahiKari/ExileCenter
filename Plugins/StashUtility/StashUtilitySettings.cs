@@ -10,6 +10,7 @@ namespace StashUtility
         public bool EnableWaystoneManager = true;
         public bool WaystoneCraftCorrupt = true;
         public int WaystoneCraftCurrencyLimit = 200;
+        public Dictionary<string, WaystoneCraftPreset> WaystoneCraftPresets = new();
         public bool EnableTabletManager = true;
         public bool TabletHelpTooltips = true;
         public bool EnableTabletUI = true;
@@ -180,6 +181,15 @@ namespace StashUtility
         public TabletPreset[] TabletPresets = new TabletPreset[5];
         public int ActiveTabletPreset;
         public int TabletFarmPresetVersion;
+    }
+
+    public class WaystoneCraftPreset
+    {
+        public bool FromInventory;
+        public StashDestination Source = new();
+        public StashDestination Money = new();
+        public int Tier = -1;
+        public string PageName = string.Empty;
     }
 
     public class StashDestination

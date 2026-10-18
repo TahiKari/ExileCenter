@@ -100,6 +100,45 @@ internal static class TabletRankingCheck
             Visible(waystone,true);
             var tabType=typeof(StashUtilityCore).GetNestedType("DetectedStashTab",flags);
             object Tab(string name,IntPtr address){var tab=Activator.CreateInstance(tabType,true);tabType.GetField("Name").SetValue(tab,name);tabType.GetField("Page").SetValue(tab,address);return tab;}
+            void SetCraft(string name,object value)=>typeof(StashUtilityCore).GetField(name,flags).SetValue(plugin,value);
+            object GetCraft(string name)=>typeof(StashUtilityCore).GetField(name,flags).GetValue(plugin);
+            SetCraft("waystoneCraftRunning",true);SetCraft("affinityCtrlHeld",true);SetCraft("affinityShiftHeld",true);
+            Call("UpdateAffinityTransfer");
+            Check((bool)GetCraft("affinityCtrlHeld")&&(bool)GetCraft("affinityShiftHeld"),"Idle transfer preserves modifiers owned by crafting between frames, without sending native input");
+            SetCraft("waystoneCraftRunning",false);SetCraft("affinityCtrlHeld",false);SetCraft("affinityShiftHeld",false);
+            SetCraft("craftInputPhase",1);
+            bool blockedCopy=false;
+            try{Call("CraftInput",true,false,true,false);}catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){blockedCopy=true;}
+            Check(blockedCopy,"A lost Ctrl modifier blocks C before any keyboard input is sent");
+            SetCraft("craftInputPhase",0);
+            var presetSource=Tab("PTP",waystone);var presetMoney=Tab("Currencies",other);
+            tabType.GetField("Folders").SetValue(presetSource,new List<string>{"01 - Mapping"});
+            tabType.GetField("Folders").SetValue(presetMoney,new List<string>{"03 - Money"});
+            var presetChoices=(IList)GetCraft("craftTabChoices");presetChoices.Add(presetSource);presetChoices.Add(presetMoney);
+            SetCraft("craftSelectedSource",presetSource);SetCraft("craftSelectedMoney",presetMoney);
+            SetCraft("craftSelectedTier",0);SetCraft("craftSelectedPageName","Div - 1");
+            Check((bool)Call("SaveCraftPreset"," Mapping "),"A named craft preset can be saved");
+            var presetJson=JsonConvert.SerializeObject(plugin.Settings.WaystoneCraftPresets);
+            plugin.Settings.WaystoneCraftPresets=JsonConvert.DeserializeObject<Dictionary<string,WaystoneCraftPreset>>(presetJson);
+            Check(!presetJson.Contains("Page\"")&&!presetJson.Contains("Address"),"Presets persist names and folder paths without native pointers");
+            SetCraft("craftSelectedSource",null);SetCraft("craftSelectedMoney",null);SetCraft("craftSelectedTier",-1);
+            Call("LoadCraftPreset","Mapping");
+            Check(ReferenceEquals(GetCraft("craftSelectedSource"),presetSource)&&ReferenceEquals(GetCraft("craftSelectedMoney"),presetMoney)&&
+                (int)GetCraft("craftSelectedPage")==0,"Reloaded presets resolve current source, currency and named sub-tab");
+            SetCraft("craftSelectedPageName","Div - 2");Call("SaveCraftPreset","Mapping");
+            Check(plugin.Settings.WaystoneCraftPresets.Count==1&&plugin.Settings.WaystoneCraftPresets["Mapping"].PageName=="Div - 2","Saving the same preset name replaces its selection");
+            presetChoices.Add(Tab("PTP",waystone));
+            tabType.GetField("Folders").SetValue(presetChoices[2],new List<string>{"01 - Mapping"});
+            Call("LoadCraftPreset","Mapping");
+            Check(GetCraft("craftSelectedSource")==null,"Ambiguous preset destinations require manual selection and cannot start crafting");
+            presetChoices.Clear();SetCraft("craftSelectedSource",null);SetCraft("craftSelectedMoney",null);
+            Call("LoadCraftPreset","Mapping");
+            Check(GetCraft("craftSelectedSource")==null&&GetCraft("craftSelectedMoney")==null,"Missing preset destinations never reuse stale pointers");
+            SetCraft("craftSelectionFromInventory",true);SetCraft("craftSelectedMoney",presetMoney);
+            Check((bool)Call("SaveCraftPreset","Inventory"),"Inventory crafting presets do not require a source stash");
+            Call("LoadCraftPreset","Mapping");
+            Check(ReferenceEquals(GetCraft("craftSelectedMoney"),presetMoney),"A stash preset cannot change an inventory-mode selection");
+            SetCraft("craftSelectionFromInventory",false);
             object Select(IntPtr preferred,params object[] tabs){var array=Array.CreateInstance(tabType,tabs.Length);for(int i=0;i<tabs.Length;i++)array.SetValue(tabs[i],i);return Call("FindCraftWaystoneTab",array,preferred);}
             var source=Tab("Any renamed tab",waystone);
             Check(ReferenceEquals(Select(other,Tab("PTP",other),source),source),"A misleading name never overrides the actual special-tab structure");
