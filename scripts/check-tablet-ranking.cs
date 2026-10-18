@@ -18,6 +18,8 @@ using Newtonsoft.Json;
 internal static class TabletRankingCheck
 {
     private static int checks;
+    private static SixLabors.ImageSharp.PixelFormats.Rgba32[] framePreviewPixels;
+    private static int framePreviewWidth, framePreviewHeight;
 
     private static void CheckWaystoneNavigation(string root)
     {
@@ -1423,6 +1425,80 @@ internal static class TabletRankingCheck
                 {Directory.CreateDirectory(previewDirectory);SaveUiPreview(Path.Combine(previewDirectory,"poe2-panel.png"),pixels,atlasWidth,atlasHeight);}
             }
             var names = (string[])typeof(ExileCenter.Ui.ImGuiTheme).GetField("PluginThemeNames", flags).GetValue(null);
+            using(var frameStream=typeof(ExileCenter.Ui.ImGuiTheme).Assembly.GetManifestResourceStream("ExileCenter.Data.Poe2Frame.png"))
+            using(var frameImage=SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(frameStream))
+            {
+                framePreviewWidth=frameImage.Width;framePreviewHeight=frameImage.Height;
+                framePreviewPixels=new SixLabors.ImageSharp.PixelFormats.Rgba32[framePreviewWidth*framePreviewHeight];
+                frameImage.CopyPixelDataTo(framePreviewPixels);
+            }
+            typeof(ExileCenter.Ui.ImGuiTheme).GetField("frameTexture",flags).SetValue(null,new IntPtr(2));
+            var ornate=typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("DrawOrnateWindow",flags);
+            foreach(var panelFlags in new[]{ImGuiNET.ImGuiWindowFlags.None,ImGuiNET.ImGuiWindowFlags.NoBackground,ImGuiNET.ImGuiWindowFlags.NoInputs})
+            {
+                ImGuiNET.ImGui.NewFrame();ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(500,300));
+                ImGuiNET.ImGui.Begin("EXILECENTER##ornate-fixture",panelFlags);
+                var list=ImGuiNET.ImGui.GetWindowDrawList();var oldClip=list.CmdBuffer[list.CmdBuffer.Size-1].ClipRect;
+                var oldCursor=ImGuiNET.ImGui.GetCursorScreenPos();
+                bool drawn=(bool)ornate.Invoke(null,new object[]{"ExileCenter##hidden-id",panelFlags,true,false});
+                Check(drawn==(panelFlags==ImGuiNET.ImGuiWindowFlags.None),"The textured skin excludes transparent and input-free overlays: "+panelFlags);
+                var contentClip=list.CmdBuffer[list.CmdBuffer.Size-1].ClipRect;
+                Check(drawn?contentClip.X>=oldClip.X&&contentClip.Z<=oldClip.Z&&contentClip.W<oldClip.W&&contentClip.Y>oldClip.Y:contentClip==oldClip,
+                    "Content clipping protects the cartouche and carved borders: "+panelFlags);
+                Check(drawn?ImGuiNET.ImGui.GetCursorScreenPos().Y>oldCursor.Y:ImGuiNET.ImGui.GetCursorScreenPos()==oldCursor,
+                    "Only opaque titled windows reserve space for their gold cartouche: "+panelFlags);
+                ImGuiNET.ImGui.TextUnformatted("Filtres et configuration");
+                bool enabled=true;ImGuiNET.ImGui.Checkbox("Activer le filtre",ref enabled);
+                ImGuiNET.ImGui.SetNextItemWidth(-1);int tier=13;ImGuiNET.ImGui.Combo("##tier-preview",ref tier,new[]{"I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI"},16);
+                ImGuiNET.ImGui.Button("Appliquer",new Vector2(-1,0));
+                Check(ImGuiNET.ImGui.GetItemRectMax().Y<316,"Native controls remain inside the textured frame");
+                ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
+                if(previewDirectory!=null&&drawn)SaveUiPreview(Path.Combine(previewDirectory,"poe2-carved-panel.png"),pixels,atlasWidth,atlasHeight);
+            }
+            bool closableOpen=true;
+            foreach(var click in new[]{false,true,false})
+            {
+                io.AddMousePosEvent(16+500-ImGuiNET.ImGui.GetStyle().FramePadding.X-ImGuiNET.ImGui.GetFontSize()/2,16+ImGuiNET.ImGui.GetFrameHeight()/2);
+                io.AddMouseButtonEvent(0,click);ImGuiNET.ImGui.NewFrame();
+                ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(500,300));
+                ExileCenter.Ui.ImGuiTheme.BeginWindow("FERMETURE##ornate-close",ref closableOpen,ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
+            }
+            Check(!closableOpen,"The repainted close button keeps its original native hit area and behavior");
+            io.AddMousePosEvent(-100,-100);
+            float scrollBodyStart=0;
+            for(int frame=0;frame<3;frame++)
+            {
+                ImGuiNET.ImGui.NewFrame();ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(500,300));
+                ExileCenter.Ui.ImGuiTheme.BeginWindow("DEFILEMENT##ornate-scroll",ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                if(frame==0)scrollBodyStart=ImGuiNET.ImGui.GetCursorPosY();
+                // ImGui can shift the aligned cursor by one pixel when the scrollbar first appears.
+                else Check(ImGuiNET.ImGui.GetScrollY()>0&&Math.Abs(ImGuiNET.ImGui.GetCursorPosY()-scrollBodyStart)<=1,
+                    "Header reservation stays constant while the body scrolls: frame="+frame+", scroll="+ImGuiNET.ImGui.GetScrollY()+", start="+scrollBodyStart+", current="+ImGuiNET.ImGui.GetCursorPosY());
+                ImGuiNET.ImGui.Button("Bouton sous le cartouche",new Vector2(200,20));
+                if(frame>0)Check(!ImGuiNET.ImGui.IsItemVisible(),"Scrolled controls cannot paint over or receive clicks through the cartouche");
+                ImGuiNET.ImGui.Dummy(new Vector2(0,800));
+                if(frame==0)ImGuiNET.ImGui.SetScrollY(100);
+                ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
+            }
+            foreach(bool independent in new[]{false,true})
+            {
+                ImGuiNET.ImGui.NewFrame();ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(800,600));
+                var settingsFlags=ImGuiNET.ImGuiWindowFlags.MenuBar|(independent?ImGuiNET.ImGuiWindowFlags.NoTitleBar:ImGuiNET.ImGuiWindowFlags.None);
+                ImGuiNET.ImGui.Begin("REGLAGES##ornate-settings",settingsFlags);
+                typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("DrawSettingsBackground",flags).Invoke(null,new object[]{independent});
+                float bodyTop=ImGuiNET.ImGui.GetCursorScreenPos().Y;
+                if(ImGuiNET.ImGui.BeginMenuBar())
+                {
+                    ImGuiNET.ImGui.MenuItem("Fichier");ImGuiNET.ImGui.MenuItem("Affichage");ImGuiNET.ImGui.MenuItem("Aide");
+                    Check(ImGuiNET.ImGui.GetItemRectMax().Y<bodyTop,"Native menus remain above the ornamental header and content: "+independent);
+                    ImGuiNET.ImGui.EndMenuBar();
+                }
+                typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("SectionHeader",flags).Invoke(null,new object[]{"Configuration",null});
+                bool filter=true;ImGuiNET.ImGui.Checkbox("Activer les filtres",ref filter);ImGuiNET.ImGui.Button("Appliquer");
+                ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
+                if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"poe2-settings-"+independent+".png"),pixels,atlasWidth,atlasHeight);
+            }
             Check(names.Select(ExileCenter.Ui.ImGuiTheme.PluginAccent).Distinct().Count() == names.Length, "Every bundled plugin has a distinct accent");
             // OKLab measures perceived differences; unequal RGB values alone do not prevent lookalikes.
             Vector3 PerceptualColor(Vector4 color)
@@ -1616,7 +1692,7 @@ internal static class TabletRankingCheck
                 using (ExileCenter.Ui.ImGuiTheme.UsePluginTheme("StashUtility/tablets"))
                 {
                     ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16)); ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width, 900));
-                    ImGuiNET.ImGui.Begin("Tablettes · ExileCenter", ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                    ExileCenter.Ui.ImGuiTheme.BeginWindow("Tablettes · ExileCenter", ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
                     helpCenter = ImGuiNET.ImGui.GetCursorScreenPos() + new Vector2(70, ImGuiNET.ImGui.GetFrameHeight() + ImGuiNET.ImGui.GetStyle().ItemSpacing.Y + ImGuiNET.ImGui.GetFontSize() / 2);
                     draw.Invoke(plugin, null);
                     if (previousPaneWidth == width)
@@ -1829,6 +1905,14 @@ internal static class TabletRankingCheck
                         int texel = (Math.Clamp((int)(uv.Y * atlasHeight), 0, atlasHeight - 1) * atlasWidth + Math.Clamp((int)(uv.X * atlasWidth), 0, atlasWidth - 1)) * 4;
                         var color = ca * u + cb * v + cc * w;
                         float alpha = color.W / 255f * atlas[texel + 3] / 255f;
+                        if(command.TextureId==new IntPtr(2)&&framePreviewPixels!=null)
+                        {
+                            int textureX=Math.Clamp((int)(uv.X*framePreviewWidth),0,framePreviewWidth-1);
+                            int textureY=Math.Clamp((int)(uv.Y*framePreviewHeight),0,framePreviewHeight-1);
+                            var sample=framePreviewPixels[textureY*framePreviewWidth+textureX].ToVector4();
+                            color.X*=sample.X;color.Y*=sample.Y;color.Z*=sample.Z;
+                            alpha=color.W/255f*sample.W;
+                        }
                         var old = image[x, y];
                         image[x, y] = new((byte)(color.X * alpha + old.R * (1 - alpha)), (byte)(color.Y * alpha + old.G * (1 - alpha)), (byte)(color.Z * alpha + old.B * (1 - alpha)), 255);
                     }

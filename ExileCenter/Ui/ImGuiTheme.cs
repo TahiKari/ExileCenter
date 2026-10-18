@@ -18,15 +18,20 @@ namespace ExileCenter.Ui
         private static bool backgroundLoaded;
         private static IntPtr backgroundTexture;
         private static Vector2 backgroundSize;
+        private static bool frameLoaded;
+        private static IntPtr frameTexture;
 
         internal static void DrawSettingsBackground(bool independent)
-            => DrawWindowBackground(ImGuiWindowFlags.MenuBar | (independent ? ImGuiWindowFlags.NoTitleBar : ImGuiWindowFlags.None), 0.80f);
+        {
+            var flags = ImGuiWindowFlags.MenuBar | (independent ? ImGuiWindowFlags.NoTitleBar : ImGuiWindowFlags.None);
+            if (!DrawOrnateWindow("ExileCenter", flags, !independent, forceHeading: true)) DrawWindowBackground(flags, .80f);
+        }
 
         /// <summary>Opens a themed panel without decorating transparent gameplay markers.</summary>
         public static bool BeginWindow(string name, ImGuiWindowFlags flags = ImGuiWindowFlags.None)
         {
             bool visible = ImGui.Begin(name, flags);
-            if (visible) DrawWindowBackground(flags);
+            if (visible && !DrawOrnateWindow(name, flags, false)) DrawWindowBackground(flags);
             return visible;
         }
 
@@ -34,8 +39,115 @@ namespace ExileCenter.Ui
         public static bool BeginWindow(string name, ref bool open, ImGuiWindowFlags flags = ImGuiWindowFlags.None)
         {
             bool visible = ImGui.Begin(name, ref open, flags);
-            if (visible) DrawWindowBackground(flags);
+            if (visible && !DrawOrnateWindow(name, flags, true)) DrawWindowBackground(flags);
             return visible;
+        }
+
+        private static bool DrawOrnateWindow(string name, ImGuiWindowFlags flags, bool closable, bool forceHeading = false)
+        {
+            var size = ImGui.GetWindowSize();
+            var style = ImGui.GetStyle();
+            if ((flags & (ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoMouseInputs)) != 0 ||
+                style.Colors[(int)ImGuiCol.WindowBg].W <= 0 || size.X < 160 || size.Y < 80) return false;
+            if (!frameLoaded && Core.Overlay != null)
+            {
+                frameLoaded = true;
+                try
+                {
+                    using var stream = typeof(ImGuiTheme).Assembly.GetManifestResourceStream("ExileCenter.Data.Poe2Frame.png");
+                    if (stream != null)
+                    {
+                        using var image = Image.Load<Rgba32>(stream);
+                        Core.Overlay.AddOrGetImagePointer("ExileCenter.Poe2Frame", image, false, out frameTexture);
+                    }
+                }
+                catch (Exception ex) { Console.WriteLine($"[Theme.Frame] {ex.Message}"); }
+            }
+            if (frameTexture == IntPtr.Zero) return false;
+
+            int id = name.IndexOf("##", StringComparison.Ordinal);
+            string title = (id < 0 ? name : name[..id]).ToUpperInvariant();
+            bool heading = title.Length > 0 && (forceHeading || (flags & ImGuiWindowFlags.NoTitleBar) == 0);
+            float menuOffset = (flags & ImGuiWindowFlags.MenuBar) == 0 ? 0 :
+                ImGui.GetFrameHeight() * ((flags & ImGuiWindowFlags.NoTitleBar) == 0 ? 2 : 1);
+            var position = ImGui.GetWindowPos() + new Vector2(0, menuOffset);
+            var end = ImGui.GetWindowPos() + size;
+            float header = heading ? Math.Clamp(size.X * .105f, 36, 70) : 8;
+            float edge = Math.Clamp(Math.Min(size.X * .016f, style.WindowPadding.X), 1, 12);
+            float bottom = Math.Clamp(style.WindowPadding.Y - 2, 2, 10);
+            if (end.Y - position.Y < header + bottom + 12) return false;
+            var draw = ImGui.GetWindowDrawList();
+            // Native scrollbars are already rendered by Begin; leave their pixels and hit areas intact.
+            var clipEnd = end - new Vector2(ImGui.GetScrollMaxY() > 0 ? style.ScrollbarSize + 1 : 0,
+                ImGui.GetScrollMaxX() > 0 ? style.ScrollbarSize + 1 : 0);
+            draw.PushClipRect(position, clipEnd, false);
+            Span<float> x = stackalloc float[] { position.X, position.X + edge, end.X - edge, end.X };
+            Span<float> y = stackalloc float[] { position.Y, position.Y + header, end.Y - bottom, end.Y };
+            Span<float> u = stackalloc float[] { 0, .115f, .885f, 1 };
+            Span<float> v = stackalloc float[] { heading ? 0 : .175f, .19f, .875f, 1 };
+            uint tint = ImGui.GetColorU32(new Vector4(1, 1, 1, style.Colors[(int)ImGuiCol.WindowBg].W));
+            // Nine slices retain the carved corners and rails instead of stretching the entire frame.
+            for (int row = 0; row < 3; row++)
+                for (int column = 0; column < 3; column++)
+                {
+                    // Sample only clear stone behind text, excluding the corner reliefs.
+                    var uvMin = row == 1 && column == 1 ? new Vector2(.17f, .23f) : new Vector2(u[column], v[row]);
+                    var uvMax = row == 1 && column == 1 ? new Vector2(.83f, .83f) : new Vector2(u[column + 1], v[row + 1]);
+                    draw.AddImage(frameTexture, new Vector2(x[column], y[row]), new Vector2(x[column + 1], y[row + 1]),
+                        uvMin, uvMax, tint);
+                }
+            draw.AddRectFilled(new Vector2(x[1], y[1]), new Vector2(x[2], y[2]),
+                ImGui.GetColorU32(new Vector4(.015f, .012f, .010f, style.Colors[(int)ImGuiCol.WindowBg].W * .42f)));
+            if (heading)
+            {
+                var font = ImGui.GetFont();
+                float fontSize = ImGui.GetFontSize() * 1.10f;
+                float width = (size.X - edge * 2) * .46f;
+                var measured = ImGui.CalcTextSize(title) * 1.10f;
+                if (measured.X > width) { fontSize *= width / measured.X; measured *= width / measured.X; }
+                var center = position + new Vector2(size.X / 2, header * .575f);
+                draw.AddText(font, fontSize, center - measured / 2 + Vector2.One,
+                    ImGui.GetColorU32(new Vector4(.87f, .76f, .48f, 1)), title);
+                draw.AddText(font, fontSize, center - measured / 2,
+                    ImGui.GetColorU32(new Vector4(.075f, .055f, .025f, 1)), title);
+                // Only the decorative header reserves space; controls retain their own frame metrics.
+                float contentTop = menuOffset + header + style.WindowPadding.Y;
+                if (ImGui.GetCursorPosY() < contentTop)
+                    ImGui.Dummy(new Vector2(0, contentTop - ImGui.GetCursorPosY()));
+            }
+            draw.PopClipRect();
+            if (heading && menuOffset == 0 && (flags & ImGuiWindowFlags.NoTitleBar) == 0)
+            {
+                // Repaint the existing native buttons; interaction and window IDs remain unchanged.
+                draw.PushClipRect(ImGui.GetWindowPos(), end, false);
+                float radius = ImGui.GetFontSize() * .48f;
+                float middle = ImGui.GetWindowPos().Y + ImGui.GetFrameHeight() / 2;
+                if (closable)
+                {
+                    var center = new Vector2(end.X - style.FramePadding.X - ImGui.GetFontSize() / 2, middle);
+                    draw.AddCircleFilled(center, radius, ImGui.GetColorU32(new Vector4(.25f, .025f, .018f, 1)));
+                    draw.AddCircle(center, radius, ImGui.GetColorU32(Accent), 12);
+                    float arm = radius * .45f;
+                    draw.AddLine(center - new Vector2(arm), center + new Vector2(arm), ImGui.GetColorU32(Accent), 1.5f);
+                    draw.AddLine(center + new Vector2(-arm, arm), center + new Vector2(arm, -arm), ImGui.GetColorU32(Accent), 1.5f);
+                }
+                if ((flags & ImGuiWindowFlags.NoCollapse) == 0)
+                {
+                    var center = new Vector2(ImGui.GetWindowPos().X + style.FramePadding.X + ImGui.GetFontSize() / 2, middle);
+                    draw.AddTriangleFilled(center + new Vector2(-3, -2), center + new Vector2(3, -2), center + new Vector2(0, 3), ImGui.GetColorU32(Accent));
+                }
+                draw.PopClipRect();
+            }
+            if (heading)
+            {
+                // Replace the body's clip at the same stack depth so scrolling content cannot
+                // paint over, or receive clicks through, the ornamental header.
+                var clip = draw.CmdBuffer[draw.CmdBuffer.Size - 1].ClipRect;
+                ImGui.PopClipRect();
+                ImGui.PushClipRect(new Vector2(Math.Max(clip.X, position.X + edge), Math.Max(clip.Y, position.Y + header)),
+                    new Vector2(Math.Min(clip.Z, end.X - edge), Math.Min(clip.W, end.Y - bottom)), false);
+            }
+            return true;
         }
 
         private static void DrawWindowBackground(ImGuiWindowFlags flags, float shade = 0.88f)
@@ -352,6 +464,15 @@ namespace ExileCenter.Ui
             ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark]);
             ImGui.TextUnformatted(title);
             ImGui.PopStyleColor();
+            if (frameTexture != IntPtr.Zero)
+            {
+                var start = ImGui.GetItemRectMax();
+                var end = new Vector2(ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X, 0);
+                float middle = (ImGui.GetItemRectMin().Y + start.Y) / 2;
+                if (end.X - start.X > 40)
+                    ImGui.GetWindowDrawList().AddImage(frameTexture, new Vector2(start.X + 12, middle - 3),
+                        new Vector2(end.X, middle + 3), new Vector2(.115f, .967f), new Vector2(.885f, .99f), ImGui.GetColorU32(Vector4.One));
+            }
             if (!string.IsNullOrEmpty(subtitle))
             {
                 ImGui.PushStyleColor(ImGuiCol.Text, TextMuted);
