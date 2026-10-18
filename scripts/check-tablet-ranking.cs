@@ -1532,9 +1532,11 @@ internal static class TabletRankingCheck
                 bool drawn=(bool)ornate.Invoke(null,new object[]{"ExileCenter##hidden-id",panelFlags,true,false,-1f});
                 Check(drawn==(panelFlags==ImGuiNET.ImGuiWindowFlags.None),"The textured skin excludes transparent and input-free overlays: "+panelFlags);
                 var contentClip=list.CmdBuffer[list.CmdBuffer.Size-1].ClipRect;
-                Check(drawn?contentClip.X>=oldClip.X&&contentClip.Z<=oldClip.Z&&contentClip.W<oldClip.W&&contentClip.Y>oldClip.Y:contentClip==oldClip,
+                Check(drawn?contentClip.X>=oldClip.X&&contentClip.Z<=oldClip.Z&&contentClip.W<=oldClip.W&&contentClip.Y>=oldClip.Y&&
+                    contentClip.Y>=ImGuiNET.ImGui.GetWindowPos().Y+ImGuiNET.ImGui.GetWindowWidth()*(56f/1672)&&
+                    contentClip.W<=ImGuiNET.ImGui.GetWindowPos().Y+ImGuiNET.ImGui.GetWindowHeight()-ImGuiNET.ImGui.GetWindowWidth()*(56f/1672):contentClip==oldClip,
                     "Content clipping protects the cartouche and carved borders: "+panelFlags);
-                Check(drawn?ImGuiNET.ImGui.GetCursorScreenPos().Y>oldCursor.Y:ImGuiNET.ImGui.GetCursorScreenPos()==oldCursor,
+                Check(drawn?ImGuiNET.ImGui.GetCursorScreenPos().Y>=oldCursor.Y:ImGuiNET.ImGui.GetCursorScreenPos()==oldCursor,
                     "Only opaque titled windows reserve space for their gold cartouche: "+panelFlags);
                 ImGuiNET.ImGui.TextUnformatted("Filtres et configuration");
                 bool enabled=true;ImGuiNET.ImGui.Checkbox("Activer le filtre",ref enabled);
@@ -1621,8 +1623,8 @@ internal static class TabletRankingCheck
                                 Check(vertices.All(v=>v.col==0xffffffff),"The original frame colors have no tint or opacity modification: "+windowSize);
                                 artworkMin=Vector2.Min(artworkMin,new Vector2(vertices.Min(v=>v.pos.X),vertices.Min(v=>v.pos.Y)));
                                 artworkMax=Vector2.Max(artworkMax,new Vector2(vertices.Max(v=>v.pos.X),vertices.Max(v=>v.pos.Y)));
-                                if(Math.Abs(du-1)<.0001f&&Math.Abs(vertices.Min(v=>v.uv.Y))<.0001f&&Math.Abs(dv-112f/941)<.0001f)headerTriangles++;
-                                if(Math.Abs(du-1)<.0001f&&Math.Abs(vertices.Min(v=>v.uv.Y)-790f/941)<.0001f&&Math.Abs(vertices.Max(v=>v.uv.Y)-1)<.0001f)footerTriangles++;
+                                if(Math.Abs(du-1)<.0001f&&Math.Abs(vertices.Min(v=>v.uv.Y))<.0001f&&Math.Abs(dv-56f/941)<.0001f)headerTriangles++;
+                                if(Math.Abs(du-1)<.0001f&&Math.Abs(vertices.Min(v=>v.uv.Y)-875f/941)<.0001f&&Math.Abs(vertices.Max(v=>v.uv.Y)-1)<.0001f)footerTriangles++;
                                 Check(vertices.All(v=>v.pos.X>=command.ClipRect.X-.01f&&v.pos.X<=command.ClipRect.Z+.01f&&
                                     v.pos.Y>=command.ClipRect.Y-.01f&&v.pos.Y<=command.ClipRect.W+.01f),
                                     "No image edge or corner is clipped, including beside native scrollbars: "+windowSize);
@@ -1633,12 +1635,12 @@ internal static class TabletRankingCheck
                         Check(Vector2.Distance(artworkMin,imageStart)<1&&Vector2.Distance(artworkMax,imageStart+new Vector2(imageWidth,imageHeight))<1,
                             "Artwork fills all viewport edges without black lateral margins: "+windowSize);
                         var cursor=ImGuiNET.ImGui.GetCursorScreenPos();var available=ImGuiNET.ImGui.GetContentRegionAvail();
-                        Check(cursor.X>=imageStart.X+imageWidth*(80f/1672)-1&&cursor.X+available.X<=imageStart.X+imageWidth*(1-80f/1672)+1,
+                        Check(cursor.X>=imageStart.X+imageWidth*(40f/1672)-1&&cursor.X+available.X<=imageStart.X+imageWidth*(1-40f/1672)+1,
                             "Content and fill-width controls fit between the proportional pillars: "+windowSize);
-                        Check(cursor.Y>=imageStart.Y+imageWidth*(112f/1672)&&cursor.Y+available.Y<=imageStart.Y+imageHeight-imageWidth*(111f/1672)+1,
+                        Check(cursor.Y>=imageStart.Y+imageWidth*(56f/1672)&&cursor.Y+available.Y<=imageStart.Y+imageHeight-imageWidth*(56f/1672)+1,
                             "The work rectangle reserves both the cartouche and the carved footer: "+windowSize);
                     }
-                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.59");ImGuiNET.ImGui.EndMenuBar();}
+                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.60");ImGuiNET.ImGui.EndMenuBar();}
                     ImGuiNET.ImGui.BeginChild("Navigation",new Vector2(Math.Min(220,ImGuiNET.ImGui.GetContentRegionAvail().X*.3f),0),ImGuiNET.ImGuiChildFlags.Borders);
                     foreach(var label in new[]{"Application","General","Plugins","Mises a jour","Plugins actifs","Auto-craft TP"})ImGuiNET.ImGui.Selectable(label,label=="Plugins");
                     ImGuiNET.ImGui.EndChild();ImGuiNET.ImGui.SameLine();
