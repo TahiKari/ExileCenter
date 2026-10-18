@@ -1852,6 +1852,10 @@ namespace StashUtility
         private DetectedStashTab craftSelectedSource, craftSelectedMoney;
         private readonly List<string> craftSourceFolders = new(), craftMoneyFolders = new();
         private int craftSelectedTier = -1, craftSelectedPage = -1;
+        private string craftSelectedPageName;
+        private bool craftNamedPageResolved, craftNamedPageClicked;
+        private int craftNamedProbePage = -1;
+        private DateTime craftNamedPageReady;
         private static readonly string[] CraftTierNames = { "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI" };
         private readonly Queue<IntPtr> craftQueue = new();
         private readonly List<SortItem> craftInventoryBefore = new();
@@ -2089,15 +2093,7 @@ namespace StashUtility
             string name = null;
             if (TryReadStashEntries(header, out var entries) && entries.Count == count) name = entries[index].name;
             else if (count == 16) name = new[] { "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI" }[index];
-            var candidates = new List<(IntPtr address, string name)>();
-            // Native buttons can be wrapped into multiple rows. Resolve their own
-            // labels instead of confusing a row container with a clickable button.
-            foreach (var node in StashUiNodes(ReadStashUiBranch(ResolvePath(header, new[] { 0 }))))
-            {
-                var label = ResolvePath(node.Address, new[] { 0, 1 });
-                if (IsElementVisible(node.Address) && TryReadUiString(label, 0x360, out var text) && !string.IsNullOrWhiteSpace(text))
-                    candidates.Add((node.Address, text));
-            }
+            var candidates = ReadCraftPageButtons(header);
             if (name != null)
             {
                 var matches = candidates.Where(button => button.name == name).ToList();
@@ -2106,6 +2102,20 @@ namespace StashUtility
             // These six native page slots are verified again after selection, before any craft.
             return candidates.Count == count && candidates.Select(button => button.name).Distinct().Count() == count ?
                 candidates[index].address : IntPtr.Zero;
+        }
+
+        private List<(IntPtr address, string name)> ReadCraftPageButtons(IntPtr header, bool visibleOnly = true)
+        {
+            var buttons = new List<(IntPtr address, string name)>();
+            // Specialized tabs can expose labels without a dropdown, including on inactive tiers.
+            foreach (var node in StashUiNodes(ReadStashUiBranch(ResolvePath(header, new[] { 0 }))))
+            {
+                if (visibleOnly && !IsElementVisible(node.Address)) continue;
+                foreach (var path in new[] { new[] { 0, 1 }, new[] { 0 } })
+                    if (TryReadUiString(ResolvePath(node.Address, path), 0x360, out var text) && !string.IsNullOrWhiteSpace(text))
+                    { buttons.Add((node.Address, text)); break; }
+            }
+            return buttons;
         }
 
         private IntPtr CraftPageControl(IntPtr header, int index, int count, bool navigate)
@@ -2131,7 +2141,61 @@ namespace StashUtility
         private bool CraftSelectWaystonePage(bool navigate)
         {
             var tier = CraftPageControl(ResolvePath(craftSource.Page, new[] { 0 }), craftTier, 16, navigate);
-            return tier != IntPtr.Zero && CraftPageControl(ResolvePath(tier, new[] { 0 }), craftPage, 6, navigate) != IntPtr.Zero;
+            if (tier == IntPtr.Zero) return false;
+            var header = ResolvePath(tier, new[] { 0 });
+            if (craftExplicitDestinations)
+            {
+                if (string.IsNullOrEmpty(craftSelectedPageName)) return false;
+                if (TryReadStashEntries(header, out var entries) && entries.Count == 6 &&
+                    entries.Count(entry => entry.name == craftSelectedPageName) == 1)
+                {
+                    craftPage = entries.FindIndex(entry => entry.name == craftSelectedPageName);
+                    craftNamedPageResolved = true;
+                }
+                else
+                {
+                    if (!CraftUiChildren(ResolvePath(header, new[] { 1 }), 6, out var pages)) return false;
+                    if (craftNamedPageResolved && craftPage is >= 0 and < 6 && IsElementVisible(pages[craftPage]) &&
+                        IsTabVisible(pages[craftPage]) && pages.Count(IsTabVisible) == 1) return true;
+                    if (!navigate) return false;
+                    bool probe = !craftNamedPageResolved && craftNamedProbePage < 0;
+                    if (craftNamedPageClicked)
+                    {
+                        if (DateTime.UtcNow < craftNamedPageReady) return false;
+                        var selected = pages.Select((page, index) => (page, index)).Where(pair => IsTabVisible(pair.page)).ToList();
+                        if (selected.Count != 1 || !IsElementVisible(selected[0].page)) return false;
+                        if (probe)
+                        {
+                            craftNamedProbePage = selected[0].index;
+                            craftNamedPageClicked = false;
+                            return false;
+                        }
+                        // Without a canonical list, first select a different named tab.
+                        // Only an observed transition back to the requested name confirms its page.
+                        if (!craftNamedPageResolved && selected[0].index == craftNamedProbePage ||
+                            craftNamedPageResolved && selected[0].index != craftPage) return false;
+                        craftPage = selected[0].index;
+                        craftNamedPageResolved = true;
+                        craftNamedPageClicked = false;
+                    }
+                    else
+                    {
+                        var buttons = ReadCraftPageButtons(header);
+                        if (buttons.Count != 6 || buttons.Select(button => button.name).Distinct().Count() != 6 ||
+                            buttons.Count(button => button.name == craftSelectedPageName) != 1)
+                            throw CraftFailure("page_layout", "The waystone tier or page controls could not be verified. No click was sent.");
+                        NavigateStashControl(probe ? buttons.First(button => button.name != craftSelectedPageName).address :
+                            buttons.Single(button => button.name == craftSelectedPageName).address);
+                        if (affinityNavigationElement == IntPtr.Zero)
+                        {
+                            craftNamedPageClicked = true;
+                            craftNamedPageReady = affinityNextAction;
+                        }
+                        return false;
+                    }
+                }
+            }
+            return CraftPageControl(header, craftPage, 6, navigate) != IntPtr.Zero;
         }
 
         private bool CraftPersonalStashOpen()
@@ -2156,6 +2220,7 @@ namespace StashUtility
                 craftSelectedSource = craftSelectedMoney = null;
                 craftSourceFolders.Clear(); craftMoneyFolders.Clear();
                 craftSelectedTier = craftSelectedPage = -1;
+                craftSelectedPageName = null;
                 craftSelectionRoot = stash;
                 craftSelectionFromInventory = fromInventory;
                 craftSelectionOpen = true;
@@ -2194,21 +2259,21 @@ namespace StashUtility
         private string[] CraftSelectionPageNames()
         {
             if (craftSelectedSource != null && craftSelectedTier is >= 0 and < 16 &&
-                CraftUiChildren(ResolvePath(craftSelectedSource.Page, new[] { 0, 1 }), 16, out var tiers) &&
-                TryReadStashEntries(ResolvePath(tiers[craftSelectedTier], new[] { 0 }), out var pages) && pages.Count == 6)
-                return pages.Select(page => page.name).ToArray();
-            return Enumerable.Range(1, 6).Select(page => PluginText.F("stashutility.craft.page_choice", "Page {0} / 6", page)).ToArray();
+                CraftUiChildren(ResolvePath(craftSelectedSource.Page, new[] { 0, 1 }), 16, out var tiers))
+            {
+                var header = ResolvePath(tiers[craftSelectedTier], new[] { 0 });
+                if (TryReadStashEntries(header, out var pages) && pages.Count == 6 && pages.Select(page => page.name).Distinct().Count() == 6)
+                    return pages.Select(page => page.name).ToArray();
+                var buttons = ReadCraftPageButtons(header, visibleOnly: false);
+                if (buttons.Count == 6 && buttons.Select(button => button.name).Distinct().Count() == 6)
+                    return buttons.Select(button => button.name).ToArray();
+            }
+            return Array.Empty<string>();
         }
 
         private void DrawWaystoneCraftSelection()
         {
             if (!craftSelectionOpen) return;
-            if (waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0 || Core.IsSettingsMenuOpen ||
-                !InventoryToolbarHasFocus() || !TryGetCraftInventory(out _, out var stash) || stash != craftSelectionRoot)
-            {
-                craftSelectionOpen = false;
-                return;
-            }
             var viewport = ImGui.GetMainViewport();
             ImGui.SetNextWindowPos(viewport.Pos + viewport.Size / 2, ImGuiCond.Appearing, new Vector2(.5f));
             ImGui.SetNextWindowSize(new Vector2(Math.Min(580, viewport.Size.X - 40), 0), ImGuiCond.Always);
@@ -2231,21 +2296,32 @@ namespace StashUtility
             {
                 var previous = craftSelectedSource;
                 DrawCraftTabChoice(PluginText.T("stashutility.craft.source_choice", "Waystone stash"), ref craftSelectedSource, craftSourceFolders);
-                if (previous != craftSelectedSource) craftSelectedTier = craftSelectedPage = -1;
+                if (previous != craftSelectedSource) { craftSelectedTier = craftSelectedPage = -1; craftSelectedPageName = null; }
                 ImGui.BeginDisabled(craftSelectedSource == null);
                 ImGui.TextUnformatted(PluginText.T("stashutility.craft.tier_choice", "Waystone tier"));
                 ImGui.SetNextItemWidth(-1);
-                if (ImGui.Combo("##craftTier", ref craftSelectedTier, CraftTierNames, CraftTierNames.Length)) craftSelectedPage = -1;
+                if (ImGui.Combo("##craftTier", ref craftSelectedTier, CraftTierNames, CraftTierNames.Length))
+                { craftSelectedPage = -1; craftSelectedPageName = null; }
                 ImGui.BeginDisabled(craftSelectedTier < 0);
                 ImGui.TextUnformatted(PluginText.T("stashutility.craft.subpage_choice", "Sub-tab (one of six)"));
                 ImGui.SetNextItemWidth(-1);
-                ImGui.Combo("##craftPage", ref craftSelectedPage, CraftSelectionPageNames(), 6);
+                var names = CraftSelectionPageNames();
+                if (ImGui.BeginCombo("##craftPage", craftSelectedPageName ?? PluginText.T("stashutility.craft.choose", "Choose...")))
+                {
+                    for (int i = 0; i < names.Length; i++)
+                        if (ImGui.Selectable(names[i], names[i] == craftSelectedPageName))
+                        { craftSelectedPage = i; craftSelectedPageName = names[i]; }
+                    ImGui.EndCombo();
+                }
+                if (craftSelectedTier >= 0 && names.Length == 0)
+                    ImGui.TextWrapped(PluginText.T("stashutility.craft.names_unavailable", "Open the selected waystone stash and tier once to load its sub-tab names."));
                 ImGui.EndDisabled(); ImGui.EndDisabled();
             }
             DrawCraftTabChoice(PluginText.T("stashutility.craft.money_choice", "Currency stash"), ref craftSelectedMoney, craftMoneyFolders);
             ImGui.TextWrapped(PluginText.T("stashutility.craft.selection_safety", "Keep one inventory cell free. After starting, keep the mouse still. Escape stops crafting."));
-            ImGui.BeginDisabled(craftSelectedMoney == null || !craftSelectionFromInventory &&
-                (craftSelectedSource == null || craftSelectedTier < 0 || craftSelectedPage < 0));
+            ImGui.BeginDisabled(waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0 ||
+                craftSelectedMoney == null || !craftSelectionFromInventory &&
+                (craftSelectedSource == null || craftSelectedTier < 0 || craftSelectedPage < 0 || string.IsNullOrEmpty(craftSelectedPageName)));
             bool start = ImGui.Button(PluginText.T("stashutility.craft.start", "Start crafting"));
             ImGui.EndDisabled();
             ImGui.SameLine();
@@ -2261,6 +2337,8 @@ namespace StashUtility
             {
                 craftFromInventory = fromInventory;
                 craftExplicitDestinations = selectedDestinations;
+                craftNamedPageResolved = craftNamedPageClicked = false;
+                craftNamedProbePage = -1;
                 craftScanAttempted = craftScanCompleted = false;
                 craftLocalCurrency = craftCurrencyPending = false; craftCurrencyCell = null;
                 craftSource = selectedDestinations ? craftSelectedSource : null;

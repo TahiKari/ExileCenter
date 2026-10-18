@@ -126,6 +126,44 @@ internal static class TabletRankingCheck
                 Check(selectedJobs.SequenceEqual(new[]{(tier,page)}),"Explicit selection crafts exactly one native page: "+tier+"/"+page);
                 Check(((string[])Call("CraftSelectionPageNames"))[page]==new[]{"Div - 1","Div - 2","300 - 700","200 - 299","20 - 49","10 - 19"}[page],"Each dropdown label maps to its canonical native page: "+tier+"/"+page);
             }
+            var nativeHeader=(IntPtr)Call("ResolvePath",tiers[0],new[]{0});
+            var nativeHeaderData=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(nativeHeader);
+            var nativeDropdown=Marshal.ReadIntPtr(nativeHeaderData.ChildrensPtr.First,4*IntPtr.Size);
+            Marshal.WriteIntPtr(nativeHeaderData.ChildrensPtr.First,4*IntPtr.Size,Node());
+            typeof(StashUtilityCore).GetField("craftSelectedTier",flags).SetValue(plugin,0);
+            Visible(tiers[0],false);
+            Check(((string[])Call("CraftSelectionPageNames")).SequenceEqual(new[]{"Div - 1","Div - 2","300 - 700","200 - 299","20 - 49","10 - 19"}),"Inactive native waystone tabs expose their actual names without a dropdown list");
+            Visible(tiers[0],true);
+            var nativeButtons=(IntPtr)Call("ResolvePath",nativeHeader,new[]{0});
+            var nativeButtonsData=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(nativeButtons);
+            var savedButtons=Enumerable.Range(0,6).Select(i=>Marshal.ReadIntPtr(nativeButtonsData.ChildrensPtr.First,i*IntPtr.Size)).ToArray();
+            for(int i=0;i<6;i++)Marshal.WriteIntPtr(nativeButtonsData.ChildrensPtr.First,i*IntPtr.Size,savedButtons[5-i]);
+            Check(((string[])Call("CraftSelectionPageNames")).SequenceEqual(new[]{"10 - 19","20 - 49","200 - 299","300 - 700","Div - 2","Div - 1"}),"Reordered native buttons retain their actual labels instead of generated numbers");
+            typeof(StashUtilityCore).GetField("craftTier",flags).SetValue(plugin,0);
+            typeof(StashUtilityCore).GetField("craftPage",flags).SetValue(plugin,5);
+            typeof(StashUtilityCore).GetField("craftSelectedPageName",flags).SetValue(plugin,"Div - 1");
+            Check(!(bool)Call("CraftSelectWaystonePage",false),"A named native page needs confirmation before any craft");
+            typeof(StashUtilityCore).GetField("craftNamedPageClicked",flags).SetValue(plugin,true);
+            for(int i=0;i<6;i++)Visible(subpages[0][i],i==2);
+            Check(!(bool)Call("CraftSelectWaystonePage",true),"The alternate-page probe never confirms a craft target");
+            typeof(StashUtilityCore).GetField("craftNamedPageClicked",flags).SetValue(plugin,true);
+            Check(!(bool)Call("CraftSelectWaystonePage",true),"An unchanged page after the target click is not an acknowledgement");
+            for(int i=0;i<6;i++)Visible(subpages[0][i],i==1);
+            Check((bool)Call("CraftSelectWaystonePage",true)&&
+                (int)typeof(StashUtilityCore).GetField("craftPage",flags).GetValue(plugin)==1,"The acknowledged named button determines the native page independently of button order; no input executed");
+            Check((bool)Call("CraftSelectWaystonePage",false),"The confirmed named page remains valid without another click");
+            for(int i=0;i<6;i++)Visible(subpages[0][i],i==3);
+            Check(!(bool)Call("CraftSelectWaystonePage",false),"A different visible page cannot replace the confirmed named target");
+            for(int i=0;i<6;i++){Marshal.WriteIntPtr(nativeButtonsData.ChildrensPtr.First,i*IntPtr.Size,savedButtons[i]);Visible(subpages[0][i],i==0);}
+            var directNames=new[]{"Div - 1","Div - 2","300 - 700","200 - 299","20 - 49","10 - 19"};
+            for(int i=0;i<6;i++)Marshal.WriteIntPtr(nativeButtonsData.ChildrensPtr.First,i*IntPtr.Size,Node(Label(directNames[i])));
+            Check(((string[])Call("CraftSelectionPageNames")).SequenceEqual(directNames),"Direct native labels are read without requiring a generic stash-dropdown layout");
+            for(int i=0;i<6;i++)Marshal.WriteIntPtr(nativeButtonsData.ChildrensPtr.First,i*IntPtr.Size,savedButtons[i]);
+            Marshal.WriteIntPtr(nativeHeaderData.ChildrensPtr.First,4*IntPtr.Size,nativeDropdown);
+            typeof(StashUtilityCore).GetField("craftNamedPageResolved",flags).SetValue(plugin,false);
+            typeof(StashUtilityCore).GetField("craftSelectedSource",flags).SetValue(plugin,null);
+            Check(((string[])Call("CraftSelectionPageNames")).Length==0,"Unreadable sub-tab names never turn into invented numbered choices");
+            typeof(StashUtilityCore).GetField("craftSelectedSource",flags).SetValue(plugin,namedSource);
             foreach(var invalidChoice in new[]{(-1,0),(16,0),(0,-1),(0,6)})
             {
                 typeof(StashUtilityCore).GetField("craftSelectedTier",flags).SetValue(plugin,invalidChoice.Item1);
@@ -1630,6 +1668,7 @@ internal static class TabletRankingCheck
                 typeof(StashUtilityCore).GetField("craftSelectedMoney",flags).SetValue(plugin,selected?craftMoney:null);
                 typeof(StashUtilityCore).GetField("craftSelectedTier",flags).SetValue(plugin,selected?13:-1);
                 typeof(StashUtilityCore).GetField("craftSelectedPage",flags).SetValue(plugin,selected?0:-1);
+                typeof(StashUtilityCore).GetField("craftSelectedPageName",flags).SetValue(plugin,selected?"Div - 1":null);
                 var sourceFolders=(List<string>)typeof(StashUtilityCore).GetField("craftSourceFolders",flags).GetValue(plugin);
                 var moneyFolders=(List<string>)typeof(StashUtilityCore).GetField("craftMoneyFolders",flags).GetValue(plugin);
                 sourceFolders.Clear();moneyFolders.Clear();
@@ -1645,6 +1684,17 @@ internal static class TabletRankingCheck
             }
             Check(!(bool)typeof(StashUtilityCore).GetField("waystoneCraftRunning",flags).GetValue(plugin)&&
                 JsonConvert.SerializeObject(plugin.Settings)==craftSettings,"Craft selection sends no game input and preserves saved settings before confirmation");
+            var selectionWindow=typeof(StashUtilityCore).GetMethod("DrawWaystoneCraftSelection",flags);
+            typeof(StashUtilityCore).GetField("craftSelectionOpen",flags).SetValue(plugin,true);
+            foreach(bool focused in new[]{false,true,true})
+            {
+                io.AddFocusEvent(focused);io.AddMousePosEvent(1200,900);io.AddMouseButtonEvent(0,focused);
+                ImGuiNET.ImGui.NewFrame();selectionWindow.Invoke(plugin,null);ImGuiNET.ImGui.Render();
+                Check((bool)typeof(StashUtilityCore).GetField("craftSelectionOpen",flags).GetValue(plugin),"Switching screens or clicking outside keeps the selection window open");
+                Check((string)typeof(StashUtilityCore).GetField("craftSelectedPageName",flags).GetValue(plugin)=="Div - 1","Focus changes preserve the chosen sub-tab name");
+            }
+            io.AddMouseButtonEvent(0,false);io.AddFocusEvent(true);
+            typeof(StashUtilityCore).GetField("craftSelectionOpen",flags).SetValue(plugin,false);
             var analysisObservation = ModDatabase.TabletMeta.Recognize("Breach Tablet",
                 new[] { ModDatabase.TabletMeta.FindSubRank("Breach Tablet","S1").GameModIds[0] });
             analysisObservation.Mods[0].Roll=10000;
