@@ -564,15 +564,6 @@ namespace ExileCenter.Ui
             ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark]);
             ImGui.TextUnformatted(title);
             ImGui.PopStyleColor();
-            if (frameTexture != IntPtr.Zero)
-            {
-                var start = ImGui.GetItemRectMax();
-                var end = new Vector2(ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X, 0);
-                float middle = (ImGui.GetItemRectMin().Y + start.Y) / 2;
-                if (end.X - start.X > 40)
-                    ImGui.GetWindowDrawList().AddImage(frameTexture, new Vector2(start.X + 12, middle - 3),
-                        new Vector2(end.X, middle + 3), new Vector2(.115f, .967f), new Vector2(.885f, .99f), ImGui.GetColorU32(Vector4.One));
-            }
             if (!string.IsNullOrEmpty(subtitle))
             {
                 ImGui.PushStyleColor(ImGuiCol.Text, TextMuted);
