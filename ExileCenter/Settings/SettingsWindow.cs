@@ -74,6 +74,17 @@ namespace ExileCenter.Settings
                 return;
             }
 
+            var saveLabel = L.T("settings.menu.save", "Save settings");
+            var saveWidth = ImGui.CalcTextSize(saveLabel).X + ImGui.GetStyle().FramePadding.X * 2f;
+            var updateLabel = L.T("updates.short", "Update");
+            var actionsWidth = saveWidth + (LocalUpdates.IsAvailable ? ImGui.CalcTextSize(updateLabel).X + ImGui.GetStyle().FramePadding.X * 2f + ImGui.GetStyle().ItemSpacing.X : 0f);
+            float actionsX = ImGui.GetWindowPos().X + ImGui.GetWindowWidth() - actionsWidth - 24f;
+            // Reserve the right-hand actions before drawing the informational labels.
+            // The ornamental padding also offsets ImGui's menu group, so SameLine(offset)
+            // would add that margin again and push the buttons outside the window.
+            var menuClip = ImGui.GetWindowDrawList().CmdBuffer[ImGui.GetWindowDrawList().CmdBuffer.Size - 1].ClipRect;
+            ImGui.PushClipRect(new Vector2(menuClip.X, menuClip.Y),
+                new Vector2(Math.Max(menuClip.X, actionsX - ImGui.GetStyle().ItemSpacing.X), menuClip.W), true);
             ImGui.PushStyleColor(ImGuiCol.Text, ImGuiTheme.TextMuted);
             ImGui.Text($"ExileCenter {LocalUpdates.InstalledVersion}");
             ImGui.PopStyleColor();
@@ -81,13 +92,9 @@ namespace ExileCenter.Settings
             ImGui.TextDisabled("|");
             ImGui.SameLine();
             ImGui.TextDisabled(L.F("settings.menu.hide_show", "Hide/show menu: {0}", Core.GHSettings.MainMenuHotKey));
-            var saveLabel = L.T("settings.menu.save", "Save settings");
-            var saveWidth = ImGui.CalcTextSize(saveLabel).X + ImGui.GetStyle().FramePadding.X * 2f;
-            var updateLabel = L.T("updates.short", "Update");
-            var actionsWidth = saveWidth + (LocalUpdates.IsAvailable ? ImGui.CalcTextSize(updateLabel).X + ImGui.GetStyle().FramePadding.X * 2f + 8f : 0f);
-            if (ImGui.GetWindowWidth() - actionsWidth - 24f > ImGui.GetCursorPosX())
-                ImGui.SameLine(ImGui.GetWindowWidth() - actionsWidth - 24f);
-            else ImGui.SameLine();
+            ImGui.PopClipRect();
+            ImGui.SameLine();
+            ImGui.SetCursorScreenPos(new Vector2(actionsX, ImGui.GetCursorScreenPos().Y));
             if (ImGui.SmallButton(saveLabel + "##SaveSettingsNow"))
                 CoroutineHandler.RaiseEvent(ExileCenterEvents.TimeToSaveAllSettings);
             if (LocalUpdates.IsAvailable)

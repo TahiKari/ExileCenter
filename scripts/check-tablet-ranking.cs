@@ -1433,6 +1433,44 @@ internal static class TabletRankingCheck
                 frameImage.CopyPixelDataTo(framePreviewPixels);
             }
             typeof(ExileCenter.Ui.ImGuiTheme).GetField("frameTexture",flags).SetValue(null,new IntPtr(2));
+            var updatesType=typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.LocalUpdates",true);
+            var offerField=updatesType.GetField("offer",flags);var previousOffer=offerField.GetValue(null);
+            var settingsType=typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Settings.SettingsWindow",true);
+            var selectedPageField=settingsType.GetField("selectedSettingsPage",flags);var previousPage=selectedPageField.GetValue(null);
+            float previousToolbarFontScale=io.FontGlobalScale;
+            try
+            {
+                io.FontGlobalScale=1.35f;
+                var packageType=updatesType.GetNestedType("Package",BindingFlags.NonPublic);
+                offerField.SetValue(null,Activator.CreateInstance(packageType,new object[]{"fixture:toolbar-update","fixture.zip",new string('a',64),"ExileCenter fixture"}));
+                foreach(bool independent in new[]{false,true})
+                foreach(int width in new[]{800,1200})
+                {
+                    Vector2 buttonCenter=Vector2.Zero;
+                    for(int frame=0;frame<6;frame++)
+                    {
+                        io.AddMousePosEvent(frame>=3?buttonCenter.X:-100,frame>=3?buttonCenter.Y:-100);
+                        io.AddMouseButtonEvent(0,frame==4);
+                        ImGuiNET.ImGui.NewFrame();
+                        typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("PushSettingsStyle",flags).Invoke(null,null);
+                        ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width,600));
+                        var menuFlags=ImGuiNET.ImGuiWindowFlags.MenuBar|(independent?ImGuiNET.ImGuiWindowFlags.NoTitleBar:ImGuiNET.ImGuiWindowFlags.None);
+                        typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("BeginSettingsWindow",flags).Invoke(null,new object[]{"Mise a jour###toolbar-fixture",true,menuFlags});
+                        settingsType.GetMethod("DrawManuBar",flags).Invoke(null,null);
+                        var buttonMin=ImGuiNET.ImGui.GetItemRectMin();var buttonMax=ImGuiNET.ImGui.GetItemRectMax();
+                        buttonCenter=(buttonMin+buttonMax)/2;
+                        if(frame==2)Check(buttonMin.X>=16&&buttonMax.X<=16+width,
+                            "The persistent update button beside Save stays inside the window: independent="+independent+", width="+width+", bounds="+buttonMin+".."+buttonMax);
+                        if(frame==5)Check((string)selectedPageField.GetValue(null)=="core:updates","The real persistent update button opens the update page by mouse click");
+                        ImGuiNET.ImGui.End();typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("PopSettingsStyle",flags).Invoke(null,null);
+                        ImGuiNET.ImGui.Render();
+                        if(frame==2&&previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,$"updates-toolbar-{width}-{independent}.png"),pixels,atlasWidth,atlasHeight);
+                    }
+                    selectedPageField.SetValue(null,previousPage);
+                }
+            }
+            finally {offerField.SetValue(null,previousOffer);selectedPageField.SetValue(null,previousPage);io.FontGlobalScale=previousToolbarFontScale;}
+            io.AddMousePosEvent(-100,-100);io.AddMouseButtonEvent(0,false);
             var ornate=typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("DrawOrnateWindow",flags);
             foreach(var panelFlags in new[]{ImGuiNET.ImGuiWindowFlags.None,ImGuiNET.ImGuiWindowFlags.NoBackground,ImGuiNET.ImGuiWindowFlags.NoInputs})
             {
@@ -1547,7 +1585,7 @@ internal static class TabletRankingCheck
                         Check(cursor.Y>=imageStart.Y+imageHeight*.16f&&cursor.Y+available.Y<=imageStart.Y+imageHeight*(1-.15f)+1,
                             "The work rectangle reserves both the cartouche and the carved footer: "+windowSize);
                     }
-                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.56");ImGuiNET.ImGui.EndMenuBar();}
+                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.57");ImGuiNET.ImGui.EndMenuBar();}
                     ImGuiNET.ImGui.BeginChild("Navigation",new Vector2(Math.Min(220,ImGuiNET.ImGui.GetContentRegionAvail().X*.3f),0),ImGuiNET.ImGuiChildFlags.Borders);
                     foreach(var label in new[]{"Application","General","Plugins","Mises a jour","Plugins actifs","Auto-craft TP"})ImGuiNET.ImGui.Selectable(label,label=="Plugins");
                     ImGuiNET.ImGui.EndChild();ImGuiNET.ImGui.SameLine();
