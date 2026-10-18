@@ -237,6 +237,16 @@ namespace ExileCenter
                 this.window = new Win32Window(this.className, bounds.Width, bounds.Height, bounds.X, bounds.Y,
                     this.WindowTitle, (WindowStyles)0x00CF0000, (WindowExStyles)0x00040000);
                 if (this.window.Handle == IntPtr.Zero) throw new System.ComponentModel.Win32Exception();
+                if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
+                {
+                    // Native frames use the same stone, bronze and ivory palette as the content.
+                    // https://learn.microsoft.com/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute
+                    int dark = 1, border = 0x00365770, caption = 0x00080A0B, text = 0x00DBE8ED;
+                    Native.DwmSetWindowAttribute(this.window.Handle, 20, ref dark, sizeof(int));
+                    Native.DwmSetWindowAttribute(this.window.Handle, 34, ref border, sizeof(int));
+                    Native.DwmSetWindowAttribute(this.window.Handle, 35, ref caption, sizeof(int));
+                    Native.DwmSetWindowAttribute(this.window.Handle, 36, ref text, sizeof(int));
+                }
                 var inputType = typeof(Overlay).Assembly.GetType("ClickableTransparentOverlay.ImGuiInputHandler", true)!;
                 var input = Activator.CreateInstance(inputType, this.window.Handle)!;
                 this.updateInput = inputType.GetMethod("Update")!.CreateDelegate<Func<bool>>(input);
@@ -444,6 +454,7 @@ namespace ExileCenter
             [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr window, int command);
             [DllImport("user32.dll")] internal static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
             [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern bool SetWindowText(IntPtr window, string text);
+            [DllImport("dwmapi.dll")] internal static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
         }
     }
 }

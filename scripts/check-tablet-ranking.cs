@@ -1401,6 +1401,27 @@ internal static class TabletRankingCheck
             typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("Apply", flags).Invoke(null, null);
             Vector4[] Colors() => Enumerable.Range(0, (int)ImGuiNET.ImGuiCol.COUNT).Select(i => ImGuiNET.ImGui.GetStyle().Colors[i]).ToArray();
             var original = Colors();
+            var decorate=typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("DrawWindowBackground",flags);
+            foreach(var panelFlags in new[]{ImGuiNET.ImGuiWindowFlags.None,ImGuiNET.ImGuiWindowFlags.NoBackground,ImGuiNET.ImGuiWindowFlags.NoInputs})
+            {
+                ImGuiNET.ImGui.NewFrame();
+                ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(380,220));
+                ImGuiNET.ImGui.Begin("Cadre de pierre et bronze##poe2-panel",panelFlags);
+                var drawList=ImGuiNET.ImGui.GetWindowDrawList();int beforeVertices=drawList.VtxBuffer.Size;
+                var beforeClip=drawList.CmdBuffer[drawList.CmdBuffer.Size-1].ClipRect;
+                var beforeCursor=ImGuiNET.ImGui.GetCursorPos();
+                decorate.Invoke(null,new object[]{panelFlags,.88f});
+                Check(panelFlags==ImGuiNET.ImGuiWindowFlags.None?drawList.VtxBuffer.Size>beforeVertices:drawList.VtxBuffer.Size==beforeVertices,
+                    "Opaque panels receive metalwork while transparent and input-free overlays receive no decoration: "+panelFlags);
+                Check(ImGuiNET.ImGui.GetCursorPos()==beforeCursor&&drawList.CmdBuffer[drawList.CmdBuffer.Size-1].ClipRect==beforeClip,
+                    "Panel decoration preserves control layout and clipping: "+panelFlags);
+                ImGuiNET.ImGui.TextUnformatted("ExileCenter - Configuration");
+                bool sampleEnabled=true;ImGuiNET.ImGui.Checkbox("Activer le filtre",ref sampleEnabled);
+                ImGuiNET.ImGui.Button("Appliquer",new Vector2(-1,0));
+                ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
+                if(previewDirectory!=null&&panelFlags==ImGuiNET.ImGuiWindowFlags.None)
+                {Directory.CreateDirectory(previewDirectory);SaveUiPreview(Path.Combine(previewDirectory,"poe2-panel.png"),pixels,atlasWidth,atlasHeight);}
+            }
             var names = (string[])typeof(ExileCenter.Ui.ImGuiTheme).GetField("PluginThemeNames", flags).GetValue(null);
             Check(names.Select(ExileCenter.Ui.ImGuiTheme.PluginAccent).Distinct().Count() == names.Length, "Every bundled plugin has a distinct accent");
             // OKLab measures perceived differences; unequal RGB values alone do not prevent lookalikes.
@@ -1433,6 +1454,16 @@ internal static class TabletRankingCheck
                     ImGuiNET.ImGui.ColorConvertRGBtoHSV(accent.X, accent.Y, accent.Z, out _, out float saturation, out float brightness);
                     Check(saturation <= .73f && brightness <= .881f, "Plugin accents stay subdued: " + name);
                     backgrounds.Add(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.WindowBg]);
+                    float Luminance(Vector4 color)
+                    {
+                        float Linear(float component)=>component<=.04045f?component/12.92f:MathF.Pow((component+.055f)/1.055f,2.4f);
+                        return .2126f*Linear(color.X)+.7152f*Linear(color.Y)+.0722f*Linear(color.Z);
+                    }
+                    var body=ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.WindowBg];
+                    Check(Math.Max(body.X,Math.Max(body.Y,body.Z))<.15f,"Every plugin retains the shared dark stone background: "+name);
+                    foreach(var control in new[]{ImGuiNET.ImGuiCol.WindowBg,ImGuiNET.ImGuiCol.FrameBg,ImGuiNET.ImGuiCol.Button,ImGuiNET.ImGuiCol.HeaderActive})
+                        Check((Luminance(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.Text])+.05f)/
+                            (Luminance(ImGuiNET.ImGui.GetStyle().Colors[(int)control])+.05f)>=4.5f,"Ivory text remains readable on themed content: "+name+control);
                     Check(ImGuiNET.ImGui.GetStyle().Colors[(int)ImGuiNET.ImGuiCol.FrameBg] != original[(int)ImGuiNET.ImGuiCol.FrameBg], "Input fields follow the plugin palette: " + name);
                     using (ExileCenter.Ui.ImGuiTheme.UsePluginTheme(name + "/appearance"))
                     {
@@ -1462,7 +1493,7 @@ internal static class TabletRankingCheck
                         using var theme = ExileCenter.Ui.ImGuiTheme.UsePluginTheme(names[index]);
                         ImGuiNET.ImGui.SetNextWindowPos(new Vector2(10 + index % 5 * 254, 10 + index / 5 * 188));
                         ImGuiNET.ImGui.SetNextWindowSize(new Vector2(244, 180));
-                        ImGuiNET.ImGui.Begin(names[index] + "##ThemePreview", ImGuiNET.ImGuiWindowFlags.NoSavedSettings | ImGuiNET.ImGuiWindowFlags.NoResize | ImGuiNET.ImGuiWindowFlags.NoMove | ImGuiNET.ImGuiWindowFlags.NoCollapse);
+                        ExileCenter.Ui.ImGuiTheme.BeginWindow(names[index] + "##ThemePreview", ImGuiNET.ImGuiWindowFlags.NoSavedSettings | ImGuiNET.ImGuiWindowFlags.NoResize | ImGuiNET.ImGuiWindowFlags.NoMove | ImGuiNET.ImGuiWindowFlags.NoCollapse);
                         ImGuiNET.ImGui.TextColored(ExileCenter.Ui.ImGuiTheme.PluginAccent(names[index]), "Relique ancienne");
                         bool enabled = true; float intensity = .65f;
                         ImGuiNET.ImGui.Checkbox("Activer", ref enabled);

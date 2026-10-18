@@ -58,8 +58,6 @@ namespace ExileCenter.Ui
                 }
                 catch (Exception ex) { Console.WriteLine($"[Settings.Background] {ex.Message}"); }
             }
-            if (backgroundTexture == IntPtr.Zero || backgroundSize.X <= 0 || backgroundSize.Y <= 0) return;
-
             float header = ((flags & ImGuiWindowFlags.NoTitleBar) == 0 ? ImGui.GetFrameHeight() : 0) +
                 ((flags & ImGuiWindowFlags.MenuBar) != 0 ? ImGui.GetFrameHeight() : 0);
             var min = ImGui.GetWindowPos() + new Vector2(1, header);
@@ -68,24 +66,48 @@ namespace ExileCenter.Ui
             if (ImGui.GetScrollMaxX() > 0) max.Y -= ImGui.GetStyle().ScrollbarSize;
             var size = max - min;
             if (size.X <= 0 || size.Y <= 0) return;
-            // Fill the body without stretching the artwork or covering the title/menu bars.
-            float sourceAspect = backgroundSize.X / backgroundSize.Y;
-            float targetAspect = size.X / size.Y;
-            var crop = sourceAspect > targetAspect
-                ? new Vector2((1 - targetAspect / sourceAspect) / 2, 0)
-                : new Vector2(0, (1 - sourceAspect / targetAspect) / 2);
             var draw = ImGui.GetWindowDrawList();
-            // Blend the artwork into the panel instead of making translucent HUDs opaque.
-            draw.AddImage(backgroundTexture, min, max, crop, Vector2.One - crop,
-                ImGui.GetColorU32(new Vector4(1, 1, 1, 1 - shade)));
+            var position = ImGui.GetWindowPos();
+            var end = position + windowSize;
+            float alpha = ImGui.GetStyle().Colors[(int)ImGuiCol.WindowBg].W;
+            draw.PushClipRect(position, end, false);
+            uint stone = ImGui.GetColorU32(new Vector4(.073f, .068f, .059f, alpha * .65f));
+            uint shadow = ImGui.GetColorU32(new Vector4(.018f, .020f, .022f, alpha * .75f));
+            draw.AddRectFilledMultiColor(min, max, stone, stone, shadow, shadow);
+            if (backgroundTexture != IntPtr.Zero && backgroundSize.X > 0 && backgroundSize.Y > 0)
+            {
+                // Fill the body without stretching the artwork or covering the title/menu bars.
+                float sourceAspect = backgroundSize.X / backgroundSize.Y;
+                float targetAspect = size.X / size.Y;
+                var crop = sourceAspect > targetAspect
+                    ? new Vector2((1 - targetAspect / sourceAspect) / 2, 0)
+                    : new Vector2(0, (1 - sourceAspect / targetAspect) / 2);
+                draw.AddImage(backgroundTexture, min, max, crop, Vector2.One - crop,
+                    ImGui.GetColorU32(new Vector4(1, 1, 1, (1 - shade) * alpha)));
+            }
+
+            // Inset metalwork stays inside the window and never covers controls or title text.
+            uint bronze = ImGui.GetColorU32(new Vector4(AccentMuted.X, AccentMuted.Y, AccentMuted.Z, alpha));
+            uint gold = ImGui.GetColorU32(new Vector4(Accent.X, Accent.Y, Accent.Z, alpha * .80f));
+            draw.AddRect(position + Vector2.One, end - Vector2.One, bronze, 2, ImDrawFlags.None, 2);
+            draw.AddRect(position + new Vector2(4), end - new Vector2(4), ImGui.GetColorU32(new Vector4(.22f, .18f, .12f, alpha * .65f)), 1);
+            if (header > 0) draw.AddLine(new Vector2(position.X + 5, min.Y - 1), new Vector2(end.X - 5, min.Y - 1), bronze);
+            for (int corner = 0; corner < 4; corner++)
+            {
+                var inward = new Vector2((corner & 1) == 0 ? 1 : -1, (corner & 2) == 0 ? 1 : -1);
+                var point = new Vector2(inward.X > 0 ? position.X + 4 : end.X - 4, inward.Y > 0 ? position.Y + 4 : end.Y - 4);
+                draw.AddLine(point, point + new Vector2(inward.X * 17, 0), gold, 2);
+                draw.AddLine(point, point + new Vector2(0, inward.Y * 17), gold, 2);
+            }
+            draw.PopClipRect();
         }
 
-        public static readonly Vector4 Accent = new(0.78f, 0.61f, 0.37f, 1f);
-        public static readonly Vector4 AccentMuted = new(0.44f, 0.33f, 0.21f, 1f);
-        internal static readonly Vector4 TextMuted = new(0.76f, 0.72f, 0.62f, 1f);
+        public static readonly Vector4 Accent = new(0.78f, 0.63f, 0.39f, 1f);
+        public static readonly Vector4 AccentMuted = new(0.44f, 0.34f, 0.21f, 1f);
+        internal static readonly Vector4 TextMuted = new(0.70f, 0.67f, 0.59f, 1f);
         internal static readonly Vector4 Success = new(0.35f, 0.78f, 0.45f, 1f);
         internal static readonly Vector4 Danger = new(0.85f, 0.35f, 0.35f, 1f);
-        internal static readonly Vector4 SectionBg = new(0.171f, 0.1425f, 0.105f, 1f);
+        internal static readonly Vector4 SectionBg = new(0.065f, 0.061f, 0.053f, 1f);
 
         private static readonly string[] PluginThemeNames =
         {
@@ -159,7 +181,7 @@ namespace ExileCenter.Ui
                 if (this.context == IntPtr.Zero) return;
                 ActivePluginTheme = key;
                 var accent = PluginAccent(key!);
-                Vector4 Tint(float amount) => Vector4.Lerp(new Vector4(.055f, .05f, .045f, 1), accent, amount);
+                Vector4 Tint(float amount) => Vector4.Lerp(new Vector4(.027f, .025f, .023f, 1), accent, amount * .35f);
                 var colors = ImGui.GetStyle().Colors;
                 var windowBg = Tint(.12f); windowBg.W = colors[(int)ImGuiCol.WindowBg].W;
                 var childBg = Tint(.19f); childBg.W = colors[(int)ImGuiCol.ChildBg].W;
@@ -170,7 +192,7 @@ namespace ExileCenter.Ui
                 ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, Tint(.31f));
                 ImGui.PushStyleColor(ImGuiCol.FrameBgActive, Tint(.40f));
                 ImGui.PushStyleColor(ImGuiCol.TitleBg, Tint(.10f));
-                ImGui.PushStyleColor(ImGuiCol.TitleBgActive, Tint(.23f));
+                ImGui.PushStyleColor(ImGuiCol.TitleBgActive, new Vector4(.15f, .112f, .066f, 1));
                 ImGui.PushStyleColor(ImGuiCol.TitleBgCollapsed, Tint(.08f));
                 ImGui.PushStyleColor(ImGuiCol.MenuBarBg, Tint(.12f));
                 ImGui.PushStyleColor(ImGuiCol.ScrollbarBg, Tint(.07f));
@@ -200,11 +222,11 @@ namespace ExileCenter.Ui
                 ImGui.PushStyleColor(ImGuiCol.ButtonActive, Tint(.53f));
                 ImGui.PushStyleColor(ImGuiCol.Header, Tint(.33f));
                 ImGui.PushStyleColor(ImGuiCol.HeaderHovered, Tint(.43f));
-                ImGui.PushStyleColor(ImGuiCol.HeaderActive, Tint(.53f));
+                ImGui.PushStyleColor(ImGuiCol.HeaderActive, new Vector4(.24f, .065f, .050f, 1));
                 ImGui.PushStyleColor(ImGuiCol.TabHovered, Tint(.40f));
-                ImGui.PushStyleColor(ImGuiCol.TabSelected, Tint(.32f));
-                ImGui.PushStyleColor(ImGuiCol.TabSelectedOverline, accent);
-                ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(accent.X, accent.Y, accent.Z, .45f));
+                ImGui.PushStyleColor(ImGuiCol.TabSelected, new Vector4(.20f, .058f, .043f, 1));
+                ImGui.PushStyleColor(ImGuiCol.TabSelectedOverline, Accent);
+                ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(AccentMuted.X, AccentMuted.Y, AccentMuted.Z, .85f));
                 ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, Tint(.20f));
                 ImGui.PushStyleColor(ImGuiCol.NavCursor, accent);
             }
@@ -224,27 +246,27 @@ namespace ExileCenter.Ui
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(18f, 16f));
             ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(8f, 4f));
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(10f, 7f));
-            ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 8f);
-            ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 8f);
-            ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5f);
-            ImGui.PushStyleVar(ImGuiStyleVar.TabRounding, 5f);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 2f);
+            ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 1f);
+            ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 1f);
+            ImGui.PushStyleVar(ImGuiStyleVar.TabRounding, 1f);
             ImGui.PushStyleVar(ImGuiStyleVar.SelectableTextAlign, new Vector2(0f, 0.5f));
-            ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.0945f, 0.0808f, 0.0563f, 0.98f));
-            ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.135f, 0.114f, 0.0788f, 0.42f));
-            ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(0.315f, 0.266f, 0.18f, 0.55f));
-            ImGui.PushStyleColor(ImGuiCol.FrameBg, new Vector4(0.198f, 0.1663f, 0.1125f, 1f));
-            ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, new Vector4(0.27f, 0.2233f, 0.15f, 1f));
-            ImGui.PushStyleColor(ImGuiCol.FrameBgActive, new Vector4(0.324f, 0.266f, 0.1725f, 1f));
-            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.252f, 0.2043f, 0.135f, 1f));
-            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.387f, 0.304f, 0.1875f, 1f));
-            ImGui.PushStyleColor(ImGuiCol.ButtonActive, AccentMuted);
-            ImGui.PushStyleColor(ImGuiCol.Header, new Vector4(0.306f, 0.228f, 0.135f, 1f));
-            ImGui.PushStyleColor(ImGuiCol.HeaderHovered, new Vector4(0.387f, 0.2945f, 0.18f, 1f));
-            ImGui.PushStyleColor(ImGuiCol.HeaderActive, AccentMuted);
-            ImGui.PushStyleColor(ImGuiCol.TabSelected, new Vector4(0.351f, 0.2565f, 0.1425f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(.034f, .032f, .028f, .98f));
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(.065f, .059f, .047f, .68f));
+            ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(.44f, .34f, .21f, .85f));
+            ImGui.PushStyleColor(ImGuiCol.FrameBg, new Vector4(.085f, .075f, .057f, 1));
+            ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, new Vector4(.16f, .13f, .08f, 1));
+            ImGui.PushStyleColor(ImGuiCol.FrameBgActive, new Vector4(.22f, .17f, .095f, 1));
+            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(.13f, .105f, .067f, 1));
+            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(.23f, .18f, .10f, 1));
+            ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(.28f, .075f, .055f, 1));
+            ImGui.PushStyleColor(ImGuiCol.Header, new Vector4(.12f, .095f, .057f, 1));
+            ImGui.PushStyleColor(ImGuiCol.HeaderHovered, new Vector4(.20f, .14f, .075f, 1));
+            ImGui.PushStyleColor(ImGuiCol.HeaderActive, new Vector4(.25f, .065f, .045f, 1));
+            ImGui.PushStyleColor(ImGuiCol.TabSelected, new Vector4(.20f, .058f, .043f, 1));
             ImGui.PushStyleColor(ImGuiCol.TabSelectedOverline, Accent);
-            ImGui.PushStyleColor(ImGuiCol.MenuBarBg, new Vector4(0.1215f, 0.0998f, 0.0675f, 1f));
-            ImGui.PushStyleColor(ImGuiCol.TitleBgActive, new Vector4(0.171f, 0.133f, 0.0825f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.MenuBarBg, new Vector4(.065f, .054f, .038f, 1));
+            ImGui.PushStyleColor(ImGuiCol.TitleBgActive, new Vector4(.15f, .112f, .066f, 1));
         }
 
         internal static void PopSettingsStyle()
@@ -257,13 +279,19 @@ namespace ExileCenter.Ui
         {
             ImGui.StyleColorsDark();
             var style = ImGui.GetStyle();
-            style.WindowRounding = 6f;
-            style.ChildRounding = 5f;
-            style.FrameRounding = 4f;
-            style.PopupRounding = 5f;
-            style.ScrollbarRounding = 5f;
-            style.GrabRounding = 4f;
-            style.TabRounding = 4f;
+            style.WindowRounding = 2f;
+            style.ChildRounding = 1f;
+            style.FrameRounding = 1f;
+            style.PopupRounding = 2f;
+            style.ScrollbarRounding = 1f;
+            style.GrabRounding = 1f;
+            style.TabRounding = 1f;
+            style.WindowBorderSize = 2f;
+            style.ChildBorderSize = 1f;
+            style.PopupBorderSize = 2f;
+            style.FrameBorderSize = 1f;
+            style.TabBorderSize = 1f;
+            style.WindowTitleAlign = new Vector2(.5f, .5f);
             style.WindowPadding = new Vector2(14f, 12f);
             style.FramePadding = new Vector2(8f, 5f);
             style.ItemSpacing = new Vector2(10f, 7f);
@@ -274,33 +302,35 @@ namespace ExileCenter.Ui
             var colors = style.Colors;
             colors[(int)ImGuiCol.Text] = new Vector4(0.93f, 0.91f, 0.86f, 1f);
             colors[(int)ImGuiCol.TextDisabled] = TextMuted;
-            colors[(int)ImGuiCol.WindowBg] = new Vector4(0.126f, 0.1045f, 0.075f, 0.97f);
-            colors[(int)ImGuiCol.ChildBg] = new Vector4(0.153f, 0.1235f, 0.09f, 1f);
-            colors[(int)ImGuiCol.PopupBg] = new Vector4(0.144f, 0.114f, 0.0825f, 0.98f);
-            colors[(int)ImGuiCol.Border] = new Vector4(0.27f, 0.228f, 0.165f, 0.55f);
-            colors[(int)ImGuiCol.FrameBg] = new Vector4(0.198f, 0.1615f, 0.12f, 1f);
-            colors[(int)ImGuiCol.FrameBgHovered] = new Vector4(0.252f, 0.209f, 0.15f, 1f);
-            colors[(int)ImGuiCol.FrameBgActive] = new Vector4(0.297f, 0.247f, 0.18f, 1f);
-            colors[(int)ImGuiCol.TitleBg] = new Vector4(0.117f, 0.095f, 0.0675f, 1f);
-            colors[(int)ImGuiCol.TitleBgActive] = new Vector4(0.198f, 0.152f, 0.105f, 1f);
-            colors[(int)ImGuiCol.MenuBarBg] = new Vector4(0.144f, 0.114f, 0.0825f, 1f);
-            colors[(int)ImGuiCol.ScrollbarBg] = new Vector4(0.126f, 0.1045f, 0.075f, 0.6f);
-            colors[(int)ImGuiCol.ScrollbarGrab] = new Vector4(0.342f, 0.285f, 0.21f, 1f);
-            colors[(int)ImGuiCol.ScrollbarGrabHovered] = new Vector4(0.396f, 0.342f, 0.255f, 1f);
+            colors[(int)ImGuiCol.WindowBg] = new Vector4(.035f, .033f, .030f, .97f);
+            colors[(int)ImGuiCol.ChildBg] = new Vector4(.060f, .055f, .046f, 1);
+            colors[(int)ImGuiCol.PopupBg] = new Vector4(.045f, .040f, .031f, .98f);
+            colors[(int)ImGuiCol.Border] = new Vector4(.44f, .34f, .21f, .85f);
+            colors[(int)ImGuiCol.BorderShadow] = new Vector4(.008f, .007f, .006f, .80f);
+            colors[(int)ImGuiCol.FrameBg] = new Vector4(.09f, .078f, .058f, 1);
+            colors[(int)ImGuiCol.FrameBgHovered] = new Vector4(.16f, .13f, .08f, 1);
+            colors[(int)ImGuiCol.FrameBgActive] = new Vector4(.22f, .17f, .095f, 1);
+            colors[(int)ImGuiCol.TitleBg] = new Vector4(.055f, .045f, .030f, 1);
+            colors[(int)ImGuiCol.TitleBgActive] = new Vector4(.15f, .112f, .066f, 1);
+            colors[(int)ImGuiCol.TitleBgCollapsed] = new Vector4(.045f, .037f, .026f, 1);
+            colors[(int)ImGuiCol.MenuBarBg] = new Vector4(.065f, .054f, .038f, 1);
+            colors[(int)ImGuiCol.ScrollbarBg] = new Vector4(.025f, .023f, .020f, .80f);
+            colors[(int)ImGuiCol.ScrollbarGrab] = new Vector4(.26f, .20f, .125f, 1);
+            colors[(int)ImGuiCol.ScrollbarGrabHovered] = new Vector4(.40f, .31f, .18f, 1);
             colors[(int)ImGuiCol.ScrollbarGrabActive] = Accent;
             colors[(int)ImGuiCol.CheckMark] = Accent;
             colors[(int)ImGuiCol.SliderGrab] = AccentMuted;
             colors[(int)ImGuiCol.SliderGrabActive] = Accent;
-            colors[(int)ImGuiCol.Button] = new Vector4(0.27f, 0.209f, 0.15f, 1f);
-            colors[(int)ImGuiCol.ButtonHovered] = new Vector4(0.36f, 0.285f, 0.195f, 1f);
-            colors[(int)ImGuiCol.ButtonActive] = AccentMuted;
-            colors[(int)ImGuiCol.Header] = new Vector4(0.252f, 0.19f, 0.135f, 1f);
-            colors[(int)ImGuiCol.HeaderHovered] = new Vector4(0.342f, 0.266f, 0.18f, 1f);
-            colors[(int)ImGuiCol.HeaderActive] = new Vector4(0.45f, 0.342f, 0.225f, 1f);
+            colors[(int)ImGuiCol.Button] = new Vector4(.15f, .12f, .075f, 1);
+            colors[(int)ImGuiCol.ButtonHovered] = new Vector4(.25f, .19f, .105f, 1);
+            colors[(int)ImGuiCol.ButtonActive] = new Vector4(.28f, .075f, .055f, 1);
+            colors[(int)ImGuiCol.Header] = new Vector4(.12f, .095f, .057f, 1);
+            colors[(int)ImGuiCol.HeaderHovered] = new Vector4(.20f, .14f, .075f, 1);
+            colors[(int)ImGuiCol.HeaderActive] = new Vector4(.25f, .065f, .045f, 1);
             colors[(int)ImGuiCol.Separator] = new Vector4(0.288f, 0.247f, 0.18f, 0.6f);
-            colors[(int)ImGuiCol.Tab] = new Vector4(0.18f, 0.1425f, 0.105f, 1f);
-            colors[(int)ImGuiCol.TabHovered] = new Vector4(0.378f, 0.285f, 0.195f, 1f);
-            colors[(int)ImGuiCol.TabSelected] = new Vector4(0.378f, 0.266f, 0.165f, 1f);
+            colors[(int)ImGuiCol.Tab] = new Vector4(.085f, .070f, .047f, 1);
+            colors[(int)ImGuiCol.TabHovered] = new Vector4(.22f, .16f, .085f, 1);
+            colors[(int)ImGuiCol.TabSelected] = new Vector4(.20f, .058f, .043f, 1);
             colors[(int)ImGuiCol.TabSelectedOverline] = Accent;
             colors[(int)ImGuiCol.TabDimmedSelected] = new Vector4(0.22f, 0.18f, 0.13f, 1f);
             colors[(int)ImGuiCol.TabDimmedSelectedOverline] = AccentMuted;
@@ -310,7 +340,7 @@ namespace ExileCenter.Ui
             colors[(int)ImGuiCol.ResizeGripHovered] = AccentMuted;
             colors[(int)ImGuiCol.ResizeGripActive] = Accent;
             colors[(int)ImGuiCol.DockingPreview] = new Vector4(0.58f, 0.43f, 0.24f, 0.65f);
-            colors[(int)ImGuiCol.TableHeaderBg] = new Vector4(0.20f, 0.18f, 0.145f, 1f);
+            colors[(int)ImGuiCol.TableHeaderBg] = new Vector4(.10f, .083f, .054f, 1);
             colors[(int)ImGuiCol.TableBorderStrong] = new Vector4(0.34f, 0.28f, 0.20f, 0.7f);
             colors[(int)ImGuiCol.TableBorderLight] = new Vector4(0.27f, 0.235f, 0.185f, 0.5f);
             colors[(int)ImGuiCol.TableRowBgAlt] = new Vector4(0.26f, 0.23f, 0.18f, 0.22f);
@@ -338,7 +368,7 @@ namespace ExileCenter.Ui
         internal static void BeginPanel(string id)
         {
             ImGui.PushStyleColor(ImGuiCol.ChildBg, ActivePluginTheme is { } key
-                ? Vector4.Lerp(new Vector4(.055f, .05f, .045f, 1), PluginAccent(key), .16f) : SectionBg);
+                ? Vector4.Lerp(new Vector4(.027f, .025f, .023f, 1), PluginAccent(key), .045f) : SectionBg);
             ImGui.BeginChild(id, Vector2.Zero, ImGuiChildFlags.Borders);
         }
 
