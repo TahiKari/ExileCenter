@@ -21,6 +21,10 @@ namespace ExileCenter.Ui
         private static Vector2 backgroundSize;
         private static bool frameLoaded;
         private static IntPtr frameTexture;
+        private const float FrameAspect = 1672f / 941f;
+        private const float FrameEdge = .068f;
+        private const float FrameHeader = .16f;
+        private const float FrameFooter = .15f;
         private static readonly Dictionary<(IntPtr Context, string Name), Vector2> frameSizes = new();
 
         internal static bool BeginSettingsWindow(string name, ref bool open, ImGuiWindowFlags flags)
@@ -77,14 +81,12 @@ namespace ExileCenter.Ui
                 ImGui.GetStyle().Colors[(int)ImGuiCol.WindowBg].W > 0 &&
                 frameSizes.TryGetValue(FrameKey(name), out var size) && size.X >= 160 && size.Y >= 80)
             {
-                float menu = (flags & ImGuiWindowFlags.MenuBar) == 0 ? 0 :
-                    ImGui.GetFrameHeight() * ((flags & ImGuiWindowFlags.NoTitleBar) == 0 ? 2 : 1);
-                scale = Math.Max(0, Math.Min(size.X, size.Y - menu));
+                scale = size.X;
             }
             // Begin caches this padding in the window's work rectangle. Restore the style
             // immediately afterwards so children and controls keep their normal spacing.
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding,
-                ImGui.GetStyle().WindowPadding + new Vector2(scale * .115f, scale * .125f));
+                ImGui.GetStyle().WindowPadding + new Vector2(scale * FrameEdge, scale / FrameAspect * FrameFooter));
             return scale;
         }
 
@@ -117,11 +119,13 @@ namespace ExileCenter.Ui
                 ImGui.GetFrameHeight() * ((flags & ImGuiWindowFlags.NoTitleBar) == 0 ? 2 : 1);
             var position = ImGui.GetWindowPos() + new Vector2(0, menuOffset);
             var end = ImGui.GetWindowPos() + size;
-            if (scale < 0) scale = Math.Min(size.X, size.Y - menuOffset);
-            scale = Math.Min(scale, Math.Min(size.X, size.Y - menuOffset));
-            float header = heading ? scale * .19f : scale * .015f;
-            float edge = scale * .115f;
-            float bottom = scale * .125f;
+            // Full-width top/bottom strips from a native landscape asset. Both axes
+            // share the same pixel scale; only the middle region changes in height.
+            scale = size.X;
+            var imageSize = new Vector2(scale, scale / FrameAspect);
+            float header = imageSize.Y * (heading ? FrameHeader : .012f);
+            float edge = imageSize.X * FrameEdge;
+            float bottom = imageSize.Y * FrameFooter;
             if (end.Y - position.Y < header + bottom + 12) return false;
             var draw = ImGui.GetWindowDrawList();
             // Native scrollbars are already rendered by Begin; leave their pixels and hit areas intact.
@@ -129,53 +133,44 @@ namespace ExileCenter.Ui
                 ImGui.GetScrollMaxX() > 0 ? style.ScrollbarSize + 1 : 0);
             draw.PushClipRect(position, clipEnd, false);
             uint tint = ImGui.GetColorU32(new Vector4(1, 1, 1, style.Colors[(int)ImGuiCol.WindowBg].W));
-            // Every patch uses the same X/Y scale. Extra width/height repeats neutral
-            // stone and rails instead of flattening the cartouche, wings or pillars.
+            // Repeat/crop only the middle. The complete friezes retain their original
+            // composition from the left pillar to the right pillar, without extensions.
             void Tile(Vector2 min, Vector2 max, Vector2 uvMin, Vector2 uvMax)
             {
-                var tile = (uvMax - uvMin) * scale;
+                var tile = (uvMax - uvMin) * imageSize;
                 for (float y = min.Y; y < max.Y; y += tile.Y)
                     for (float x = min.X; x < max.X; x += tile.X)
                     {
                         var start = new Vector2(x, y);
                         var stop = Vector2.Min(start + tile, max);
-                        draw.AddImage(frameTexture, start, stop, uvMin, uvMin + (stop - start) / scale, tint);
+                        draw.AddImage(frameTexture, start, stop, uvMin, uvMin + (stop - start) / imageSize, tint);
                     }
             }
-            Tile(position, end, new Vector2(.17f, .23f), new Vector2(.83f, .83f));
-            Tile(position, new Vector2(end.X, position.Y + scale * .025f), new Vector2(.65f, 0), new Vector2(.75f, .025f));
-            Tile(new Vector2(position.X, position.Y + header - scale * .015f), new Vector2(end.X, position.Y + header),
-                new Vector2(.6f, .175f), new Vector2(.7f, .19f));
-            Tile(new Vector2(position.X, end.Y - bottom + scale * .012f), new Vector2(end.X, end.Y - bottom + scale * .037f),
-                new Vector2(.49f, .887f), new Vector2(.6f, .912f));
-            Tile(new Vector2(position.X, end.Y - scale * .025f), end, new Vector2(.3f, .975f), new Vector2(.7f, 1));
+            Tile(new Vector2(position.X + edge, position.Y + header), new Vector2(end.X - edge, end.Y - bottom),
+                new Vector2(.12f, .2f), new Vector2(.88f, .8f));
             for (int side = 0; side < 2; side++)
             {
                 float x = side == 0 ? position.X : end.X - edge;
-                float u = side == 0 ? 0 : .885f;
-                draw.AddImage(frameTexture, new Vector2(x, position.Y), new Vector2(x + edge, position.Y + header),
-                    new Vector2(u, heading ? 0 : .175f), new Vector2(u + .115f, .19f), tint);
+                float u = side == 0 ? 0 : 1 - FrameEdge;
                 Tile(new Vector2(x, position.Y + header), new Vector2(x + edge, end.Y - bottom),
-                    new Vector2(u, .19f), new Vector2(u + .115f, .875f));
-                draw.AddImage(frameTexture, new Vector2(x, end.Y - bottom), new Vector2(x + edge, end.Y),
-                    new Vector2(u, .875f), new Vector2(u + .115f, 1), tint);
+                    new Vector2(u, FrameHeader), new Vector2(u + FrameEdge, 1 - FrameFooter));
             }
-            float centerX = position.X + size.X / 2;
             for (int row = 0; row < 2; row++)
             {
                 bool top = row == 0;
                 float y = top ? position.Y : end.Y - bottom;
                 float height = top ? header : bottom;
-                draw.AddImage(frameTexture, new Vector2(centerX - scale * .385f, y), new Vector2(centerX + scale * .385f, y + height),
-                    new Vector2(.115f, top ? (heading ? 0 : .175f) : .875f), new Vector2(.885f, top ? .19f : 1), tint);
+                draw.AddImage(frameTexture, new Vector2(position.X, y), new Vector2(end.X, y + height),
+                    new Vector2(0, top ? (heading ? 0 : FrameHeader - .012f) : 1 - FrameFooter),
+                    new Vector2(1, top ? FrameHeader : 1), tint);
             }
             draw.AddRectFilled(new Vector2(position.X + edge, position.Y + header), new Vector2(end.X - edge, end.Y - bottom),
                 ImGui.GetColorU32(new Vector4(.015f, .012f, .010f, style.Colors[(int)ImGuiCol.WindowBg].W * .42f)));
             if (heading)
             {
                 var font = ImGui.GetFont();
-                float fontSize = Math.Max(ImGui.GetFontSize() * 1.10f, scale * .025f);
-                float width = scale * .35f;
+                float fontSize = Math.Max(ImGui.GetFontSize() * 1.10f, imageSize.Y * .025f);
+                float width = scale * .28f;
                 var measured = ImGui.CalcTextSize(title) * (fontSize / ImGui.GetFontSize());
                 if (measured.X > width) { fontSize *= width / measured.X; measured *= width / measured.X; }
                 var center = position + new Vector2(size.X / 2, header * .575f);
