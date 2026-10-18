@@ -168,8 +168,11 @@ namespace ExileCenter.Ui
                 // even though Begin uses symmetric padding for the work rectangle.
                 float contentTop = Math.Max(ImGui.GetCursorPosY(), frame.Offset.Y + header + (forceHeading ? SettingsFrameGap : style.WindowPadding.Y));
                 ImGui.SetCursorPosY(contentTop);
+                // Submit the reserved area even when a title-bar action skips the body.
+                // Zero item spacing keeps the tight margin without a second cursor move.
+                ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(style.ItemSpacing.X, 0));
                 ImGui.Dummy(Vector2.Zero);
-                ImGui.SetCursorPosY(contentTop);
+                ImGui.PopStyleVar();
             }
             draw.PopClipRect();
             if (heading && (flags & (ImGuiWindowFlags.MenuBar | ImGuiWindowFlags.NoTitleBar)) == 0)

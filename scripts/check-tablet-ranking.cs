@@ -1565,6 +1565,7 @@ internal static class TabletRankingCheck
                 }
             }
             finally {offerField.SetValue(null,previousOffer);selectedPageField.SetValue(null,previousPage);io.FontGlobalScale=previousToolbarFontScale;}
+            CheckSingleScreenHide();
             CheckSettingsCaption();
             io.AddMousePosEvent(-100,-100);io.AddMouseButtonEvent(0,false);
             var beforeRealWindowSize=io.DisplaySize;float beforeRealWindowFont=io.FontGlobalScale;
@@ -1744,7 +1745,7 @@ internal static class TabletRankingCheck
                             cursor.Y-imageStart.Y-imageWidth*(48f/1672)*1.35f<=4&&imageStart.Y+imageHeight-imageWidth*(52f/1672)-cursor.Y-available.Y<=4,
                             "Settings content stays within four pixels of every protected ornamental border: "+windowSize);
                     }
-                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter 1.6.0");ImGuiNET.ImGui.EndMenuBar();}
+                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter 1.6.1");ImGuiNET.ImGui.EndMenuBar();}
                     ImGuiNET.ImGui.BeginChild("Navigation",new Vector2(Math.Min(220,ImGuiNET.ImGui.GetContentRegionAvail().X*.3f),0),ImGuiNET.ImGuiChildFlags.Borders);
                     foreach(var label in new[]{"Application","General","Plugins","Mises a jour","Plugins actifs","Auto-craft TP"})ImGuiNET.ImGui.Selectable(label,label=="Plugins");
                     ImGuiNET.ImGui.EndChild();ImGuiNET.ImGui.SameLine();
@@ -2139,6 +2140,75 @@ internal static class TabletRankingCheck
         {
             ExileCenter.Core.GHSettings.UiLanguage = previousLanguage;
             Directory.SetCurrentDirectory(previousDirectory); ImGuiNET.ImGui.DestroyContext(context);
+        }
+    }
+
+    private static void CheckSingleScreenHide()
+    {
+        const BindingFlags flags = BindingFlags.Static | BindingFlags.NonPublic;
+        var settings = typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Settings.SettingsWindow", true);
+        var theme = typeof(ExileCenter.Ui.ImGuiTheme);
+        var visible = settings.GetField("isSettingsWindowVisible", flags);
+        var page = settings.GetField("selectedSettingsPage", flags);
+        var updates = typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.LocalUpdates", true);
+        var offer = updates.GetField("offer", flags);
+        var previousVisible = visible.GetValue(null); var previousPage = page.GetValue(null); var previousOffer = offer.GetValue(null);
+        bool previousSeparate = ExileCenter.Core.GHSettings.SettingsOnSeparateWindow;
+        bool previousOpen = ExileCenter.Core.IsSettingsMenuOpen;
+        var io = ImGuiNET.ImGui.GetIO(); var previousDisplay = io.DisplaySize; float previousScale = io.FontGlobalScale;
+        int saves = 0;
+        var saveEvent = (Coroutine.Event)typeof(ExileCenter.CoroutineEvents.ExileCenterEvents).GetField("TimeToSaveAllSettings", flags).GetValue(null);
+        IEnumerator<Coroutine.Wait> CountSaves()
+        {
+            while (true) { yield return new Coroutine.Wait(saveEvent); saves++; }
+        }
+        var observer = Coroutine.CoroutineHandler.Start(CountSaves());
+        try
+        {
+            ExileCenter.Core.GHSettings.SettingsOnSeparateWindow = false;
+            page.SetValue(null, "core:plugins"); offer.SetValue(null, null);
+            io.DisplaySize = new Vector2(1920, 1010);
+            foreach (float fontScale in new[] { 1f, 1.35f })
+            foreach (int width in new[] { 800, 1101, 1280 })
+            {
+                io.FontGlobalScale = fontScale; visible.SetValue(null, true);
+                Vector2 saveCenter = Vector2.Zero, hideCenter = Vector2.Zero;
+                for (int frame = 0; frame < 2; frame++)
+                {
+                    io.AddMousePosEvent(-100, -100); io.AddMouseButtonEvent(0, false);
+                    ImGuiNET.ImGui.NewFrame(); theme.GetMethod("PushSettingsStyle", flags).Invoke(null, null);
+                    ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16)); ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width, 760));
+                    theme.GetMethod("BeginSettingsWindow", flags).Invoke(null, new object[] { "Single screen###GameOverlaySettings", true, ImGuiNET.ImGuiWindowFlags.MenuBar });
+                    settings.GetMethod("DrawManuBar", flags).Invoke(null, new object[] { false });
+                    saveCenter = (ImGuiNET.ImGui.GetItemRectMin() + ImGuiNET.ImGui.GetItemRectMax()) / 2;
+                    var style = ImGuiNET.ImGui.GetStyle(); float fontSize = ImGuiNET.ImGui.GetFontSize();
+                    hideCenter = ImGuiNET.ImGui.GetWindowPos() + new Vector2(width - style.FramePadding.X - 1.5f * fontSize - style.ItemInnerSpacing.X, ImGuiNET.ImGui.GetFrameHeight() / 2);
+                    ImGuiNET.ImGui.End(); theme.GetMethod("PopSettingsStyle", flags).Invoke(null, null); ImGuiNET.ImGui.Render();
+                }
+                int beforeSave = saves;
+                for (int frame = 0; frame < 6; frame++)
+                {
+                    var mouse = frame < 3 ? saveCenter : hideCenter;
+                    io.AddMousePosEvent(mouse.X, mouse.Y); io.AddMouseButtonEvent(0, frame == 1 || frame == 4);
+                    ImGuiNET.ImGui.NewFrame();
+                    if ((bool)visible.GetValue(null)) settings.GetMethod("DrawWindow", flags).Invoke(null, new object[] { false });
+                    ImGuiNET.ImGui.Render();
+                    if (frame == 2) Check(saves == beforeSave + 1, "The actual Save button raises one save event before hiding: " + width + "/" + fontScale);
+                }
+                Check(!(bool)visible.GetValue(null) && !ExileCenter.Core.IsSettingsMenuOpen, "The actual single-screen hide button closes settings and releases the overlays: " + width + "/" + fontScale);
+                Check(saves == beforeSave + 2, "Hiding after Save preserves the save-on-hide event: " + width + "/" + fontScale);
+                visible.SetValue(null, true); io.AddMousePosEvent(-100, -100); io.AddMouseButtonEvent(0, false);
+                ImGuiNET.ImGui.NewFrame(); settings.GetMethod("DrawWindow", flags).Invoke(null, new object[] { false }); ImGuiNET.ImGui.Render();
+                Check(ExileCenter.Core.IsSettingsMenuOpen, "Settings reopen cleanly after Save then Hide: " + width + "/" + fontScale);
+            }
+            Console.WriteLine("VALIDATION single screen: Save -> title-bar Hide -> reopen passed at three widths and two font scales; no OS or game input.");
+        }
+        finally
+        {
+            observer.Cancel(); visible.SetValue(null, previousVisible); page.SetValue(null, previousPage); offer.SetValue(null, previousOffer);
+            ExileCenter.Core.GHSettings.SettingsOnSeparateWindow = previousSeparate;
+            typeof(ExileCenter.Core).GetProperty("IsSettingsMenuOpen").SetValue(null, previousOpen);
+            io.DisplaySize = previousDisplay; io.FontGlobalScale = previousScale; io.AddMousePosEvent(-100, -100); io.AddMouseButtonEvent(0, false);
         }
     }
 
