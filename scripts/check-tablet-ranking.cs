@@ -1440,7 +1440,7 @@ internal static class TabletRankingCheck
                 ImGuiNET.ImGui.Begin("EXILECENTER##ornate-fixture",panelFlags);
                 var list=ImGuiNET.ImGui.GetWindowDrawList();var oldClip=list.CmdBuffer[list.CmdBuffer.Size-1].ClipRect;
                 var oldCursor=ImGuiNET.ImGui.GetCursorScreenPos();
-                bool drawn=(bool)ornate.Invoke(null,new object[]{"ExileCenter##hidden-id",panelFlags,true,false});
+                bool drawn=(bool)ornate.Invoke(null,new object[]{"ExileCenter##hidden-id",panelFlags,true,false,-1f});
                 Check(drawn==(panelFlags==ImGuiNET.ImGuiWindowFlags.None),"The textured skin excludes transparent and input-free overlays: "+panelFlags);
                 var contentClip=list.CmdBuffer[list.CmdBuffer.Size-1].ClipRect;
                 Check(drawn?contentClip.X>=oldClip.X&&contentClip.Z<=oldClip.Z&&contentClip.W<oldClip.W&&contentClip.Y>oldClip.Y:contentClip==oldClip,
@@ -1467,26 +1467,26 @@ internal static class TabletRankingCheck
             Check(!closableOpen,"The repainted close button keeps its original native hit area and behavior");
             io.AddMousePosEvent(-100,-100);
             float scrollBodyStart=0;
-            for(int frame=0;frame<3;frame++)
+            for(int frame=0;frame<4;frame++)
             {
                 ImGuiNET.ImGui.NewFrame();ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(500,300));
                 ExileCenter.Ui.ImGuiTheme.BeginWindow("DEFILEMENT##ornate-scroll",ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
-                if(frame==0)scrollBodyStart=ImGuiNET.ImGui.GetCursorPosY();
+                if(frame==1)scrollBodyStart=ImGuiNET.ImGui.GetCursorPosY();
                 // ImGui can shift the aligned cursor by one pixel when the scrollbar first appears.
-                else Check(ImGuiNET.ImGui.GetScrollY()>0&&Math.Abs(ImGuiNET.ImGui.GetCursorPosY()-scrollBodyStart)<=1,
+                else if(frame>1)Check(ImGuiNET.ImGui.GetScrollY()>0&&Math.Abs(ImGuiNET.ImGui.GetCursorPosY()-scrollBodyStart)<=1,
                     "Header reservation stays constant while the body scrolls: frame="+frame+", scroll="+ImGuiNET.ImGui.GetScrollY()+", start="+scrollBodyStart+", current="+ImGuiNET.ImGui.GetCursorPosY());
                 ImGuiNET.ImGui.Button("Bouton sous le cartouche",new Vector2(200,20));
-                if(frame>0)Check(!ImGuiNET.ImGui.IsItemVisible(),"Scrolled controls cannot paint over or receive clicks through the cartouche");
+                if(frame>1)Check(!ImGuiNET.ImGui.IsItemVisible(),"Scrolled controls cannot paint over or receive clicks through the cartouche");
                 ImGuiNET.ImGui.Dummy(new Vector2(0,800));
-                if(frame==0)ImGuiNET.ImGui.SetScrollY(100);
+                if(frame==1)ImGuiNET.ImGui.SetScrollY(100);
                 ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
             }
             foreach(bool independent in new[]{false,true})
+            for(int frame=0;frame<2;frame++)
             {
                 ImGuiNET.ImGui.NewFrame();ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(800,600));
                 var settingsFlags=ImGuiNET.ImGuiWindowFlags.MenuBar|(independent?ImGuiNET.ImGuiWindowFlags.NoTitleBar:ImGuiNET.ImGuiWindowFlags.None);
-                ImGuiNET.ImGui.Begin("REGLAGES##ornate-settings",settingsFlags);
-                typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("DrawSettingsBackground",flags).Invoke(null,new object[]{independent});
+                typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("BeginSettingsWindow",flags).Invoke(null,new object[]{"REGLAGES##ornate-settings",true,settingsFlags});
                 float bodyTop=ImGuiNET.ImGui.GetCursorScreenPos().Y;
                 if(ImGuiNET.ImGui.BeginMenuBar())
                 {
@@ -1498,6 +1498,60 @@ internal static class TabletRankingCheck
                 bool filter=true;ImGuiNET.ImGui.Checkbox("Activer les filtres",ref filter);ImGuiNET.ImGui.Button("Appliquer");
                 ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
                 if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"poe2-settings-"+independent+".png"),pixels,atlasWidth,atlasHeight);
+            }
+            foreach(var windowSize in new[]{new Vector2(1000,1000),new Vector2(1890,1024),new Vector2(460,900)})
+            {
+                io.DisplaySize=windowSize;
+                for(int frame=0;frame<3;frame++)
+                {
+                    ImGuiNET.ImGui.NewFrame();ImGuiNET.ImGui.SetNextWindowPos(Vector2.Zero);ImGuiNET.ImGui.SetNextWindowSize(windowSize);
+                    var frameFlags=ImGuiNET.ImGuiWindowFlags.MenuBar|ImGuiNET.ImGuiWindowFlags.NoTitleBar|ImGuiNET.ImGuiWindowFlags.NoSavedSettings;
+                    typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("BeginSettingsWindow",flags).Invoke(null,new object[]{"Proportions###frame-aspect",true,frameFlags});
+                    if(frame==2)
+                    {
+                        var list=ImGuiNET.ImGui.GetWindowDrawList();
+                        foreach(int commandIndex in Enumerable.Range(0,list.CmdBuffer.Size))
+                        {
+                            var command=list.CmdBuffer[commandIndex];if(command.TextureId!=new IntPtr(2))continue;
+                            for(int offset=0;offset<command.ElemCount;offset+=3)
+                            {
+                                var vertices=Enumerable.Range(0,3).Select(i=>list.VtxBuffer[(int)command.VtxOffset+list.IdxBuffer[(int)command.IdxOffset+offset+i]]).ToArray();
+                                float dx=vertices.Max(v=>v.pos.X)-vertices.Min(v=>v.pos.X),dy=vertices.Max(v=>v.pos.Y)-vertices.Min(v=>v.pos.Y);
+                                float du=vertices.Max(v=>v.uv.X)-vertices.Min(v=>v.uv.X),dv=vertices.Max(v=>v.uv.Y)-vertices.Min(v=>v.uv.Y);
+                                if(dx>.1f&&dy>.1f&&du>.0001f&&dv>.0001f)
+                                    Check(Math.Abs(dx/du-dy/dv)<.15f,"Every artwork patch retains its original aspect ratio: "+windowSize);
+                            }
+                        }
+                        float scale=Math.Min(windowSize.X,windowSize.Y-ImGuiNET.ImGui.GetFrameHeight());
+                        var cursor=ImGuiNET.ImGui.GetCursorScreenPos();var available=ImGuiNET.ImGui.GetContentRegionAvail();
+                        Check(cursor.X>=scale*.115f&&cursor.X+available.X<=windowSize.X-scale*.115f+1,
+                            "Content and fill-width controls fit between the proportional pillars: "+windowSize);
+                        Check(cursor.Y>=ImGuiNET.ImGui.GetFrameHeight()+scale*.19f&&cursor.Y+available.Y<=windowSize.Y-scale*.125f+1,
+                            "The work rectangle reserves both the cartouche and the carved footer: "+windowSize);
+                    }
+                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.54");ImGuiNET.ImGui.EndMenuBar();}
+                    ImGuiNET.ImGui.BeginChild("Navigation",new Vector2(Math.Min(220,ImGuiNET.ImGui.GetContentRegionAvail().X*.3f),0),ImGuiNET.ImGuiChildFlags.Borders);
+                    foreach(var label in new[]{"Application","General","Plugins","Mises a jour","Plugins actifs","Auto-craft TP"})ImGuiNET.ImGui.Selectable(label,label=="Plugins");
+                    ImGuiNET.ImGui.EndChild();ImGuiNET.ImGui.SameLine();
+                    ImGuiNET.ImGui.BeginChild("Contenu",Vector2.Zero,ImGuiNET.ImGuiChildFlags.Borders);
+                    typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("SectionHeader",flags).Invoke(null,new object[]{"Gestion des plugins",null});
+                    ImGuiNET.ImGui.TextWrapped("Activez ou desactivez les plugins. Les modifications sont enregistrees automatiquement.");
+                    bool enabled=true;foreach(var label in new[]{"Atlas et itineraires","Regles de raccourcis","AutoPot","Zoom de la camera","Barres de vie","Suivi du butin","Auto-craft TP"})ImGuiNET.ImGui.Checkbox(label,ref enabled);
+                    ImGuiNET.ImGui.Button("Appliquer",new Vector2(-1,0));ImGuiNET.ImGui.EndChild();
+                    ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
+                    if(frame==2&&previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,$"poe2-proportions-{windowSize.X}x{windowSize.Y}.png"),pixels,atlasWidth,atlasHeight);
+                }
+            }
+            io.DisplaySize=new Vector2(1280,960);
+            for(int frame=0;frame<4;frame++)
+            {
+                ImGuiNET.ImGui.NewFrame();ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(460,300));
+                ExileCenter.Ui.ImGuiTheme.BeginWindow("Commandes larges##frame-horizontal",ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                ImGuiNET.ImGui.Button("Commande large",new Vector2(800,20));
+                if(frame==2)ImGuiNET.ImGui.SetScrollX(100);
+                if(frame==3)Check(ImGuiNET.ImGui.GetScrollMaxX()>0&&ImGuiNET.ImGui.GetScrollX()>0,
+                    "Narrow framed panels allow real horizontal scrolling to overflowing controls");
+                ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
             }
             Check(names.Select(ExileCenter.Ui.ImGuiTheme.PluginAccent).Distinct().Count() == names.Length, "Every bundled plugin has a distinct accent");
             // OKLab measures perceived differences; unequal RGB values alone do not prevent lookalikes.
@@ -1692,11 +1746,13 @@ internal static class TabletRankingCheck
                 using (ExileCenter.Ui.ImGuiTheme.UsePluginTheme("StashUtility/tablets"))
                 {
                     ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16)); ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width, 900));
-                    ExileCenter.Ui.ImGuiTheme.BeginWindow("Tablettes · ExileCenter", ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                    // These widths exercise the tablet controls' viewport, independently of
+                    // the ornamental outer frame tested above at square/wide/narrow sizes.
+                    ImGuiNET.ImGui.Begin("Tablettes · ExileCenter", ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
                     helpCenter = ImGuiNET.ImGui.GetCursorScreenPos() + new Vector2(70, ImGuiNET.ImGui.GetFrameHeight() + ImGuiNET.ImGui.GetStyle().ItemSpacing.Y + ImGuiNET.ImGui.GetFontSize() / 2);
                     draw.Invoke(plugin, null);
                     if (previousPaneWidth == width)
-                        Check(ImGuiNET.ImGui.GetScrollMaxX() == 0, "Tablet layout fits horizontally at width " + width);
+                        Check(ImGuiNET.ImGui.GetScrollMaxX()==0,"Tablet layout fits horizontally at width "+width);
                     ImGuiNET.ImGui.End();
                 }
                 pop.Invoke(null, null); ImGuiNET.ImGui.Render();
@@ -1874,7 +1930,7 @@ internal static class TabletRankingCheck
     private static void SaveUiPreview(string file, byte[] atlas, int atlasWidth, int atlasHeight)
     {
         var data = ImGuiNET.ImGui.GetDrawData();
-        using var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(1280, 960, new(22, 20, 17, 255));
+        using var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>((int)data.DisplaySize.X, (int)data.DisplaySize.Y, new(22, 20, 17, 255));
         for (int listIndex = 0; listIndex < data.CmdListsCount; listIndex++)
         {
             var list = data.CmdLists[listIndex];

@@ -5,6 +5,7 @@
 namespace ExileCenter.Ui
 {
     using System;
+    using System.Collections.Generic;
     using System.Numerics;
     using ImGuiNET;
     using SixLabors.ImageSharp;
@@ -20,35 +21,79 @@ namespace ExileCenter.Ui
         private static Vector2 backgroundSize;
         private static bool frameLoaded;
         private static IntPtr frameTexture;
+        private static readonly Dictionary<(IntPtr Context, string Name), Vector2> frameSizes = new();
 
-        internal static void DrawSettingsBackground(bool independent)
+        internal static bool BeginSettingsWindow(string name, ref bool open, ImGuiWindowFlags flags)
         {
-            var flags = ImGuiWindowFlags.MenuBar | (independent ? ImGuiWindowFlags.NoTitleBar : ImGuiWindowFlags.None);
-            if (!DrawOrnateWindow("ExileCenter", flags, !independent, forceHeading: true)) DrawWindowBackground(flags, .80f);
+            float scale = PushFramePadding(name, flags, true);
+            if (scale > 0) flags |= ImGuiWindowFlags.HorizontalScrollbar;
+            bool visible = ImGui.Begin(name, ref open, flags);
+            ImGui.PopStyleVar();
+            RememberFrameSize(name);
+            if (visible && !DrawOrnateWindow("ExileCenter", flags, true, true, scale)) DrawWindowBackground(flags, .80f);
+            return visible;
         }
 
         /// <summary>Opens a themed panel without decorating transparent gameplay markers.</summary>
         public static bool BeginWindow(string name, ImGuiWindowFlags flags = ImGuiWindowFlags.None)
         {
+            float scale = PushFramePadding(name, flags);
+            if (scale > 0) flags |= ImGuiWindowFlags.HorizontalScrollbar;
             bool visible = ImGui.Begin(name, flags);
-            if (visible && !DrawOrnateWindow(name, flags, false)) DrawWindowBackground(flags);
+            ImGui.PopStyleVar();
+            RememberFrameSize(name);
+            if (visible && !DrawOrnateWindow(name, flags, false, scale: scale)) DrawWindowBackground(flags);
             return visible;
         }
 
         /// <summary>Opens a closable themed panel without changing its input or placement rules.</summary>
         public static bool BeginWindow(string name, ref bool open, ImGuiWindowFlags flags = ImGuiWindowFlags.None)
         {
+            float scale = PushFramePadding(name, flags);
+            if (scale > 0) flags |= ImGuiWindowFlags.HorizontalScrollbar;
             bool visible = ImGui.Begin(name, ref open, flags);
-            if (visible && !DrawOrnateWindow(name, flags, true)) DrawWindowBackground(flags);
+            ImGui.PopStyleVar();
+            RememberFrameSize(name);
+            if (visible && !DrawOrnateWindow(name, flags, true, scale: scale)) DrawWindowBackground(flags);
             return visible;
         }
 
-        private static bool DrawOrnateWindow(string name, ImGuiWindowFlags flags, bool closable, bool forceHeading = false)
+        private static (IntPtr, string) FrameKey(string name)
+        {
+            int id = name.IndexOf("###", StringComparison.Ordinal);
+            return (ImGui.GetCurrentContext(), id < 0 ? name : name[id..]);
+        }
+
+        private static void RememberFrameSize(string name)
+        {
+            if (!ImGui.IsWindowCollapsed()) frameSizes[FrameKey(name)] = ImGui.GetWindowSize();
+        }
+
+        private static float PushFramePadding(string name, ImGuiWindowFlags flags, bool forceHeading = false)
+        {
+            float scale = 0;
+            if ((flags & (ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoMouseInputs | ImGuiWindowFlags.AlwaysAutoResize)) == 0 &&
+                (forceHeading || (flags & ImGuiWindowFlags.NoTitleBar) == 0) &&
+                ImGui.GetStyle().Colors[(int)ImGuiCol.WindowBg].W > 0 &&
+                frameSizes.TryGetValue(FrameKey(name), out var size) && size.X >= 160 && size.Y >= 80)
+            {
+                float menu = (flags & ImGuiWindowFlags.MenuBar) == 0 ? 0 :
+                    ImGui.GetFrameHeight() * ((flags & ImGuiWindowFlags.NoTitleBar) == 0 ? 2 : 1);
+                scale = Math.Max(0, Math.Min(size.X, size.Y - menu));
+            }
+            // Begin caches this padding in the window's work rectangle. Restore the style
+            // immediately afterwards so children and controls keep their normal spacing.
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding,
+                ImGui.GetStyle().WindowPadding + new Vector2(scale * .115f, scale * .125f));
+            return scale;
+        }
+
+        private static bool DrawOrnateWindow(string name, ImGuiWindowFlags flags, bool closable, bool forceHeading = false, float scale = -1)
         {
             var size = ImGui.GetWindowSize();
             var style = ImGui.GetStyle();
             if ((flags & (ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoMouseInputs)) != 0 ||
-                style.Colors[(int)ImGuiCol.WindowBg].W <= 0 || size.X < 160 || size.Y < 80) return false;
+                style.Colors[(int)ImGuiCol.WindowBg].W <= 0 || size.X < 160 || size.Y < 80 || scale == 0) return false;
             if (!frameLoaded && Core.Overlay != null)
             {
                 frameLoaded = true;
@@ -72,38 +117,66 @@ namespace ExileCenter.Ui
                 ImGui.GetFrameHeight() * ((flags & ImGuiWindowFlags.NoTitleBar) == 0 ? 2 : 1);
             var position = ImGui.GetWindowPos() + new Vector2(0, menuOffset);
             var end = ImGui.GetWindowPos() + size;
-            float header = heading ? Math.Clamp(size.X * .105f, 36, 70) : 8;
-            float edge = Math.Clamp(Math.Min(size.X * .016f, style.WindowPadding.X), 1, 12);
-            float bottom = Math.Clamp(style.WindowPadding.Y - 2, 2, 10);
+            if (scale < 0) scale = Math.Min(size.X, size.Y - menuOffset);
+            scale = Math.Min(scale, Math.Min(size.X, size.Y - menuOffset));
+            float header = heading ? scale * .19f : scale * .015f;
+            float edge = scale * .115f;
+            float bottom = scale * .125f;
             if (end.Y - position.Y < header + bottom + 12) return false;
             var draw = ImGui.GetWindowDrawList();
             // Native scrollbars are already rendered by Begin; leave their pixels and hit areas intact.
             var clipEnd = end - new Vector2(ImGui.GetScrollMaxY() > 0 ? style.ScrollbarSize + 1 : 0,
                 ImGui.GetScrollMaxX() > 0 ? style.ScrollbarSize + 1 : 0);
             draw.PushClipRect(position, clipEnd, false);
-            Span<float> x = stackalloc float[] { position.X, position.X + edge, end.X - edge, end.X };
-            Span<float> y = stackalloc float[] { position.Y, position.Y + header, end.Y - bottom, end.Y };
-            Span<float> u = stackalloc float[] { 0, .115f, .885f, 1 };
-            Span<float> v = stackalloc float[] { heading ? 0 : .175f, .19f, .875f, 1 };
             uint tint = ImGui.GetColorU32(new Vector4(1, 1, 1, style.Colors[(int)ImGuiCol.WindowBg].W));
-            // Nine slices retain the carved corners and rails instead of stretching the entire frame.
-            for (int row = 0; row < 3; row++)
-                for (int column = 0; column < 3; column++)
-                {
-                    // Sample only clear stone behind text, excluding the corner reliefs.
-                    var uvMin = row == 1 && column == 1 ? new Vector2(.17f, .23f) : new Vector2(u[column], v[row]);
-                    var uvMax = row == 1 && column == 1 ? new Vector2(.83f, .83f) : new Vector2(u[column + 1], v[row + 1]);
-                    draw.AddImage(frameTexture, new Vector2(x[column], y[row]), new Vector2(x[column + 1], y[row + 1]),
-                        uvMin, uvMax, tint);
-                }
-            draw.AddRectFilled(new Vector2(x[1], y[1]), new Vector2(x[2], y[2]),
+            // Every patch uses the same X/Y scale. Extra width/height repeats neutral
+            // stone and rails instead of flattening the cartouche, wings or pillars.
+            void Tile(Vector2 min, Vector2 max, Vector2 uvMin, Vector2 uvMax)
+            {
+                var tile = (uvMax - uvMin) * scale;
+                for (float y = min.Y; y < max.Y; y += tile.Y)
+                    for (float x = min.X; x < max.X; x += tile.X)
+                    {
+                        var start = new Vector2(x, y);
+                        var stop = Vector2.Min(start + tile, max);
+                        draw.AddImage(frameTexture, start, stop, uvMin, uvMin + (stop - start) / scale, tint);
+                    }
+            }
+            Tile(position, end, new Vector2(.17f, .23f), new Vector2(.83f, .83f));
+            Tile(position, new Vector2(end.X, position.Y + scale * .025f), new Vector2(.65f, 0), new Vector2(.75f, .025f));
+            Tile(new Vector2(position.X, position.Y + header - scale * .015f), new Vector2(end.X, position.Y + header),
+                new Vector2(.6f, .175f), new Vector2(.7f, .19f));
+            Tile(new Vector2(position.X, end.Y - bottom + scale * .012f), new Vector2(end.X, end.Y - bottom + scale * .037f),
+                new Vector2(.49f, .887f), new Vector2(.6f, .912f));
+            Tile(new Vector2(position.X, end.Y - scale * .025f), end, new Vector2(.3f, .975f), new Vector2(.7f, 1));
+            for (int side = 0; side < 2; side++)
+            {
+                float x = side == 0 ? position.X : end.X - edge;
+                float u = side == 0 ? 0 : .885f;
+                draw.AddImage(frameTexture, new Vector2(x, position.Y), new Vector2(x + edge, position.Y + header),
+                    new Vector2(u, heading ? 0 : .175f), new Vector2(u + .115f, .19f), tint);
+                Tile(new Vector2(x, position.Y + header), new Vector2(x + edge, end.Y - bottom),
+                    new Vector2(u, .19f), new Vector2(u + .115f, .875f));
+                draw.AddImage(frameTexture, new Vector2(x, end.Y - bottom), new Vector2(x + edge, end.Y),
+                    new Vector2(u, .875f), new Vector2(u + .115f, 1), tint);
+            }
+            float centerX = position.X + size.X / 2;
+            for (int row = 0; row < 2; row++)
+            {
+                bool top = row == 0;
+                float y = top ? position.Y : end.Y - bottom;
+                float height = top ? header : bottom;
+                draw.AddImage(frameTexture, new Vector2(centerX - scale * .385f, y), new Vector2(centerX + scale * .385f, y + height),
+                    new Vector2(.115f, top ? (heading ? 0 : .175f) : .875f), new Vector2(.885f, top ? .19f : 1), tint);
+            }
+            draw.AddRectFilled(new Vector2(position.X + edge, position.Y + header), new Vector2(end.X - edge, end.Y - bottom),
                 ImGui.GetColorU32(new Vector4(.015f, .012f, .010f, style.Colors[(int)ImGuiCol.WindowBg].W * .42f)));
             if (heading)
             {
                 var font = ImGui.GetFont();
-                float fontSize = ImGui.GetFontSize() * 1.10f;
-                float width = (size.X - edge * 2) * .46f;
-                var measured = ImGui.CalcTextSize(title) * 1.10f;
+                float fontSize = Math.Max(ImGui.GetFontSize() * 1.10f, scale * .025f);
+                float width = scale * .35f;
+                var measured = ImGui.CalcTextSize(title) * (fontSize / ImGui.GetFontSize());
                 if (measured.X > width) { fontSize *= width / measured.X; measured *= width / measured.X; }
                 var center = position + new Vector2(size.X / 2, header * .575f);
                 draw.AddText(font, fontSize, center - measured / 2 + Vector2.One,
