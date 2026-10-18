@@ -33,6 +33,8 @@ namespace ExileCenter
         private volatile bool closeRequested;
         internal string? SettingsDisplayError { get; private set; }
         internal void ResetSettingsDisplay() => this.settingsDisplay?.ResetPosition();
+        internal void MinimizeSettingsDisplay() => this.settingsDisplay?.RequestWindowState(6);
+        internal void ToggleSettingsDisplaySize() => this.settingsDisplay?.RequestWindowState(0);
         public override void Close() => this.closeRequested = true;
         /// <summary>
         ///     Initializes a new instance of the <see cref="GameOverlay" /> class.
@@ -192,13 +194,21 @@ namespace ExileCenter
         private bool visible;
         private bool minimized;
         private bool registered;
+        private readonly bool useSettingsTitleBar;
+        private int? requestedWindowState;
+        private WindowStyles WindowStyle => (WindowStyles)(this.useSettingsTitleBar ? 0x800F0000u : 0x00CF0000u);
 
         internal SettingsDisplay(Overlay overlay, Action draw, Action hide)
-            : this(overlay, draw, hide, Core.GHSettings, null, null, new Size(840, 640), new Size(1100, 800)) { }
+            : this(overlay, draw, hide, Core.GHSettings, null, null, new Size(840, 640), new Size(1100, 800), true) { }
 
         public SettingsDisplay(Overlay overlay, Action draw, Action hide, State placement,
             Func<string>? title, Action<Rectangle>? savePlacement, Size minimumSize, Size initialSize)
+            : this(overlay, draw, hide, placement, title, savePlacement, minimumSize, initialSize, false) { }
+
+        private SettingsDisplay(Overlay overlay, Action draw, Action hide, State placement,
+            Func<string>? title, Action<Rectangle>? savePlacement, Size minimumSize, Size initialSize, bool useSettingsTitleBar)
         {
+            this.useSettingsTitleBar = useSettingsTitleBar;
             this.placement = placement;
             this.title = title;
             this.savePlacement = savePlacement;
@@ -235,7 +245,7 @@ namespace ExileCenter
                 this.registered = true;
                 var bounds = InitialBounds(this.placement, overlay.window.Handle, this.minimumSize, this.initialSize);
                 this.window = new Win32Window(this.className, bounds.Width, bounds.Height, bounds.X, bounds.Y,
-                    this.WindowTitle, (WindowStyles)0x00CF0000, (WindowExStyles)0x00040000);
+                    this.WindowTitle, this.WindowStyle, (WindowExStyles)0x00040000);
                 if (this.window.Handle == IntPtr.Zero) throw new System.ComponentModel.Win32Exception();
                 if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
                 {
@@ -278,6 +288,11 @@ namespace ExileCenter
             // CTO pumps one message per frame. Drain a bounded batch so this extra window
             // does not introduce a backlog of mouse, keyboard or resize messages.
             for (var i = 0; i < 32; i++) this.window.PumpEvents();
+            if (this.requestedWindowState is int command)
+            {
+                this.requestedWindowState = null;
+                Native.ShowWindow(this.window.Handle, command == 0 ? (Native.IsZoomed(this.window.Handle) ? 9 : 3) : command);
+            }
             if (show != this.visible)
             {
                 if (!show) this.SaveBounds();
@@ -316,6 +331,8 @@ namespace ExileCenter
             this.SaveBounds();
         }
 
+        internal void RequestWindowState(int command) => this.requestedWindowState = command;
+
         private void Resize(int width, int height)
         {
             if (this.swapChain == null || width <= 0 || height <= 0) return;
@@ -331,6 +348,17 @@ namespace ExileCenter
             // Native callbacks must never allow exceptions to escape into user32.
             try
             {
+                if (message == 0x0084 && this.useSettingsTitleBar) // Preserve native resize edges and caption dragging.
+                {
+                    var hit = Native.DefWindowProc(handle, message, wParam, lParam);
+                    var point = new Native.Point { X = (short)((long)lParam & 0xffff), Y = (short)(((long)lParam >> 16) & 0xffff) };
+                    if (hit == (IntPtr)1 && Native.ScreenToClient(handle, ref point))
+                    {
+                        var caption = SettingsWindow.CaptionBounds;
+                        if (point.Y >= 0 && point.Y < caption.Height && point.X >= 0 && point.X < caption.ActionsX) return (IntPtr)2;
+                    }
+                    return hit;
+                }
                 if (message == 0x0010) { this.SaveBounds(); this.hide(); return IntPtr.Zero; } // Close hides; F11 opens again.
                 if (message == 0x0005)
                 {
@@ -342,6 +370,15 @@ namespace ExileCenter
                 {
                     var limits = Marshal.PtrToStructure<Native.MinMaxInfo>(lParam);
                     limits.MinTrackSize = new Native.Point { X = this.minimumSize.Width, Y = this.minimumSize.Height };
+                    if (this.useSettingsTitleBar)
+                    {
+                        var monitor = new Native.MonitorInfo { Size = Marshal.SizeOf<Native.MonitorInfo>() };
+                        if (Native.GetMonitorInfo(Native.MonitorFromWindow(handle, 2), ref monitor))
+                        {
+                            limits.MaxPosition = new Native.Point { X = monitor.Work.Left - monitor.Monitor.Left, Y = monitor.Work.Top - monitor.Monitor.Top };
+                            limits.MaxSize = new Native.Point { X = monitor.Work.Width, Y = monitor.Work.Height };
+                        }
+                    }
                     Marshal.StructureToPtr(limits, lParam, false);
                     return IntPtr.Zero;
                 }
@@ -450,6 +487,8 @@ namespace ExileCenter
             [DllImport("user32.dll")] internal static extern IntPtr MonitorFromWindow(IntPtr window, uint flags);
             [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
             [DllImport("user32.dll")] internal static extern bool GetClientRect(IntPtr window, out Rect rect);
+            [DllImport("user32.dll")] internal static extern bool ScreenToClient(IntPtr window, ref Point point);
+            [DllImport("user32.dll")] internal static extern bool IsZoomed(IntPtr window);
             [DllImport("user32.dll")] internal static extern bool GetWindowRect(IntPtr window, out Rect rect);
             [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr window, int command);
             [DllImport("user32.dll")] internal static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);

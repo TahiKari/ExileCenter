@@ -1456,7 +1456,7 @@ internal static class TabletRankingCheck
                         ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width,600));
                         var menuFlags=ImGuiNET.ImGuiWindowFlags.MenuBar|(independent?ImGuiNET.ImGuiWindowFlags.NoTitleBar:ImGuiNET.ImGuiWindowFlags.None);
                         typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("BeginSettingsWindow",flags).Invoke(null,new object[]{"Mise a jour###toolbar-fixture",true,menuFlags});
-                        settingsType.GetMethod("DrawManuBar",flags).Invoke(null,null);
+                        settingsType.GetMethod("DrawManuBar",flags).Invoke(null,new object[]{independent});
                         var buttonMin=ImGuiNET.ImGui.GetItemRectMin();var buttonMax=ImGuiNET.ImGui.GetItemRectMax();
                         buttonCenter=(buttonMin+buttonMax)/2;
                         if(frame==2)Check(buttonMin.X>=16&&buttonMax.X<=16+width,
@@ -1470,6 +1470,7 @@ internal static class TabletRankingCheck
                 }
             }
             finally {offerField.SetValue(null,previousOffer);selectedPageField.SetValue(null,previousPage);io.FontGlobalScale=previousToolbarFontScale;}
+            CheckSettingsCaption();
             io.AddMousePosEvent(-100,-100);io.AddMouseButtonEvent(0,false);
             var beforeRealWindowSize=io.DisplaySize;float beforeRealWindowFont=io.FontGlobalScale;
             var managerType=typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Plugin.PManager",true);
@@ -2036,6 +2037,99 @@ internal static class TabletRankingCheck
             ExileCenter.Core.GHSettings.UiLanguage = previousLanguage;
             Directory.SetCurrentDirectory(previousDirectory); ImGuiNET.ImGui.DestroyContext(context);
         }
+    }
+
+    private static void CheckSettingsCaption()
+    {
+        const BindingFlags hidden=BindingFlags.Static|BindingFlags.Instance|BindingFlags.NonPublic|BindingFlags.Public;
+        var displayType=typeof(ExileCenter.SettingsDisplay);
+        var settingsType=typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Settings.SettingsWindow",true);
+        var display=RuntimeHelpers.GetUninitializedObject(displayType);
+        displayType.GetField("useSettingsTitleBar",hidden).SetValue(display,true);
+        displayType.GetField("minimumSize",hidden).SetValue(display,new System.Drawing.Size(840,640));
+        uint style=unchecked((uint)Convert.ToInt32(displayType.GetProperty("WindowStyle",hidden).GetValue(display)));
+        IntPtr window=CaptionNative.CreateWindowEx(0,"STATIC","ExileCenter hidden caption fixture",style,-1200,-700,1300,800,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero);
+        Check(window!=IntPtr.Zero,"A hidden native caption fixture is created without game input or focus");
+        try
+        {
+            long actualStyle=CaptionNative.GetWindowLongPtr(window,-16).ToInt64();
+            Check((actualStyle&0x00c00000)==0&&(actualStyle&0x00070000)==0x00070000,"The unified settings window has no second caption and retains resize, minimize and maximize styles");
+            var caption=((float Height,float ActionsX))settingsType.GetProperty("CaptionBounds",hidden).GetValue(null);
+            var procedure=displayType.GetMethod("WindowProcedure",hidden);
+            IntPtr Hit(int x,int y)
+            {
+                var point=new CaptionNative.Point{X=x,Y=y};CaptionNative.ClientToScreen(window,ref point);
+                long packed=(long)(ushort)point.X|((long)(ushort)point.Y<<16);
+                return (IntPtr)procedure.Invoke(display,new object[]{window,0x0084u,UIntPtr.Zero,(IntPtr)packed});
+            }
+            Check(caption.Height>0&&caption.ActionsX>0,"Real toolbar geometry is available for native hit testing");
+            Check(Hit(10,(int)(caption.Height/2))==(IntPtr)2,"The information and empty title area drag the native window, including on negative monitor coordinates");
+            Check(Hit((int)caption.ActionsX+4,(int)(caption.Height/2))==(IntPtr)1,"Save, Update and window controls remain client clicks rather than dragging");
+            Check(Hit(10,(int)caption.Height+20)==(IntPtr)1,"The ornamental header and content are not native drag zones");
+            CaptionNative.GetWindowRect(window,out var bounds);
+            long borderPoint=(long)(ushort)(bounds.Left+1)|((long)(ushort)((bounds.Top+bounds.Bottom)/2)<<16);
+            Check((IntPtr)procedure.Invoke(display,new object[]{window,0x0084u,UIntPtr.Zero,(IntPtr)borderPoint})==(IntPtr)10,"The native left resize edge is preserved");
+            var native=displayType.GetNestedType("Native",hidden);
+            var limitsType=native.GetNestedType("MinMaxInfo",hidden);
+            IntPtr limits=Marshal.AllocHGlobal(Marshal.SizeOf(limitsType));
+            try
+            {
+                Marshal.StructureToPtr(Activator.CreateInstance(limitsType),limits,false);
+                procedure.Invoke(display,new object[]{window,0x0024u,UIntPtr.Zero,limits});
+                var result=Marshal.PtrToStructure(limits,limitsType);
+                (int X,int Y) ReadPoint(string field)
+                {
+                    var point=limitsType.GetField(field,hidden).GetValue(result);
+                    return ((int)point.GetType().GetField("X",hidden).GetValue(point),(int)point.GetType().GetField("Y",hidden).GetValue(point));
+                }
+                Check(ReadPoint("MinTrackSize")== (840,640),"The unified native window retains its minimum resize bounds");
+                var monitor=native.GetMethod("MonitorFromWindow",hidden).Invoke(null,new object[]{window,2u});
+                var infoType=native.GetNestedType("MonitorInfo",hidden);var info=Activator.CreateInstance(infoType);
+                infoType.GetField("Size",hidden).SetValue(info,Marshal.SizeOf(infoType));
+                var monitorArgs=new object[]{monitor,info};
+                Check((bool)native.GetMethod("GetMonitorInfo",hidden).Invoke(null,monitorArgs),"The hidden caption fixture resolves its monitor work area");
+                var work=infoType.GetField("Work",hidden).GetValue(monitorArgs[1]);
+                int Edge(string edge)=>(int)work.GetType().GetField(edge,hidden).GetValue(work);
+                Check(ReadPoint("MaxSize")== (Edge("Right")-Edge("Left"),Edge("Bottom")-Edge("Top")),"Maximize uses the monitor work area so the taskbar remains accessible");
+            }
+            finally { Marshal.FreeHGlobal(limits); }
+            displayType.GetField("useSettingsTitleBar",hidden).SetValue(display,false);
+            Check(Hit(10,(int)(caption.Height/2))==(IntPtr)1,"Detached plugin windows keep their existing native caption behavior");
+            Check((Convert.ToUInt32(displayType.GetProperty("WindowStyle",hidden).GetValue(display))&0x00c00000)!=0,"The public plugin display constructor retains its caption style");
+            displayType.GetMethod("RequestWindowState",hidden).Invoke(display,new object[]{6});
+            Check((int)displayType.GetField("requestedWindowState",hidden).GetValue(display)==6,"Minimize is queued for the native frame boundary without changing focus during drawing");
+            displayType.GetMethod("RequestWindowState",hidden).Invoke(display,new object[]{0});
+            Check((int)displayType.GetField("requestedWindowState",hidden).GetValue(display)==0,"Maximize/restore is queued without changing the game or native fixture state");
+        }
+        finally { CaptionNative.DestroyWindow(window); }
+
+        var io=ImGuiNET.ImGui.GetIO();
+        var glyphButton=settingsType.GetMethod("DrawCaptionButton",hidden);
+        foreach(int glyph in new[]{0,1,2})
+        {
+            Vector2 center=Vector2.Zero;bool clicked=false;
+            for(int frame=0;frame<4;frame++)
+            {
+                io.AddMousePosEvent(frame==0?-100:center.X,frame==0?-100:center.Y);io.AddMouseButtonEvent(0,frame==2);
+                ImGuiNET.ImGui.NewFrame();ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(240,80));
+                ImGuiNET.ImGui.Begin("Caption controls##isolated",ImGuiNET.ImGuiWindowFlags.NoTitleBar|ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                clicked|=(bool)glyphButton.Invoke(null,new object[]{"##glyph",glyph,32f});
+                center=(ImGuiNET.ImGui.GetItemRectMin()+ImGuiNET.ImGui.GetItemRectMax())/2;
+                ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
+            }
+            Check(clicked,"Each custom caption glyph responds to a real isolated ImGui press/release: "+glyph);
+        }
+    }
+
+    private static class CaptionNative
+    {
+        [StructLayout(LayoutKind.Sequential)] internal struct Point { internal int X,Y; }
+        [StructLayout(LayoutKind.Sequential)] internal struct Rect { internal int Left,Top,Right,Bottom; }
+        [DllImport("user32.dll",CharSet=CharSet.Unicode,SetLastError=true)] internal static extern IntPtr CreateWindowEx(uint exStyle,string className,string title,uint style,int x,int y,int width,int height,IntPtr parent,IntPtr menu,IntPtr instance,IntPtr data);
+        [DllImport("user32.dll")] internal static extern bool DestroyWindow(IntPtr window);
+        [DllImport("user32.dll")] internal static extern bool ClientToScreen(IntPtr window,ref Point point);
+        [DllImport("user32.dll")] internal static extern bool GetWindowRect(IntPtr window,out Rect rect);
+        [DllImport("user32.dll",EntryPoint="GetWindowLongPtrW")] internal static extern IntPtr GetWindowLongPtr(IntPtr window,int index);
     }
 
     private static void SaveUiPreview(string file, byte[] atlas, int atlasWidth, int atlasHeight)

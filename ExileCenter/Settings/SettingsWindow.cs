@@ -35,6 +35,7 @@ namespace ExileCenter.Settings
         private static string selectedSettingsPage = PluginManagerPageId;
         private static string pluginReloadStatus = string.Empty;
         private static string settingsPluginFilter = string.Empty;
+        internal static (float Height, float ActionsX) CaptionBounds { get; private set; }
 
         private static EntityFilterType efilterType = EntityFilterType.PATH;
         private static string filterText = string.Empty;
@@ -67,7 +68,7 @@ namespace ExileCenter.Settings
                 UiRenderPriority.CoreWindows));
         }
 
-        private static void DrawManuBar()
+        private static void DrawManuBar(bool independent)
         {
             if (!ImGui.BeginMenuBar())
             {
@@ -78,7 +79,10 @@ namespace ExileCenter.Settings
             var saveWidth = ImGui.CalcTextSize(saveLabel).X + ImGui.GetStyle().FramePadding.X * 2f;
             var updateLabel = L.T("updates.short", "Update");
             var actionsWidth = saveWidth + (LocalUpdates.IsAvailable ? ImGui.CalcTextSize(updateLabel).X + ImGui.GetStyle().FramePadding.X * 2f + ImGui.GetStyle().ItemSpacing.X : 0f);
-            float actionsX = ImGui.GetWindowPos().X + ImGui.GetWindowWidth() - actionsWidth - 24f;
+            float titleButtonWidth = Math.Max(32, ImGui.GetFontSize() * 1.75f);
+            float windowControlsWidth = independent ? 3 * (titleButtonWidth + ImGui.GetStyle().ItemSpacing.X) : 0;
+            float actionsX = ImGui.GetWindowPos().X + ImGui.GetWindowWidth() - actionsWidth - windowControlsWidth - 24f;
+            if (independent) CaptionBounds = (ImGui.GetFrameHeight(), Math.Max(0, actionsX - ImGui.GetWindowPos().X));
             // Reserve the right-hand actions before drawing the informational labels.
             // The ornamental padding also offsets ImGui's menu group, so SameLine(offset)
             // would add that margin again and push the buttons outside the window.
@@ -94,7 +98,17 @@ namespace ExileCenter.Settings
             ImGui.TextDisabled(L.F("settings.menu.hide_show", "Hide/show menu: {0}", Core.GHSettings.MainMenuHotKey));
             ImGui.PopClipRect();
             ImGui.SameLine();
-            ImGui.SetCursorScreenPos(new Vector2(actionsX, ImGui.GetCursorScreenPos().Y));
+            float actionsY = ImGui.GetCursorScreenPos().Y;
+            if (independent)
+            {
+                ImGui.SetCursorScreenPos(new Vector2(actionsX + actionsWidth + ImGui.GetStyle().ItemSpacing.X, actionsY));
+                if (DrawCaptionButton("##MinimizeSettings", 0, titleButtonWidth)) Core.Overlay?.MinimizeSettingsDisplay();
+                ImGui.SameLine();
+                if (DrawCaptionButton("##MaximizeSettings", 1, titleButtonWidth)) Core.Overlay?.ToggleSettingsDisplaySize();
+                ImGui.SameLine();
+                if (DrawCaptionButton("##HideSettings", 2, titleButtonWidth)) HideSettingsWindow();
+            }
+            ImGui.SetCursorScreenPos(new Vector2(actionsX, actionsY));
             if (ImGui.SmallButton(saveLabel + "##SaveSettingsNow"))
                 CoroutineHandler.RaiseEvent(ExileCenterEvents.TimeToSaveAllSettings);
             if (LocalUpdates.IsAvailable)
@@ -113,6 +127,27 @@ namespace ExileCenter.Settings
 #endif
 
             ImGui.EndMenuBar();
+        }
+
+        private static bool DrawCaptionButton(string id, int glyph, float width)
+        {
+            bool clicked = ImGui.InvisibleButton(id, new Vector2(width, ImGui.GetFontSize()));
+            var min = ImGui.GetItemRectMin();
+            var max = ImGui.GetItemRectMax();
+            var draw = ImGui.GetWindowDrawList();
+            if (ImGui.IsItemHovered())
+                draw.AddRectFilled(min, max, glyph == 2 ? ImGui.GetColorU32(new Vector4(.55f, .12f, .08f, 1)) : ImGui.GetColorU32(ImGuiCol.ButtonHovered));
+            var center = (min + max) / 2;
+            float arm = ImGui.GetFontSize() * .24f;
+            uint color = ImGui.GetColorU32(ImGuiCol.Text);
+            if (glyph == 0) draw.AddLine(center + new Vector2(-arm, arm), center + new Vector2(arm, arm), color);
+            else if (glyph == 1) draw.AddRect(center - new Vector2(arm), center + new Vector2(arm), color);
+            else
+            {
+                draw.AddLine(center - new Vector2(arm), center + new Vector2(arm), color);
+                draw.AddLine(center + new Vector2(-arm, arm), center + new Vector2(arm, -arm), color);
+            }
+            return clicked;
         }
 
         private static void DrawSettingsLayout()
@@ -1258,7 +1293,7 @@ namespace ExileCenter.Settings
                     DrawConfirmationPopup();
                     if (!Core.GHSettings.IsOverlayRunning) CoroutineHandler.RaiseEvent(ExileCenterEvents.TimeToSaveAllSettings);
                     if (!expanded) return;
-                    DrawManuBar();
+                    DrawManuBar(independent);
                     DrawSettingsLayout();
                 }
                 finally { ImGui.End(); }
