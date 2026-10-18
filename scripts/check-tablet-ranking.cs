@@ -1502,15 +1502,21 @@ internal static class TabletRankingCheck
             foreach(var windowSize in new[]{new Vector2(1000,1000),new Vector2(1890,1024),new Vector2(460,900)})
             {
                 io.DisplaySize=windowSize;
-                for(int frame=0;frame<3;frame++)
+                for(int frame=0;frame<6;frame++)
                 {
                     ImGuiNET.ImGui.NewFrame();ImGuiNET.ImGui.SetNextWindowPos(Vector2.Zero);ImGuiNET.ImGui.SetNextWindowSize(windowSize);
                     var frameFlags=ImGuiNET.ImGuiWindowFlags.MenuBar|ImGuiNET.ImGuiWindowFlags.NoTitleBar|ImGuiNET.ImGuiWindowFlags.NoSavedSettings;
                     typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("BeginSettingsWindow",flags).Invoke(null,new object[]{"Proportions###frame-aspect",true,frameFlags});
-                    if(frame==2)
+                    if(frame==5)
                     {
                         var list=ImGuiNET.ImGui.GetWindowDrawList();
-                        int fullWidthFriezeTriangles=0;
+                        int wholeImageTriangles=0;
+                        var viewport=windowSize-new Vector2(ImGuiNET.ImGui.GetScrollMaxY()>0?ImGuiNET.ImGui.GetStyle().ScrollbarSize+1:0,
+                            ImGuiNET.ImGui.GetScrollMaxX()>0?ImGuiNET.ImGui.GetStyle().ScrollbarSize+1:0);
+                        float menuHeight=ImGuiNET.ImGui.GetFrameHeight();
+                        float imageHeight=Math.Min(viewport.Y-menuHeight,viewport.X*framePreviewHeight/framePreviewWidth);
+                        float imageWidth=imageHeight*framePreviewWidth/framePreviewHeight;
+                        var imageStart=new Vector2((viewport.X-imageWidth)/2,menuHeight+(viewport.Y-menuHeight-imageHeight)/2);
                         foreach(int commandIndex in Enumerable.Range(0,list.CmdBuffer.Size))
                         {
                             var command=list.CmdBuffer[commandIndex];if(command.TextureId!=new IntPtr(2))continue;
@@ -1521,26 +1527,27 @@ internal static class TabletRankingCheck
                                 float du=vertices.Max(v=>v.uv.X)-vertices.Min(v=>v.uv.X),dv=vertices.Max(v=>v.uv.Y)-vertices.Min(v=>v.uv.Y);
                                 if(dx>.1f&&dy>.1f&&du>.0001f&&dv>.0001f)
                                     Check(Math.Abs(dx/du/framePreviewWidth-dy/dv/framePreviewHeight)<.0002f,"Every artwork patch retains its original pixel aspect ratio: "+windowSize);
-                                float uvTop=vertices.Min(v=>v.uv.Y),uvBottom=vertices.Max(v=>v.uv.Y);
-                                if(Math.Abs(du-1)<.0001f&&
-                                    ((Math.Abs(uvTop)<.0001f&&Math.Abs(uvBottom-.16f)<.0001f)||
-                                     (Math.Abs(uvTop-.85f)<.0001f&&Math.Abs(uvBottom-1)<.0001f)))
-                                {
-                                    Check(Math.Abs(vertices.Min(v=>v.pos.X))<1&&Math.Abs(dx-windowSize.X)<1,
-                                        "The complete original top/footer strip spans the window from pillar to pillar: "+windowSize);
-                                    fullWidthFriezeTriangles++;
-                                }
+                                Check(Math.Abs(du-1)<.0001f&&Math.Abs(dv-1)<.0001f&&
+                                    vertices.Min(v=>v.uv.X)==0&&vertices.Min(v=>v.uv.Y)==0,
+                                    "The frame samples the entire original image with no crops or repeated sections: "+windowSize);
+                                Check(vertices.All(v=>v.col==0xffffffff),"The original frame colors have no tint or opacity modification: "+windowSize);
+                                Check(Math.Abs(vertices.Min(v=>v.pos.X)-imageStart.X)<1&&Math.Abs(vertices.Min(v=>v.pos.Y)-imageStart.Y)<1&&
+                                    Math.Abs(dx-imageWidth)<1&&Math.Abs(dy-imageHeight)<1,
+                                    "The original frame fits centered inside the viewport with proportional margins: "+windowSize);
+                                Check(vertices.All(v=>v.pos.X>=command.ClipRect.X-.01f&&v.pos.X<=command.ClipRect.Z+.01f&&
+                                    v.pos.Y>=command.ClipRect.Y-.01f&&v.pos.Y<=command.ClipRect.W+.01f),
+                                    "No image edge or corner is clipped, including beside native scrollbars: "+windowSize);
+                                wholeImageTriangles++;
                             }
                         }
-                        Check(fullWidthFriezeTriangles==4,"Both sculpted friezes are complete full-width images with no centered blocks or filler gaps: "+windowSize);
-                        float scale=windowSize.X;float imageHeight=scale*framePreviewHeight/framePreviewWidth;
+                        Check(wholeImageTriangles==2,"Exactly one full original image is rendered, with no sliced or tiled artwork: "+windowSize);
                         var cursor=ImGuiNET.ImGui.GetCursorScreenPos();var available=ImGuiNET.ImGui.GetContentRegionAvail();
-                        Check(cursor.X>=scale*.068f&&cursor.X+available.X<=windowSize.X-scale*.068f+1,
+                        Check(cursor.X>=imageStart.X+imageWidth*.068f-1&&cursor.X+available.X<=imageStart.X+imageWidth*(1-.068f)+1,
                             "Content and fill-width controls fit between the proportional pillars: "+windowSize);
-                        Check(cursor.Y>=ImGuiNET.ImGui.GetFrameHeight()+imageHeight*.16f&&cursor.Y+available.Y<=windowSize.Y-imageHeight*.15f+1,
+                        Check(cursor.Y>=imageStart.Y+imageHeight*.16f&&cursor.Y+available.Y<=imageStart.Y+imageHeight*(1-.15f)+1,
                             "The work rectangle reserves both the cartouche and the carved footer: "+windowSize);
                     }
-                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.55");ImGuiNET.ImGui.EndMenuBar();}
+                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.56");ImGuiNET.ImGui.EndMenuBar();}
                     ImGuiNET.ImGui.BeginChild("Navigation",new Vector2(Math.Min(220,ImGuiNET.ImGui.GetContentRegionAvail().X*.3f),0),ImGuiNET.ImGuiChildFlags.Borders);
                     foreach(var label in new[]{"Application","General","Plugins","Mises a jour","Plugins actifs","Auto-craft TP"})ImGuiNET.ImGui.Selectable(label,label=="Plugins");
                     ImGuiNET.ImGui.EndChild();ImGuiNET.ImGui.SameLine();
@@ -1550,7 +1557,7 @@ internal static class TabletRankingCheck
                     bool enabled=true;foreach(var label in new[]{"Atlas et itineraires","Regles de raccourcis","AutoPot","Zoom de la camera","Barres de vie","Suivi du butin","Auto-craft TP"})ImGuiNET.ImGui.Checkbox(label,ref enabled);
                     ImGuiNET.ImGui.Button("Appliquer",new Vector2(-1,0));ImGuiNET.ImGui.EndChild();
                     ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
-                    if(frame==2&&previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,$"poe2-proportions-{windowSize.X}x{windowSize.Y}.png"),pixels,atlasWidth,atlasHeight);
+                    if(frame==5&&previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,$"poe2-proportions-{windowSize.X}x{windowSize.Y}.png"),pixels,atlasWidth,atlasHeight);
                 }
             }
             io.DisplaySize=new Vector2(1280,960);

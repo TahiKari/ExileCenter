@@ -70,23 +70,41 @@ namespace ExileCenter.Ui
 
         private static void RememberFrameSize(string name)
         {
-            if (!ImGui.IsWindowCollapsed()) frameSizes[FrameKey(name)] = ImGui.GetWindowSize();
+            if (!ImGui.IsWindowCollapsed()) frameSizes[FrameKey(name)] = FrameViewport();
+        }
+
+        private static Vector2 FrameViewport() => ImGui.GetWindowSize() - new Vector2(
+            ImGui.GetScrollMaxY() > 0 ? ImGui.GetStyle().ScrollbarSize + 1 : 0,
+            ImGui.GetScrollMaxX() > 0 ? ImGui.GetStyle().ScrollbarSize + 1 : 0);
+
+        private static (Vector2 Offset, Vector2 Size) FrameLayout(Vector2 viewport, ImGuiWindowFlags flags)
+        {
+            float menu = (flags & ImGuiWindowFlags.MenuBar) == 0 ? 0 :
+                ImGui.GetFrameHeight() * ((flags & ImGuiWindowFlags.NoTitleBar) == 0 ? 2 : 1);
+            var available = viewport - new Vector2(0, menu);
+            float height = Math.Max(1, Math.Min(available.Y, available.X / FrameAspect));
+            var image = new Vector2(height * FrameAspect, height);
+            return ((available - image) / 2 + new Vector2(0, menu), image);
         }
 
         private static float PushFramePadding(string name, ImGuiWindowFlags flags, bool forceHeading = false)
         {
             float scale = 0;
+            var padding = Vector2.Zero;
             if ((flags & (ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoMouseInputs | ImGuiWindowFlags.AlwaysAutoResize)) == 0 &&
                 (forceHeading || (flags & ImGuiWindowFlags.NoTitleBar) == 0) &&
                 ImGui.GetStyle().Colors[(int)ImGuiCol.WindowBg].W > 0 &&
                 frameSizes.TryGetValue(FrameKey(name), out var size) && size.X >= 160 && size.Y >= 80)
             {
-                scale = size.X;
+                var frame = FrameLayout(size, flags);
+                scale = frame.Size.X;
+                padding = new Vector2(frame.Offset.X + frame.Size.X * FrameEdge,
+                    size.Y - frame.Offset.Y - frame.Size.Y + frame.Size.Y * FrameFooter);
             }
             // Begin caches this padding in the window's work rectangle. Restore the style
             // immediately afterwards so children and controls keep their normal spacing.
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding,
-                ImGui.GetStyle().WindowPadding + new Vector2(scale * FrameEdge, scale / FrameAspect * FrameFooter));
+                ImGui.GetStyle().WindowPadding + padding);
             return scale;
         }
 
@@ -115,57 +133,21 @@ namespace ExileCenter.Ui
             int id = name.IndexOf("##", StringComparison.Ordinal);
             string title = (id < 0 ? name : name[..id]).ToUpperInvariant();
             bool heading = title.Length > 0 && (forceHeading || (flags & ImGuiWindowFlags.NoTitleBar) == 0);
-            float menuOffset = (flags & ImGuiWindowFlags.MenuBar) == 0 ? 0 :
-                ImGui.GetFrameHeight() * ((flags & ImGuiWindowFlags.NoTitleBar) == 0 ? 2 : 1);
-            var position = ImGui.GetWindowPos() + new Vector2(0, menuOffset);
-            var end = ImGui.GetWindowPos() + size;
-            // Full-width top/bottom strips from a native landscape asset. Both axes
-            // share the same pixel scale; only the middle region changes in height.
-            scale = size.X;
-            var imageSize = new Vector2(scale, scale / FrameAspect);
-            float header = imageSize.Y * (heading ? FrameHeader : .012f);
+            var frame = FrameLayout(FrameViewport(), flags);
+            var position = ImGui.GetWindowPos() + frame.Offset;
+            var imageSize = frame.Size;
+            var end = position + imageSize;
+            var windowEnd = ImGui.GetWindowPos() + size;
+            scale = imageSize.X;
+            float header = imageSize.Y * FrameHeader;
             float edge = imageSize.X * FrameEdge;
             float bottom = imageSize.Y * FrameFooter;
             if (end.Y - position.Y < header + bottom + 12) return false;
             var draw = ImGui.GetWindowDrawList();
-            // Native scrollbars are already rendered by Begin; leave their pixels and hit areas intact.
-            var clipEnd = end - new Vector2(ImGui.GetScrollMaxY() > 0 ? style.ScrollbarSize + 1 : 0,
-                ImGui.GetScrollMaxX() > 0 ? style.ScrollbarSize + 1 : 0);
-            draw.PushClipRect(position, clipEnd, false);
-            uint tint = ImGui.GetColorU32(new Vector4(1, 1, 1, style.Colors[(int)ImGuiCol.WindowBg].W));
-            // Repeat/crop only the middle. The complete friezes retain their original
-            // composition from the left pillar to the right pillar, without extensions.
-            void Tile(Vector2 min, Vector2 max, Vector2 uvMin, Vector2 uvMax)
-            {
-                var tile = (uvMax - uvMin) * imageSize;
-                for (float y = min.Y; y < max.Y; y += tile.Y)
-                    for (float x = min.X; x < max.X; x += tile.X)
-                    {
-                        var start = new Vector2(x, y);
-                        var stop = Vector2.Min(start + tile, max);
-                        draw.AddImage(frameTexture, start, stop, uvMin, uvMin + (stop - start) / imageSize, tint);
-                    }
-            }
-            Tile(new Vector2(position.X + edge, position.Y + header), new Vector2(end.X - edge, end.Y - bottom),
-                new Vector2(.12f, .2f), new Vector2(.88f, .8f));
-            for (int side = 0; side < 2; side++)
-            {
-                float x = side == 0 ? position.X : end.X - edge;
-                float u = side == 0 ? 0 : 1 - FrameEdge;
-                Tile(new Vector2(x, position.Y + header), new Vector2(x + edge, end.Y - bottom),
-                    new Vector2(u, FrameHeader), new Vector2(u + FrameEdge, 1 - FrameFooter));
-            }
-            for (int row = 0; row < 2; row++)
-            {
-                bool top = row == 0;
-                float y = top ? position.Y : end.Y - bottom;
-                float height = top ? header : bottom;
-                draw.AddImage(frameTexture, new Vector2(position.X, y), new Vector2(end.X, y + height),
-                    new Vector2(0, top ? (heading ? 0 : FrameHeader - .012f) : 1 - FrameFooter),
-                    new Vector2(1, top ? FrameHeader : 1), tint);
-            }
-            draw.AddRectFilled(new Vector2(position.X + edge, position.Y + header), new Vector2(end.X - edge, end.Y - bottom),
-                ImGui.GetColorU32(new Vector4(.015f, .012f, .010f, style.Colors[(int)ImGuiCol.WindowBg].W * .42f)));
+            draw.PushClipRect(position, end, false);
+            // Render the original image once, in full and without tint, crops or repeated
+            // sections. Letterboxing preserves every detail when window aspect ratios differ.
+            draw.AddImage(frameTexture, position, end, Vector2.Zero, Vector2.One, 0xffffffff);
             if (heading)
             {
                 var font = ImGui.GetFont();
@@ -173,26 +155,27 @@ namespace ExileCenter.Ui
                 float width = scale * .28f;
                 var measured = ImGui.CalcTextSize(title) * (fontSize / ImGui.GetFontSize());
                 if (measured.X > width) { fontSize *= width / measured.X; measured *= width / measured.X; }
-                var center = position + new Vector2(size.X / 2, header * .575f);
+                var center = position + new Vector2(imageSize.X / 2, header * .575f);
                 draw.AddText(font, fontSize, center - measured / 2 + Vector2.One,
                     ImGui.GetColorU32(new Vector4(.87f, .76f, .48f, 1)), title);
                 draw.AddText(font, fontSize, center - measured / 2,
                     ImGui.GetColorU32(new Vector4(.075f, .055f, .025f, 1)), title);
-                // Only the decorative header reserves space; controls retain their own frame metrics.
-                float contentTop = menuOffset + header + style.WindowPadding.Y;
-                if (ImGui.GetCursorPosY() < contentTop)
-                    ImGui.Dummy(new Vector2(0, contentTop - ImGui.GetCursorPosY()));
+                // The top and bottom margins differ: start the body below the header
+                // even though Begin uses symmetric padding for the work rectangle.
+                float contentTop = frame.Offset.Y + header + style.WindowPadding.Y;
+                ImGui.SetCursorPosY(contentTop);
+                ImGui.Dummy(Vector2.Zero);
             }
             draw.PopClipRect();
-            if (heading && menuOffset == 0 && (flags & ImGuiWindowFlags.NoTitleBar) == 0)
+            if (heading && (flags & (ImGuiWindowFlags.MenuBar | ImGuiWindowFlags.NoTitleBar)) == 0)
             {
                 // Repaint the existing native buttons; interaction and window IDs remain unchanged.
-                draw.PushClipRect(ImGui.GetWindowPos(), end, false);
+                draw.PushClipRect(ImGui.GetWindowPos(), windowEnd, false);
                 float radius = ImGui.GetFontSize() * .48f;
                 float middle = ImGui.GetWindowPos().Y + ImGui.GetFrameHeight() / 2;
                 if (closable)
                 {
-                    var center = new Vector2(end.X - style.FramePadding.X - ImGui.GetFontSize() / 2, middle);
+                    var center = new Vector2(windowEnd.X - style.FramePadding.X - ImGui.GetFontSize() / 2, middle);
                     draw.AddCircleFilled(center, radius, ImGui.GetColorU32(new Vector4(.25f, .025f, .018f, 1)));
                     draw.AddCircle(center, radius, ImGui.GetColorU32(Accent), 12);
                     float arm = radius * .45f;
