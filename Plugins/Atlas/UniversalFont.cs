@@ -84,6 +84,7 @@ namespace Atlas
                 if (!haveBase)
                     fonts.AddFontDefault();
                 cfg.MergeMode = false;
+                ExileCenter.Utils.UniversalFont.AddHeadingFont(fonts);
             });
 
             applied = true;
@@ -95,7 +96,7 @@ namespace Atlas
             if (!applied || Core.Overlay == null)
                 return;
             applied = false;
-            Core.Overlay.ReplaceFont(Core.GHSettings.FontPathName, Core.GHSettings.FontSize, Core.GHSettings.FontLanguage);
+            ExileCenter.Utils.UniversalFont.ApplyConfigured();
         }
 
         private static IntPtr RangeFor(ImFontAtlasPtr fonts, FontGlyphRangeType lang) => lang switch

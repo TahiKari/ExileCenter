@@ -151,8 +151,8 @@ namespace ExileCenter.Ui
             DrawFrameArtwork(draw, position, imageSize);
             if (heading)
             {
-                var font = forceHeading && Utils.UniversalFont.HeadingFontLoaded
-                    ? Utils.UniversalFont.HeadingFont : ImGui.GetFont();
+                var font = forceHeading && Utils.UniversalFont.TryGetHeadingFont(out var headingFont)
+                    ? headingFont : ImGui.GetFont();
                 float fontSize = Math.Min(header * .34f, Math.Max(ImGui.GetFontSize() * 1.10f, imageSize.X * .014f));
                 float width = scale * .11f * HeaderZoom;
                 ImGui.PushFont(font);

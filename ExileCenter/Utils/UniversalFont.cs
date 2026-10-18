@@ -24,24 +24,36 @@ namespace ExileCenter.Utils
     ///     configured font is loaded instead. Call <see cref="ApplyFromSettings"/> on startup and
     ///     whenever the font settings change.
     /// </summary>
-    internal static class UniversalFont
+    public static class UniversalFont
     {
         // Whole Basic Multilingual Plane for the Unifont fallback. ImGui keeps this pointer until the
         // atlas is built (on the render thread), so the array must stay pinned for the app lifetime.
         private static readonly ushort[] FullBmpRange = { 0x0020, 0xFFFF, 0x0000 };
         private static GCHandle rangeHandle;
         internal static ImFontPtr HeadingFont { get; private set; }
-        internal static bool HeadingFontLoaded { get; private set; }
-
-        internal static void AddHeadingFont(ImFontAtlasPtr fonts)
+        // Atlas and other font reloads can destroy the cached native font. Compare addresses
+        // against the live atlas before accessing it; never dereference a retired pointer.
+        internal static unsafe bool TryGetHeadingFont(out ImFontPtr font)
         {
-            HeadingFontLoaded = false;
+            var fonts = ImGui.GetIO().Fonts.Fonts;
+            for (int i = 1; i < fonts.Size; i++)
+            {
+                if (fonts[i].NativePtr != HeadingFont.NativePtr) continue;
+                font = fonts[i];
+                return float.IsFinite(font.Scale) && font.Scale > 0 && font.FontSize > 0;
+            }
+            font = default;
+            return false;
+        }
+
+        public static void AddHeadingFont(ImFontAtlasPtr fonts)
+        {
+            HeadingFont = default;
             var folder = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
             var path = Path.Combine(folder, "georgiab.ttf");
             if (!File.Exists(path)) path = Path.Combine(folder, "palab.ttf");
             if (!File.Exists(path)) return;
             HeadingFont = fonts.AddFontFromFileTTF(path, 32);
-            HeadingFontLoaded = true;
         }
 
         /// <summary>

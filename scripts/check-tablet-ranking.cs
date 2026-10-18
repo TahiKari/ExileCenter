@@ -627,6 +627,7 @@ internal static class TabletRankingCheck
             RunMetaFilters(args.Length > 1 && args[1] != "none" ? args[1] : null);
             CheckWorkbookPreset();
             CheckTooltipGeometry(root, args.Length > 2 ? args[2] : null);
+            CheckFontReload(root);
             CheckTabletSettingsUi(root, args.Length > 2 ? args[2] : null);
             Console.WriteLine(checks + " tablet classification checks passed.");
             return 0;
@@ -1379,6 +1380,96 @@ internal static class TabletRankingCheck
         Console.WriteLine($"VALIDATION composition UI: 210 labels at 32/40/52/104px; bounds, quantity space, colors, live edits and hover/help switches: {checks-before} checks passed.");
     }
 
+    private static unsafe void CheckFontReload(string root)
+    {
+        const BindingFlags flags = BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        var context = ImGuiNET.ImGui.CreateContext();
+        IntPtr sharedContext = IntPtr.Zero;
+        var previousOverlay = ExileCenter.Core.Overlay;
+        var overlayProperty = typeof(ExileCenter.Core).GetProperty("Overlay");
+        var overlay = (ExileCenter.GameOverlay)RuntimeHelpers.GetUninitializedObject(typeof(ExileCenter.GameOverlay));
+        GC.SuppressFinalize(overlay);
+        var queueField = typeof(ClickableTransparentOverlay.Overlay).GetField("fontUpdates", flags);
+        var queue = Activator.CreateInstance(queueField.FieldType);
+        queueField.SetValue(overlay, queue);
+        var settings = ExileCenter.Core.GHSettings;
+        var oldPath = settings.FontPathName; var oldRange = settings.FontCustomGlyphRange;
+        var oldLanguage = settings.FontLanguage; var oldUniversal = settings.UniversalFont;
+        var theme = typeof(ExileCenter.Ui.ImGuiTheme);
+        var frameLoaded = theme.GetField("frameLoaded", flags); var frameTexture = theme.GetField("frameTexture", flags);
+        var oldLoaded = frameLoaded.GetValue(null); var oldTexture = frameTexture.GetValue(null);
+        var heading = typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Utils.UniversalFont");
+        var atlas = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(root, "Plugins", "Atlas", "Atlas.dll"))
+            .GetType("Atlas.UniversalFont");
+        bool HasHeading() => (bool)heading.GetMethod("TryGetHeadingFont", flags).Invoke(null, new object[] { default(ImGuiNET.ImFontPtr) });
+        void BuildFonts()
+        {
+            var fonts = ImGuiNET.ImGui.GetIO().Fonts;
+            fonts.GetTexDataAsRGBA32(out IntPtr pixels, out int width, out int height, out int bytes);
+            fonts.SetTexID((IntPtr)1);
+            Check(width > 0 && height > 0 && width <= 16384 && height <= 16384, "Reloaded font atlas fits the renderer");
+            fonts.ClearTexData();
+        }
+        void DrainFontUpdates()
+        {
+            foreach (Delegate update in ((IEnumerable)queue).Cast<Delegate>().ToArray())
+            {
+                ImGuiNET.ImGui.GetIO().Fonts.Clear();
+                var config = ImGuiNET.ImGuiNative.ImFontConfig_ImFontConfig();
+                try { update.DynamicInvoke(Pointer.Box(config, typeof(ImGuiNET.ImFontConfig*))); BuildFonts(); }
+                finally { ImGuiNET.ImGuiNative.ImFontConfig_destroy(config); }
+            }
+            queue.GetType().GetMethod("Clear").Invoke(queue, null);
+        }
+        void DrawTitle(IntPtr target)
+        {
+            ImGuiNET.ImGui.SetCurrentContext(target);
+            var io = ImGuiNET.ImGui.GetIO(); io.NativePtr->IniFilename = null; io.NativePtr->FontDefault = null;
+            io.DisplaySize = new Vector2(1100, 800); io.DeltaTime = 1f / 60;
+            ImGuiNET.ImGui.NewFrame();
+            ImGuiNET.ImGui.SetNextWindowSize(new Vector2(1000, 700));
+            bool open = true;
+            var args = new object[] { "Font lifecycle###font-reload", open, ImGuiNET.ImGuiWindowFlags.NoTitleBar };
+            theme.GetMethod("BeginSettingsWindow", flags).Invoke(null, args);
+            Check(ImGuiNET.ImGui.GetFont().Scale > 0 && ImGuiNET.ImGui.GetFontSize() > 0, "Title rendering restores a valid body font");
+            ImGuiNET.ImGui.TextUnformatted("Font reload check"); ImGuiNET.ImGui.End(); ImGuiNET.ImGui.Render();
+        }
+        try
+        {
+            overlayProperty.SetValue(null, overlay);
+            frameLoaded.SetValue(null, true); frameTexture.SetValue(null, (IntPtr)2);
+            settings.FontPathName = Path.Combine(root, "fonts", "DejaVuSans.ttf");
+            settings.FontLanguage = ClickableTransparentOverlay.FontGlyphRangeType.English;
+            settings.FontCustomGlyphRange = "";
+            heading.GetMethod("ApplyConfigured", flags).Invoke(null, null); DrainFontUpdates();
+            Check(HasHeading(), "Configured startup loads the separate title font");
+            sharedContext = ImGuiNET.ImGui.CreateContext(ImGuiNET.ImGui.GetIO().Fonts);
+            DrawTitle(context); DrawTitle(sharedContext); ImGuiNET.ImGui.SetCurrentContext(context);
+            settings.UniversalFont = true;
+            heading.GetMethod("ApplyFromSettings", flags).Invoke(null, null); DrainFontUpdates();
+            atlas.GetMethod("Apply", flags).Invoke(null, new object[] { Path.Combine(root, "Plugins", "Atlas") }); DrainFontUpdates();
+            Check(HasHeading(), "Atlas startup reload recreates the title font after core initialization");
+            DrawTitle(context); DrawTitle(sharedContext); ImGuiNET.ImGui.SetCurrentContext(context);
+            atlas.GetMethod("Restore", flags).Invoke(null, null); DrainFontUpdates();
+            Check(HasHeading(), "Disabling Atlas preserves the title font");
+            // Reproduce an uncoordinated reload without dereferencing the retired pointer.
+            ImGuiNET.ImGui.GetIO().Fonts.Clear(); ImGuiNET.ImGui.GetIO().Fonts.AddFontDefault(); BuildFonts();
+            Check(!HasHeading(), "A font retired by another reload is rejected before any native access");
+            DrawTitle(context); DrawTitle(sharedContext); DrawTitle(context);
+            Console.WriteLine("VALIDATION fonts: real core/Atlas reload callbacks, shared contexts and retired-font fallback passed.");
+        }
+        finally
+        {
+            ImGuiNET.ImGui.SetCurrentContext(context);
+            if (sharedContext != IntPtr.Zero) ImGuiNET.ImGui.DestroyContext(sharedContext);
+            ImGuiNET.ImGui.DestroyContext(context);
+            overlayProperty.SetValue(null, previousOverlay);
+            settings.FontPathName = oldPath; settings.FontCustomGlyphRange = oldRange;
+            settings.FontLanguage = oldLanguage; settings.UniversalFont = oldUniversal;
+            frameLoaded.SetValue(null, oldLoaded); frameTexture.SetValue(null, oldTexture);
+        }
+    }
+
     private static void CheckTabletSettingsUi(string root, string previewDirectory)
     {
         const BindingFlags flags = BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic;
@@ -1398,7 +1489,7 @@ internal static class TabletRankingCheck
             io.DisplaySize = new Vector2(1280, 960); io.DeltaTime = 1f / 60;
             io.Fonts.AddFontDefault();
             var headingFonts = typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Utils.UniversalFont");
-            headingFonts.GetMethod("AddHeadingFont", flags).Invoke(null, new object[] { io.Fonts });
+            headingFonts.GetMethod("AddHeadingFont", flags | BindingFlags.Public).Invoke(null, new object[] { io.Fonts });
             io.Fonts.GetTexDataAsRGBA32(out IntPtr atlas, out int atlasWidth, out int atlasHeight, out int bytes);
             Check(io.Fonts.Fonts.Size == 2 && io.Fonts.Fonts[0].FontSize == 13,
                 "The serif heading font is separate from the unchanged body font");
@@ -1653,7 +1744,7 @@ internal static class TabletRankingCheck
                             cursor.Y-imageStart.Y-imageWidth*(48f/1672)*1.35f<=4&&imageStart.Y+imageHeight-imageWidth*(52f/1672)-cursor.Y-available.Y<=4,
                             "Settings content stays within four pixels of every protected ornamental border: "+windowSize);
                     }
-                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.63");ImGuiNET.ImGui.EndMenuBar();}
+                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.64");ImGuiNET.ImGui.EndMenuBar();}
                     ImGuiNET.ImGui.BeginChild("Navigation",new Vector2(Math.Min(220,ImGuiNET.ImGui.GetContentRegionAvail().X*.3f),0),ImGuiNET.ImGuiChildFlags.Borders);
                     foreach(var label in new[]{"Application","General","Plugins","Mises a jour","Plugins actifs","Auto-craft TP"})ImGuiNET.ImGui.Selectable(label,label=="Plugins");
                     ImGuiNET.ImGui.EndChild();ImGuiNET.ImGui.SameLine();
