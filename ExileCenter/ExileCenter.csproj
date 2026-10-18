@@ -13,7 +13,7 @@
     <AssemblyTitle>ExileCenter</AssemblyTitle>
     <Description>Compagnon modulaire pour Path of Exile 2 : butin, dégâts, cartes et outils de jeu.</Description>
     <Version>1.5.11</Version>
-    <ExileCenterReleaseTag Condition="'$(ExileCenterReleaseTag)' == ''">v1.5.11-personnalise.54</ExileCenterReleaseTag>
+    <ExileCenterReleaseTag Condition="'$(ExileCenterReleaseTag)' == ''">v1.5.11-personnalise.55</ExileCenterReleaseTag>
     <AssemblyVersion>1.5.11.0</AssemblyVersion>
     <FileVersion>1.5.11.0</FileVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

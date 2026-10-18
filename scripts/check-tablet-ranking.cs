@@ -107,6 +107,34 @@ internal static class TabletRankingCheck
             var jobs=((IEnumerable)typeof(StashUtilityCore).GetField("craftPages",flags).GetValue(plugin)).Cast<(int tier,int page)>().ToList();
             Check(jobs.Count==96&&jobs.Distinct().Count()==96&&jobs.All(job=>job.tier>=0&&job.tier<16&&job.page>=0&&job.page<6),"The production queue visits all 96 native tier/page combinations exactly once");
             Check(jobs.First()==(0,0)&&jobs.Last()==(15,5),"Full-stash traversal includes tiers I and XVI and both end pages");
+            var discoveryArgs=new object[]{rootHeader,null};
+            string savedSettings=JsonConvert.SerializeObject(plugin.Settings);
+            Check((bool)typeof(StashUtilityCore).GetMethod("TryDiscoverNamedStashTabs",flags).Invoke(plugin,discoveryArgs),"Craft selection discovers live names without scanning contents or navigating");
+            var namedTabs=((IEnumerable)discoveryArgs[1]).Cast<object>().ToList();
+            var namedSource=namedTabs.Single(tab=>(IntPtr)tabType.GetField("Page").GetValue(tab)==waystone);
+            Check((string)tabType.GetField("Name").GetValue(namedSource)=="PTP"&&
+                ((IEnumerable<string>)tabType.GetField("Folders").GetValue(namedSource)).SequenceEqual(new[]{"01 - Mapping"}),"The dropdown retains the exact nested stash path");
+            Check(JsonConvert.SerializeObject(plugin.Settings)==savedSettings,"Reading craft choices leaves saved settings unchanged");
+            typeof(StashUtilityCore).GetField("craftExplicitDestinations",flags).SetValue(plugin,true);
+            typeof(StashUtilityCore).GetField("craftSelectedSource",flags).SetValue(plugin,namedSource);
+            for(int tier=0;tier<16;tier++)for(int page=0;page<6;page++)
+            {
+                typeof(StashUtilityCore).GetField("craftSelectedTier",flags).SetValue(plugin,tier);
+                typeof(StashUtilityCore).GetField("craftSelectedPage",flags).SetValue(plugin,page);
+                Call("QueueCraftPages");
+                var selectedJobs=((IEnumerable)typeof(StashUtilityCore).GetField("craftPages",flags).GetValue(plugin)).Cast<(int tier,int page)>().ToList();
+                Check(selectedJobs.SequenceEqual(new[]{(tier,page)}),"Explicit selection crafts exactly one native page: "+tier+"/"+page);
+                Check(((string[])Call("CraftSelectionPageNames"))[page]==new[]{"Div - 1","Div - 2","300 - 700","200 - 299","20 - 49","10 - 19"}[page],"Each dropdown label maps to its canonical native page: "+tier+"/"+page);
+            }
+            foreach(var invalidChoice in new[]{(-1,0),(16,0),(0,-1),(0,6)})
+            {
+                typeof(StashUtilityCore).GetField("craftSelectedTier",flags).SetValue(plugin,invalidChoice.Item1);
+                typeof(StashUtilityCore).GetField("craftSelectedPage",flags).SetValue(plugin,invalidChoice.Item2);
+                bool rejected=false;
+                try{Call("QueueCraftPages");}catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){rejected=true;}
+                Check(rejected,"Incomplete or invalid choices cannot queue a craft");
+            }
+            typeof(StashUtilityCore).GetField("craftExplicitDestinations",flags).SetValue(plugin,false);
             for(int tier=0;tier<16;tier++)for(int page=0;page<6;page++)
             {
                 foreach(var t in tiers)Visible(t,false);Visible(tiers[tier],true);
@@ -1584,6 +1612,39 @@ internal static class TabletRankingCheck
                 if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"waystone-craft-"+width+".png"),pixels,atlasWidth,atlasHeight);
             }
             Check(JsonConvert.SerializeObject(plugin.Settings)==craftSettings,"Viewing craft settings never starts crafting or changes saved settings");
+            var craftContents=typeof(StashUtilityCore).GetMethod("DrawWaystoneCraftSelectionContents",flags);
+            var craftTabType=typeof(StashUtilityCore).GetNestedType("DetectedStashTab",flags);
+            object CraftTab(string name,string folder)
+            {
+                var tab=Activator.CreateInstance(craftTabType,true);
+                craftTabType.GetField("Name").SetValue(tab,name);
+                craftTabType.GetField("Folders").SetValue(tab,new List<string>{folder});
+                return tab;
+            }
+            var craftSource=CraftTab("PTP","01 - Mapping");var craftMoney=CraftTab("Currencies","03 - Monétaires");
+            var craftChoices=(IList)typeof(StashUtilityCore).GetField("craftTabChoices",flags).GetValue(plugin);
+            craftChoices.Add(craftSource);craftChoices.Add(craftMoney);
+            foreach(float width in new[]{460f,580f})foreach(bool selected in new[]{false,true})
+            {
+                typeof(StashUtilityCore).GetField("craftSelectedSource",flags).SetValue(plugin,selected?craftSource:null);
+                typeof(StashUtilityCore).GetField("craftSelectedMoney",flags).SetValue(plugin,selected?craftMoney:null);
+                typeof(StashUtilityCore).GetField("craftSelectedTier",flags).SetValue(plugin,selected?13:-1);
+                typeof(StashUtilityCore).GetField("craftSelectedPage",flags).SetValue(plugin,selected?0:-1);
+                var sourceFolders=(List<string>)typeof(StashUtilityCore).GetField("craftSourceFolders",flags).GetValue(plugin);
+                var moneyFolders=(List<string>)typeof(StashUtilityCore).GetField("craftMoneyFolders",flags).GetValue(plugin);
+                sourceFolders.Clear();moneyFolders.Clear();
+                if(selected){sourceFolders.Add("01 - Mapping");moneyFolders.Add("03 - Monétaires");}
+                io.AddMousePosEvent(-100,-100);ImGuiNET.ImGui.NewFrame();
+                ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width,750));
+                ImGuiNET.ImGui.Begin("Auto-craft TP - choix des coffres##selection-fixture",ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                Check(!(bool)craftContents.Invoke(plugin,null),"Viewing empty or complete craft selection never confirms a run: "+selected+width);
+                Check(ImGuiNET.ImGui.GetCursorPosY()<700,"All craft choices and buttons fit in the selection window: "+selected+width);
+                Check(ImGuiNET.ImGui.GetItemRectMax().X<=16+width,"Craft selection controls fit the window: "+selected+width);
+                ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
+                if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"waystone-selection-"+width+"-"+selected+".png"),pixels,atlasWidth,atlasHeight);
+            }
+            Check(!(bool)typeof(StashUtilityCore).GetField("waystoneCraftRunning",flags).GetValue(plugin)&&
+                JsonConvert.SerializeObject(plugin.Settings)==craftSettings,"Craft selection sends no game input and preserves saved settings before confirmation");
             var analysisObservation = ModDatabase.TabletMeta.Recognize("Breach Tablet",
                 new[] { ModDatabase.TabletMeta.FindSubRank("Breach Tablet","S1").GameModIds[0] });
             analysisObservation.Mods[0].Roll=10000;

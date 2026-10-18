@@ -208,6 +208,7 @@ namespace StashUtility
 
         public override void OnDisable()
         {
+            craftSelectionOpen = false;
             StopWaystoneCraft();
             UnloadTabletIcons();
             StopGridSort();
@@ -1845,6 +1846,13 @@ namespace StashUtility
         private Rarity craftBeforeRarity;
         private int craftBeforeModCount;
         private DetectedStashTab craftSource, craftMoney, craftRoute;
+        private bool craftSelectionOpen, craftSelectionFromInventory, craftExplicitDestinations;
+        private IntPtr craftSelectionRoot;
+        private readonly List<DetectedStashTab> craftTabChoices = new();
+        private DetectedStashTab craftSelectedSource, craftSelectedMoney;
+        private readonly List<string> craftSourceFolders = new(), craftMoneyFolders = new();
+        private int craftSelectedTier = -1, craftSelectedPage = -1;
+        private static readonly string[] CraftTierNames = { "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI" };
         private readonly Queue<IntPtr> craftQueue = new();
         private readonly List<SortItem> craftInventoryBefore = new();
         private IntPtr craftItem, craftSlot, craftCurrencyItem;
@@ -1966,6 +1974,12 @@ namespace StashUtility
 
         private bool CraftRequireCurrency()
         {
+            if (craftExplicitDestinations)
+            {
+                if (craftMoney == null || affinityStashRoot == IntPtr.Zero)
+                    throw CraftFailure("open", "Open your personal stash with an empty cursor before starting.");
+                return true;
+            }
             if (CraftInventoryCurrency() != null) return true;
             if (affinityStashRoot == IntPtr.Zero)
                 throw CraftFailure("inventory_currency", "The required currency is missing from the inventory. Open your stash to use its currency tab.");
@@ -2058,6 +2072,13 @@ namespace StashUtility
         private void QueueCraftPages()
         {
             craftPages.Clear();
+            if (craftExplicitDestinations)
+            {
+                if (craftSelectedTier < 0 || craftSelectedTier >= 16 || craftSelectedPage < 0 || craftSelectedPage >= 6)
+                    throw CraftFailure("page_layout", "The waystone tier or page controls could not be verified. No click was sent.");
+                craftPages.Enqueue((craftSelectedTier, craftSelectedPage));
+                return;
+            }
             for (int tier = 0; tier < 16; tier++)
                 for (int page = 0; page < 6; page++) craftPages.Enqueue((tier, page));
         }
@@ -2121,24 +2142,143 @@ namespace StashUtility
                 TryReadUiString(title, 0x360, out var text) && NormalizeCraftText(text) is "reserve" or "stash" or "coffre";
         }
 
-        private void BeginWaystoneCraft(bool fromInventory = false)
+        private void RequestWaystoneCraft(bool fromInventory = false)
+        {
+            if (waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0) return;
+            try
+            {
+                if (!TryGetCraftInventory(out _, out var stash) || stash == IntPtr.Zero || Core.IsSettingsMenuOpen ||
+                    ReadSortCursorItem() != IntPtr.Zero)
+                    throw CraftFailure("open", "Open your personal stash with an empty cursor before starting.");
+                if (!TryDiscoverNamedStashTabs(stash, out var tabs) || tabs.Count == 0)
+                    throw CraftFailure("selection_unavailable", "The stash tab names could not be read. Keep your personal stash open and try again.");
+                craftTabChoices.Clear(); craftTabChoices.AddRange(tabs);
+                craftSelectedSource = craftSelectedMoney = null;
+                craftSourceFolders.Clear(); craftMoneyFolders.Clear();
+                craftSelectedTier = craftSelectedPage = -1;
+                craftSelectionRoot = stash;
+                craftSelectionFromInventory = fromInventory;
+                craftSelectionOpen = true;
+            }
+            catch (Exception ex) { StopWaystoneCraft(ex.GetBaseException().Message); }
+        }
+
+        private void DrawCraftTabChoice(string label, ref DetectedStashTab selected, List<string> folders)
+        {
+            ImGui.TextWrapped(label);
+            ImGui.PushID(label);
+            for (int depth = 0; depth <= folders.Count; depth++)
+            {
+                var parent = folders.Take(depth).ToList();
+                var choices = craftTabChoices.Where(tab => tab.Folders.Take(depth).SequenceEqual(parent)).ToList();
+                ImGui.SetNextItemWidth(-1);
+                if (!ImGui.BeginCombo("##path" + depth, depth < folders.Count ? folders[depth] :
+                    selected?.Name ?? PluginText.T("stashutility.craft.choose", "Choose..."))) continue;
+                foreach (var folder in choices.Where(tab => tab.Folders.Count > depth).Select(tab => tab.Folders[depth]).Distinct())
+                    if (ImGui.Selectable(folder + " /##folder"))
+                    {
+                        folders.RemoveRange(depth, folders.Count - depth);
+                        folders.Add(folder); selected = null;
+                    }
+                foreach (var tab in choices.Where(tab => tab.Folders.Count == depth))
+                    if (ImGui.Selectable(tab.Name + "##tab", selected == tab))
+                    {
+                        folders.RemoveRange(depth, folders.Count - depth);
+                        selected = tab;
+                    }
+                ImGui.EndCombo();
+            }
+            ImGui.PopID();
+        }
+
+        private string[] CraftSelectionPageNames()
+        {
+            if (craftSelectedSource != null && craftSelectedTier is >= 0 and < 16 &&
+                CraftUiChildren(ResolvePath(craftSelectedSource.Page, new[] { 0, 1 }), 16, out var tiers) &&
+                TryReadStashEntries(ResolvePath(tiers[craftSelectedTier], new[] { 0 }), out var pages) && pages.Count == 6)
+                return pages.Select(page => page.name).ToArray();
+            return Enumerable.Range(1, 6).Select(page => PluginText.F("stashutility.craft.page_choice", "Page {0} / 6", page)).ToArray();
+        }
+
+        private void DrawWaystoneCraftSelection()
+        {
+            if (!craftSelectionOpen) return;
+            if (waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0 || Core.IsSettingsMenuOpen ||
+                !InventoryToolbarHasFocus() || !TryGetCraftInventory(out _, out var stash) || stash != craftSelectionRoot)
+            {
+                craftSelectionOpen = false;
+                return;
+            }
+            var viewport = ImGui.GetMainViewport();
+            ImGui.SetNextWindowPos(viewport.Pos + viewport.Size / 2, ImGuiCond.Appearing, new Vector2(.5f));
+            ImGui.SetNextWindowSize(new Vector2(Math.Min(580, viewport.Size.X - 40), 0), ImGuiCond.Always);
+            bool start = false;
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow(PluginText.T("stashutility.craft.selection_title", "Auto-craft TP - stash selection") +
+                "##waystoneCraftSelection", ref craftSelectionOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoSavedSettings))
+                start = DrawWaystoneCraftSelectionContents();
+            ImGui.End();
+            if (start)
+            {
+                craftSelectionOpen = false;
+                BeginWaystoneCraft(craftSelectionFromInventory, selectedDestinations: true);
+            }
+        }
+
+        private bool DrawWaystoneCraftSelectionContents()
+        {
+            ImGui.TextWrapped(PluginText.T("stashutility.craft.selection_help", "Choose the waystone page and currency stash for this run. No crafting starts before confirmation."));
+            if (!craftSelectionFromInventory)
+            {
+                var previous = craftSelectedSource;
+                DrawCraftTabChoice(PluginText.T("stashutility.craft.source_choice", "Waystone stash"), ref craftSelectedSource, craftSourceFolders);
+                if (previous != craftSelectedSource) craftSelectedTier = craftSelectedPage = -1;
+                ImGui.BeginDisabled(craftSelectedSource == null);
+                ImGui.TextUnformatted(PluginText.T("stashutility.craft.tier_choice", "Waystone tier"));
+                ImGui.SetNextItemWidth(-1);
+                if (ImGui.Combo("##craftTier", ref craftSelectedTier, CraftTierNames, CraftTierNames.Length)) craftSelectedPage = -1;
+                ImGui.BeginDisabled(craftSelectedTier < 0);
+                ImGui.TextUnformatted(PluginText.T("stashutility.craft.subpage_choice", "Sub-tab (one of six)"));
+                ImGui.SetNextItemWidth(-1);
+                ImGui.Combo("##craftPage", ref craftSelectedPage, CraftSelectionPageNames(), 6);
+                ImGui.EndDisabled(); ImGui.EndDisabled();
+            }
+            DrawCraftTabChoice(PluginText.T("stashutility.craft.money_choice", "Currency stash"), ref craftSelectedMoney, craftMoneyFolders);
+            ImGui.TextWrapped(PluginText.T("stashutility.craft.selection_safety", "Keep one inventory cell free. After starting, keep the mouse still. Escape stops crafting."));
+            ImGui.BeginDisabled(craftSelectedMoney == null || !craftSelectionFromInventory &&
+                (craftSelectedSource == null || craftSelectedTier < 0 || craftSelectedPage < 0));
+            bool start = ImGui.Button(PluginText.T("stashutility.craft.start", "Start crafting"));
+            ImGui.EndDisabled();
+            ImGui.SameLine();
+            if (ImGui.Button(PluginText.T("stashutility.craft.cancel", "Cancel"))) craftSelectionOpen = false;
+            return start;
+        }
+
+        private void BeginWaystoneCraft(bool fromInventory = false, bool selectedDestinations = false)
         {
             if (waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0) return;
             craftSpent = craftDone = craftSkipped = 0;
             try
             {
                 craftFromInventory = fromInventory;
+                craftExplicitDestinations = selectedDestinations;
                 craftScanAttempted = craftScanCompleted = false;
                 craftLocalCurrency = craftCurrencyPending = false; craftCurrencyCell = null;
-                craftSource = craftMoney = null;
+                craftSource = selectedDestinations ? craftSelectedSource : null;
+                craftMoney = selectedDestinations ? craftSelectedMoney : null;
                 if (!TryGetCraftInventory(out affinityInventoryRoot, out affinityStashRoot) || Core.IsSettingsMenuOpen ||
                     ReadSortCursorItem() != IntPtr.Zero) throw CraftFailure("open_inventory", "Open the inventory with an empty cursor before starting.");
                 var page = affinityInventoryRoot;
+                if (selectedDestinations && (affinityStashRoot != craftSelectionRoot ||
+                    !TryDiscoverNamedStashTabs(affinityStashRoot, out var currentTabs) ||
+                    !currentTabs.Any(tab => tab.Page == craftMoney?.Page && tab.Name == craftMoney.Name && tab.Folders.SequenceEqual(craftMoney.Folders)) ||
+                    !fromInventory && !currentTabs.Any(tab => tab.Page == craftSource?.Page && tab.Name == craftSource.Name && tab.Folders.SequenceEqual(craftSource.Folders))))
+                    throw CraftFailure("selection_unavailable", "The stash tab names could not be read. Keep your personal stash open and try again.");
                 if (!fromInventory)
                 {
                     if (affinityStashRoot == IntPtr.Zero) throw CraftFailure("open", "Open your personal stash with an empty cursor before starting.");
                     page = FindSelectedStashPage(affinityStashRoot, allowDropdown: true);
-                    craftSource = FindCraftWaystoneTab(detectedStashTabs, page);
+                    if (selectedDestinations) page = craftSource.Page;
+                    else craftSource = FindCraftWaystoneTab(detectedStashTabs, page);
                 }
                 craftSourcePage = fromInventory ? IntPtr.Zero : page;
                 craftInventoryBefore.Clear(); craftInventoryBefore.AddRange(CraftInventory());
@@ -2386,7 +2526,7 @@ namespace StashUtility
                 {
                     CraftInventoryStone();
                     if (!CraftRequireCurrency()) return;
-                    craftLocalCurrency = CraftInventoryCurrency() != null;
+                    craftLocalCurrency = !craftExplicitDestinations && CraftInventoryCurrency() != null;
                     if (craftLocalCurrency || CraftNavigate(craftMoney)) craftPhase = 6;
                 }
                 else if (craftPhase == 6)
@@ -2486,6 +2626,7 @@ namespace StashUtility
                 {
                     if (!CraftInventoryUnchanged(CraftInventory())) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                     if (craftSource == null) throw CraftFailure("source", "No unique special waystone tab was identified. Open it once, then try again.");
+                    if (craftPages.Count == 0) { StopWaystoneCraft(); return; }
                     if (!CraftNavigate(craftSource)) return;
                     craftSourcePage = craftSource.Page;
                     craftPhase = 14;
@@ -4498,7 +4639,7 @@ namespace StashUtility
                 {
                     ImGui.SameLine();
                     ImGui.BeginDisabled(waystoneCraftRunning || affinityTransferRunning || sortRunning || stashScanQueue.Count > 0);
-                    if (ImGui.Button(PluginText.T("stashutility.craft.button", "Auto-craft TP"), new Vector2(128, 28))) BeginWaystoneCraft(true);
+                    if (ImGui.Button(PluginText.T("stashutility.craft.button", "Auto-craft TP"), new Vector2(128, 28))) RequestWaystoneCraft(true);
                     ImGui.EndDisabled();
                 }
                 if (Settings.ShowInventoryTransferButton)
@@ -4702,7 +4843,7 @@ namespace StashUtility
                 if (showCraft)
                 {
                     ImGui.BeginDisabled(waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0);
-                    if (ImGui.Button(PluginText.T("stashutility.craft.button", "Auto-craft TP"), new Vector2(128, 28))) BeginWaystoneCraft();
+                    if (ImGui.Button(PluginText.T("stashutility.craft.button", "Auto-craft TP"), new Vector2(128, 28))) RequestWaystoneCraft();
                     ImGui.EndDisabled();
                     ImGuiHelper.ToolTip(PluginText.T("stashutility.craft.button_help", "Craft visible waystones in the special stash tab using the currency tab detected by the stash scan. Leave one inventory cell free. Escape or mouse movement stops crafting. Settings: Filters > Waystones > Auto-crafting."));
                     ImGui.SameLine();
@@ -5102,15 +5243,22 @@ namespace StashUtility
         private void DiscoverSpecializedDestinations(IntPtr header)
         {
             // Resolve names only. Keep existing routes and None choices; do not rescan item contents.
-            var tabs = new List<DetectedStashTab>();
-            var visited = new HashSet<IntPtr>();
-            if (Read(header, new List<string>()))
+            if (TryDiscoverNamedStashTabs(header, out var tabs))
             {
                 int configured = Settings.TransferDestinations?.Count(pair => !string.IsNullOrWhiteSpace(pair.Value?.TabName)) ?? 0;
                 AutoConfigureSpecializedDestinations(tabs);
                 AutoConfigureEquipmentDestinations(tabs);
                 if (Settings.TransferDestinations.Count(pair => !string.IsNullOrWhiteSpace(pair.Value?.TabName)) > configured) SaveSettings();
             }
+        }
+
+        private bool TryDiscoverNamedStashTabs(IntPtr header, out List<DetectedStashTab> result)
+        {
+            var tabs = new List<DetectedStashTab>();
+            var visited = new HashSet<IntPtr>();
+            bool success = Read(header, new List<string>());
+            result = success ? tabs : new List<DetectedStashTab>();
+            return success;
             bool Read(IntPtr current, List<string> folders)
             {
                 if (folders.Count > 8 || !visited.Add(current) || visited.Count > 256 ||
@@ -5444,6 +5592,7 @@ namespace StashUtility
             UpdateWaystoneCraft();
             DrawInventoryTransferButton();
             DrawStashSortButton();
+            DrawWaystoneCraftSelection();
             DrawWaystoneCraftFeedback();
             DrawAffinityTransferFeedback();
             UpdateStashScan();
