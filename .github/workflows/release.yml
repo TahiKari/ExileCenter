@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag existant à compiler (ex. v1.5.11-personnalise.1)'
+        description: 'Tag existant à compiler (ex. v1.6.0)'
         required: true
         type: string
       draft:
@@ -103,8 +103,11 @@ jobs:
           $runtime = Join-Path $PWD 'ExileCenter/bin/Release/net10.0-windows/win-x64'
           $output = Join-Path $env:RUNNER_TEMP 'exilecenter-release'
           $version = $env:RELEASE_TAG.TrimStart('v')
-          if ($env:RELEASE_TAG -match '-personnalise\.(\d+)$') { $version = '1.' + [Math]::Max(0, [int]$Matches[1] - 5) }
-          $releaseName = "ExileCenter P-V$version"
+          $releaseName = "ExileCenter $version"
+          if ($env:RELEASE_TAG -match '-personnalise\.(\d+)$') {
+            $version = '1.' + [Math]::Max(0, [int]$Matches[1] - 5)
+            $releaseName = "ExileCenter P-V$version"
+          }
           "RELEASE_NAME=$releaseName" >> $env:GITHUB_ENV
           & ./scripts/publish.ps1 -LocalUpdate -SkipBuild -LocalSource $runtime -LocalDestination $output -LocalLabel $releaseName -Version $env:RELEASE_TAG -Changelog 'ExileCenter : consulter les notes de cette Release.'
           $manifest = Get-Content "$output/ExileCenter-Maj.json" -Raw | ConvertFrom-Json

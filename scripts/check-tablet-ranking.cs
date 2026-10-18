@@ -1744,7 +1744,7 @@ internal static class TabletRankingCheck
                             cursor.Y-imageStart.Y-imageWidth*(48f/1672)*1.35f<=4&&imageStart.Y+imageHeight-imageWidth*(52f/1672)-cursor.Y-available.Y<=4,
                             "Settings content stays within four pixels of every protected ornamental border: "+windowSize);
                     }
-                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.65");ImGuiNET.ImGui.EndMenuBar();}
+                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter 1.6.0");ImGuiNET.ImGui.EndMenuBar();}
                     ImGuiNET.ImGui.BeginChild("Navigation",new Vector2(Math.Min(220,ImGuiNET.ImGui.GetContentRegionAvail().X*.3f),0),ImGuiNET.ImGuiChildFlags.Borders);
                     foreach(var label in new[]{"Application","General","Plugins","Mises a jour","Plugins actifs","Auto-craft TP"})ImGuiNET.ImGui.Selectable(label,label=="Plugins");
                     ImGuiNET.ImGui.EndChild();ImGuiNET.ImGui.SameLine();

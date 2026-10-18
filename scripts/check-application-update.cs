@@ -75,12 +75,47 @@ internal static partial class UpdateChecks
         if (args.Contains("--wait-owner")) { await Task.Delay(2500); return 0; }
         if (args.Length == 2 && args[0] == "--camera-zoom") { CameraZoomSettingsCheck(args[1]); return 0; }
         if (args.Contains("--onedrive")) { await RunOneDriveChecks(); return 0; }
+        if (args.Length == 3 && args[0] == "--release-numbering") { ReleaseNumberingCheck(args[1], args[2]); return 0; }
         if (args.Length == 2 && args[0] == "--transition-package") { TransitionPackageCheck(args[1]); return 0; }
         if (args.Contains("--version-only")) { var tag = Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, "ExileCenter.dll")).GetCustomAttributes<AssemblyMetadataAttribute>().Single(a => a.Key == "ExileCenterReleaseTag").Value; Check(tag == "v1.5.11-personnalise.39", "CI binary embeds the published release tag"); return 0; }
         if (args.Length == 4 && args[0] == "--brand-migration") { await BrandMigration(args[1], args[2], args[3]); return 0; }
         if (args.Contains("--public-package")) await PublicPackageCheck(); else await RunChecks();
         return 0;
     }
+    static void ReleaseNumberingCheck(string runtime, string previousRuntime)
+    {
+        var current = Assembly.LoadFrom(Path.Combine(Path.GetFullPath(runtime), "ExileCenter.dll"));
+        var type = current.GetType("ExileCenter.LocalUpdates", true)!;
+        Check(current.GetName().Version == new Version(1, 6, 0, 0), "binary version matches 1.6.0");
+        Check(current.GetCustomAttributes<AssemblyMetadataAttribute>().Single(a => a.Key == "ExileCenterReleaseTag").Value == "v1.6.0", "binary embeds the stable release tag");
+        Check((string)type.GetProperty("InstalledVersion", PrivateStatic)!.GetValue(null)! == "1.6.0", "application displays the three-part version without P-V");
+        var display = type.GetMethod("DisplayVersion", PrivateStatic)!;
+        foreach (var version in new[] { "1.6.0", "1.6.1", "1.7.0", "2.0.0" })
+            Check((string)display.Invoke(null, new object[] { "v" + version })! == version, "stable display format: " + version);
+        Check((string)display.Invoke(null, new object[] { "v1.5.11-personnalise.70" })! == "P-V1.65", "historical releases retain their original label");
+        using var release = JsonDocument.Parse(JsonSerializer.Serialize(new {
+            draft = false, prerelease = false, tag_name = "v1.6.0", name = "ExileCenter 1.6.0", body = "Nouvelle numérotation",
+            assets = new[] { new { name = "ExileCenter-Complete-win-x64.zip", state = "uploaded", size = 1024,
+                digest = "sha256:" + new string('a', 64), browser_download_url = "https://github.com/TahiKari/ExileCenter/releases/download/v1.6.0/ExileCenter-Complete-win-x64.zip" } }
+        }));
+        var parse = type.GetMethod("ParseGitHubRelease", PrivateStatic)!;
+        object? Parse(MethodInfo method, string installed) => method.Invoke(null, new object[] { release.RootElement, installed });
+        var offer = Parse(parse, "v1.5.11-personnalise.70");
+        Check(offer != null, "stable 1.6.0 is newer than the previous custom release");
+        Check(Parse(parse, "v1.6.0") == null && Parse(parse, "v1.6.1") == null, "same or newer stable installation is never downgraded");
+        var title = (string)type.GetMethod("UpdateTitle", PrivateStatic)!.Invoke(null, new[] { offer })!;
+        Check(title.StartsWith("ExileCenter 1.6.0"), "update window uses the same professional version label");
+        var legacyContext = new System.Runtime.Loader.AssemblyLoadContext("PreviousUpdaterNumbering", isCollectible: true);
+        try
+        {
+            var previous = legacyContext.LoadFromAssemblyPath(Path.Combine(Path.GetFullPath(previousRuntime), "ExileCenter.dll"));
+            var legacyParse = previous.GetType("ExileCenter.LocalUpdates", true)!.GetMethod("ParseGitHubRelease", PrivateStatic)!;
+            Check(Parse(legacyParse, "v1.5.11-personnalise.70") != null, "unmodified P-V1.65 updater detects and accepts stable 1.6.0");
+        }
+        finally { legacyContext.Unload(); }
+        Console.WriteLine(passed + " release numbering and update compatibility checks passed.");
+    }
+
     static void CameraZoomSettingsCheck(string runtime)
     {
         runtime = Path.GetFullPath(runtime);

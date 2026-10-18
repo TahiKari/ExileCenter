@@ -345,7 +345,7 @@ namespace ExileCenter
             if (version == null) return null;
             return tag!.Contains("-personnalise.", StringComparison.Ordinal)
                 ? "P-V1." + Math.Max(0, version.Revision - 5)
-                : "v" + version.ToString(3);
+                : version.ToString(3);
         }
 
         private static string UpdateTitle(Package package)
