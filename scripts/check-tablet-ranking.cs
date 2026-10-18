@@ -1397,7 +1397,11 @@ internal static class TabletRankingCheck
             unsafe { io.NativePtr->IniFilename = null; }
             io.DisplaySize = new Vector2(1280, 960); io.DeltaTime = 1f / 60;
             io.Fonts.AddFontDefault();
+            var headingFonts = typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Utils.UniversalFont");
+            headingFonts.GetMethod("AddHeadingFont", flags).Invoke(null, new object[] { io.Fonts });
             io.Fonts.GetTexDataAsRGBA32(out IntPtr atlas, out int atlasWidth, out int atlasHeight, out int bytes);
+            Check(io.Fonts.Fonts.Size == 2 && io.Fonts.Fonts[0].FontSize == 13,
+                "The serif heading font is separate from the unchanged body font");
             io.Fonts.SetTexID(new IntPtr(1));
             var pixels = new byte[atlasWidth * atlasHeight * bytes]; Marshal.Copy(atlas, pixels, 0, pixels.Length);
             typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("Apply", flags).Invoke(null, null);
@@ -1534,8 +1538,8 @@ internal static class TabletRankingCheck
                 Check(drawn==(panelFlags==ImGuiNET.ImGuiWindowFlags.None),"The textured skin excludes transparent and input-free overlays: "+panelFlags);
                 var contentClip=list.CmdBuffer[list.CmdBuffer.Size-1].ClipRect;
                 Check(drawn?contentClip.X>=oldClip.X&&contentClip.Z<=oldClip.Z&&contentClip.W<=oldClip.W&&contentClip.Y>=oldClip.Y&&
-                    contentClip.Y>=ImGuiNET.ImGui.GetWindowPos().Y+ImGuiNET.ImGui.GetWindowWidth()*(56f/1672)&&
-                    contentClip.W<=ImGuiNET.ImGui.GetWindowPos().Y+ImGuiNET.ImGui.GetWindowHeight()-ImGuiNET.ImGui.GetWindowWidth()*(56f/1672):contentClip==oldClip,
+                    contentClip.Y>=ImGuiNET.ImGui.GetWindowPos().Y+ImGuiNET.ImGui.GetWindowWidth()*(48f/1672)*1.35f&&
+                    contentClip.W<=ImGuiNET.ImGui.GetWindowPos().Y+ImGuiNET.ImGui.GetWindowHeight()-ImGuiNET.ImGui.GetWindowWidth()*(52f/1672):contentClip==oldClip,
                     "Content clipping protects the cartouche and carved borders: "+panelFlags);
                 Check(drawn?ImGuiNET.ImGui.GetCursorScreenPos().Y>=oldCursor.Y:ImGuiNET.ImGui.GetCursorScreenPos()==oldCursor,
                     "Only opaque titled windows reserve space for their gold cartouche: "+panelFlags);
@@ -1624,10 +1628,10 @@ internal static class TabletRankingCheck
                                 Check(vertices.All(v=>v.col==0xffffffff),"The original frame colors have no tint or opacity modification: "+windowSize);
                                 artworkMin=Vector2.Min(artworkMin,new Vector2(vertices.Min(v=>v.pos.X),vertices.Min(v=>v.pos.Y)));
                                 artworkMax=Vector2.Max(artworkMax,new Vector2(vertices.Max(v=>v.pos.X),vertices.Max(v=>v.pos.Y)));
-                                if(du>.5f&&Math.Abs(vertices.Min(v=>v.uv.Y))<.0001f&&Math.Abs(dv-54f/941)<.0001f)
+                                if(du>.5f&&Math.Abs(vertices.Min(v=>v.uv.Y))<.0001f&&Math.Abs(dv-48f/941)<.0001f)
                                 {
                                     headerTriangles++;
-                                    Check(Math.Abs(dx-imageWidth*(1592f/1672))<1&&Math.Abs(dy-imageWidth*(54f/1672)*1.35f)<1,
+                                    Check(Math.Abs(dx-imageWidth*(1592f/1672))<1&&Math.Abs(dy-imageWidth*(48f/1672)*1.35f)<1,
                                         "The upper frieze is enlarged uniformly by 35 percent between the unchanged pillars: "+windowSize);
                                 }
                                 if(Math.Abs(du-1)<.0001f&&Math.Abs(vertices.Min(v=>v.uv.Y)-875f/941)<.0001f&&Math.Abs(vertices.Max(v=>v.uv.Y)-1)<.0001f)footerTriangles++;
@@ -1643,13 +1647,13 @@ internal static class TabletRankingCheck
                         var cursor=ImGuiNET.ImGui.GetCursorScreenPos();var available=ImGuiNET.ImGui.GetContentRegionAvail();
                         Check(cursor.X>=imageStart.X+imageWidth*(40f/1672)-1&&cursor.X+available.X<=imageStart.X+imageWidth*(1-40f/1672)+1,
                             "Content and fill-width controls fit between the proportional pillars: "+windowSize);
-                        Check(cursor.Y>=imageStart.Y+imageWidth*(54f/1672)*1.35f&&cursor.Y+available.Y<=imageStart.Y+imageHeight-imageWidth*(56f/1672)+1,
+                        Check(cursor.Y>=imageStart.Y+imageWidth*(48f/1672)*1.35f&&cursor.Y+available.Y<=imageStart.Y+imageHeight-imageWidth*(52f/1672)+1,
                             "The work rectangle reserves both the cartouche and the carved footer: "+windowSize);
-                        Check(cursor.X-imageStart.X-imageWidth*(40f/1672)<=8&&imageStart.X+imageWidth*(1-40f/1672)-cursor.X-available.X<=8&&
-                            cursor.Y-imageStart.Y-imageWidth*(54f/1672)*1.35f<=8&&imageStart.Y+imageHeight-imageWidth*(56f/1672)-cursor.Y-available.Y<=8,
-                            "Settings content stays within eight pixels of every protected ornamental border: "+windowSize);
+                        Check(cursor.X-imageStart.X-imageWidth*(40f/1672)<=4&&imageStart.X+imageWidth*(1-40f/1672)-cursor.X-available.X<=4&&
+                            cursor.Y-imageStart.Y-imageWidth*(48f/1672)*1.35f<=4&&imageStart.Y+imageHeight-imageWidth*(52f/1672)-cursor.Y-available.Y<=4,
+                            "Settings content stays within four pixels of every protected ornamental border: "+windowSize);
                     }
-                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.62");ImGuiNET.ImGui.EndMenuBar();}
+                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.63");ImGuiNET.ImGui.EndMenuBar();}
                     ImGuiNET.ImGui.BeginChild("Navigation",new Vector2(Math.Min(220,ImGuiNET.ImGui.GetContentRegionAvail().X*.3f),0),ImGuiNET.ImGuiChildFlags.Borders);
                     foreach(var label in new[]{"Application","General","Plugins","Mises a jour","Plugins actifs","Auto-craft TP"})ImGuiNET.ImGui.Selectable(label,label=="Plugins");
                     ImGuiNET.ImGui.EndChild();ImGuiNET.ImGui.SameLine();

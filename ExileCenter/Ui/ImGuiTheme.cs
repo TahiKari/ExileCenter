@@ -24,10 +24,10 @@ namespace ExileCenter.Ui
         private const float FrameWidth = 1672f;
         private const float FrameHeight = 941f;
         private const float HeaderZoom = 1.35f;
-        private const float SettingsFrameGap = 6f;
+        private const float SettingsFrameGap = 2f;
         private const float FrameEdge = 40f / FrameWidth;
-        private const float FrameHeader = 54f * HeaderZoom / FrameWidth;
-        private const float FrameFooter = 56f / FrameWidth;
+        private const float FrameHeader = 48f * HeaderZoom / FrameWidth;
+        private const float FrameFooter = 52f / FrameWidth;
         private static readonly Dictionary<(IntPtr Context, string Name), Vector2> frameSizes = new();
 
         internal static bool BeginSettingsWindow(string name, ref bool open, ImGuiWindowFlags flags)
@@ -151,12 +151,15 @@ namespace ExileCenter.Ui
             DrawFrameArtwork(draw, position, imageSize);
             if (heading)
             {
-                var font = ImGui.GetFont();
-                float fontSize = Math.Min(header * .30f, Math.Max(ImGui.GetFontSize() * 1.10f, imageSize.X * .014f));
+                var font = forceHeading && Utils.UniversalFont.HeadingFontLoaded
+                    ? Utils.UniversalFont.HeadingFont : ImGui.GetFont();
+                float fontSize = Math.Min(header * .34f, Math.Max(ImGui.GetFontSize() * 1.10f, imageSize.X * .014f));
                 float width = scale * .11f * HeaderZoom;
+                ImGui.PushFont(font);
                 var measured = ImGui.CalcTextSize(title) * (fontSize / ImGui.GetFontSize());
+                ImGui.PopFont();
                 if (measured.X > width) { fontSize *= width / measured.X; measured *= width / measured.X; }
-                var center = position + new Vector2(imageSize.X / 2, header * (26f / 54f));
+                var center = position + new Vector2(imageSize.X / 2, header * (26f / 48f));
                 draw.AddText(font, fontSize, center - measured / 2 + Vector2.One,
                     ImGui.GetColorU32(new Vector4(.87f, .76f, .48f, 1)), title);
                 draw.AddText(font, fontSize, center - measured / 2,
@@ -223,7 +226,7 @@ namespace ExileCenter.Ui
                     sourceMin / sourceSize, sourceMax / sourceSize, 0xffffffff);
             }
 
-            float headerSourceHeight = 54 * HeaderZoom;
+            float headerSourceHeight = 48 * HeaderZoom;
             float top = headerSourceHeight * scale;
             float footer = 66 * scale;
             float shaftEnd = size.Y - footer;
@@ -241,7 +244,7 @@ namespace ExileCenter.Ui
             float visibleHeaderWidth = 1592 / HeaderZoom;
             float headerStart = (FrameWidth - visibleHeaderWidth) / 2;
             draw.AddImage(frameTexture, position + new Vector2(edge, 0), position + new Vector2(size.X - edge, top),
-                new Vector2(headerStart, 0) / sourceSize, new Vector2(headerStart + visibleHeaderWidth, 54) / sourceSize, 0xffffffff);
+                new Vector2(headerStart, 0) / sourceSize, new Vector2(headerStart + visibleHeaderWidth, 48) / sourceSize, 0xffffffff);
             Patch(position, Vector2.Zero, new Vector2(40, headerSourceHeight));
             Patch(position + new Vector2(size.X - edge, 0), new Vector2(1632, 0), new Vector2(1672, headerSourceHeight));
             Patch(position + new Vector2(0, size.Y - footer), new Vector2(0, 875), sourceSize);

@@ -30,6 +30,19 @@ namespace ExileCenter.Utils
         // atlas is built (on the render thread), so the array must stay pinned for the app lifetime.
         private static readonly ushort[] FullBmpRange = { 0x0020, 0xFFFF, 0x0000 };
         private static GCHandle rangeHandle;
+        internal static ImFontPtr HeadingFont { get; private set; }
+        internal static bool HeadingFontLoaded { get; private set; }
+
+        internal static void AddHeadingFont(ImFontAtlasPtr fonts)
+        {
+            HeadingFontLoaded = false;
+            var folder = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+            var path = Path.Combine(folder, "georgiab.ttf");
+            if (!File.Exists(path)) path = Path.Combine(folder, "palab.ttf");
+            if (!File.Exists(path)) return;
+            HeadingFont = fonts.AddFontFromFileTTF(path, 32);
+            HeadingFontLoaded = true;
+        }
 
         /// <summary>
         ///     Loads the universal font when <see cref="ExileCenter.Settings.State.UniversalFont"/> is
@@ -55,21 +68,29 @@ namespace ExileCenter.Utils
         /// <summary>
         ///     Loads the normally-configured GH font (honouring the custom glyph range when set).
         /// </summary>
-        public static void ApplyConfigured()
+        public static unsafe void ApplyConfigured()
         {
             if (Core.Overlay == null)
             {
                 return;
             }
 
-            if (MiscHelper.TryConvertStringToImGuiGlyphRanges(Core.GHSettings.FontCustomGlyphRange, out var glyphRanges))
+            var path = Core.GHSettings.FontPathName;
+            if (!File.Exists(path)) return;
+            var size = Core.GHSettings.FontSize;
+            var language = Core.GHSettings.FontLanguage;
+            bool custom = MiscHelper.TryConvertStringToImGuiGlyphRanges(Core.GHSettings.FontCustomGlyphRange, out var glyphRanges);
+            Core.Overlay.ReplaceFont(cfg =>
             {
-                Core.Overlay.ReplaceFont(Core.GHSettings.FontPathName, Core.GHSettings.FontSize, glyphRanges);
-            }
-            else
-            {
-                Core.Overlay.ReplaceFont(Core.GHSettings.FontPathName, Core.GHSettings.FontSize, Core.GHSettings.FontLanguage);
-            }
+                var fonts = ImGui.GetIO().Fonts;
+                if (custom)
+                {
+                    fixed (ushort* ranges = glyphRanges)
+                        fonts.AddFontFromFileTTF(path, size, cfg, (IntPtr)ranges);
+                }
+                else fonts.AddFontFromFileTTF(path, size, cfg, RangeFor(fonts, language));
+                AddHeadingFont(fonts);
+            });
         }
 
         private static unsafe void Apply()
@@ -145,6 +166,7 @@ namespace ExileCenter.Utils
                 }
 
                 cfg.MergeMode = false;
+                AddHeadingFont(fonts);
             });
         }
 
