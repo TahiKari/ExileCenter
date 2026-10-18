@@ -1504,8 +1504,8 @@ internal static class TabletRankingCheck
                                 for(int offset=0;offset<command.ElemCount;offset+=3)
                                 {
                                     var vertices=Enumerable.Range(0,3).Select(i=>list.VtxBuffer[(int)command.VtxOffset+list.IdxBuffer[(int)command.IdxOffset+offset+i]]).ToArray();
-                                    if(vertices.Min(v=>v.uv.X)==0&&vertices.Min(v=>v.uv.Y)==0&&vertices.Max(v=>v.uv.X)==1&&vertices.Max(v=>v.uv.Y)==1)
-                                        bounds=new Vector4(vertices.Min(v=>v.pos.X),vertices.Min(v=>v.pos.Y),vertices.Max(v=>v.pos.X),vertices.Max(v=>v.pos.Y));
+                                    var patchBounds=new Vector4(vertices.Min(v=>v.pos.X),vertices.Min(v=>v.pos.Y),vertices.Max(v=>v.pos.X),vertices.Max(v=>v.pos.Y));
+                                    bounds=bounds==Vector4.Zero?patchBounds:new Vector4(Math.Min(bounds.X,patchBounds.X),Math.Min(bounds.Y,patchBounds.Y),Math.Max(bounds.Z,patchBounds.Z),Math.Max(bounds.W,patchBounds.W));
                                 }
                             }
                         }
@@ -1599,12 +1599,13 @@ internal static class TabletRankingCheck
                     if(frame==5)
                     {
                         var list=ImGuiNET.ImGui.GetWindowDrawList();
-                        int wholeImageTriangles=0;
+                        int artworkTriangles=0,headerTriangles=0,footerTriangles=0;
+                        var artworkMin=new Vector2(float.MaxValue);var artworkMax=new Vector2(float.MinValue);
                         var viewport=windowSize;
                         float menuHeight=ImGuiNET.ImGui.GetFrameHeight();
-                        float imageHeight=Math.Min(viewport.Y-menuHeight,viewport.X*framePreviewHeight/framePreviewWidth);
-                        float imageWidth=imageHeight*framePreviewWidth/framePreviewHeight;
-                        var imageStart=new Vector2((viewport.X-imageWidth)/2,menuHeight+(viewport.Y-menuHeight-imageHeight)/2);
+                        float imageHeight=viewport.Y-menuHeight;
+                        float imageWidth=viewport.X;
+                        var imageStart=new Vector2(0,menuHeight);
                         foreach(int commandIndex in Enumerable.Range(0,list.CmdBuffer.Size))
                         {
                             var command=list.CmdBuffer[commandIndex];if(command.TextureId!=new IntPtr(2))continue;
@@ -1615,27 +1616,29 @@ internal static class TabletRankingCheck
                                 float du=vertices.Max(v=>v.uv.X)-vertices.Min(v=>v.uv.X),dv=vertices.Max(v=>v.uv.Y)-vertices.Min(v=>v.uv.Y);
                                 if(dx>.1f&&dy>.1f&&du>.0001f&&dv>.0001f)
                                     Check(Math.Abs(dx/du/framePreviewWidth-dy/dv/framePreviewHeight)<.0002f,"Every artwork patch retains its original pixel aspect ratio: "+windowSize);
-                                Check(Math.Abs(du-1)<.0001f&&Math.Abs(dv-1)<.0001f&&
-                                    vertices.Min(v=>v.uv.X)==0&&vertices.Min(v=>v.uv.Y)==0,
-                                    "The frame samples the entire original image with no crops or repeated sections: "+windowSize);
+                                Check(vertices.All(v=>v.uv.X>=0&&v.uv.X<=1&&v.uv.Y>=0&&v.uv.Y<=1),
+                                    "Adaptive frame samples stay inside the chosen image: "+windowSize);
                                 Check(vertices.All(v=>v.col==0xffffffff),"The original frame colors have no tint or opacity modification: "+windowSize);
-                                Check(Math.Abs(vertices.Min(v=>v.pos.X)-imageStart.X)<1&&Math.Abs(vertices.Min(v=>v.pos.Y)-imageStart.Y)<1&&
-                                    Math.Abs(dx-imageWidth)<1&&Math.Abs(dy-imageHeight)<1,
-                                    "The original frame fits centered inside the viewport with proportional margins: "+windowSize);
+                                artworkMin=Vector2.Min(artworkMin,new Vector2(vertices.Min(v=>v.pos.X),vertices.Min(v=>v.pos.Y)));
+                                artworkMax=Vector2.Max(artworkMax,new Vector2(vertices.Max(v=>v.pos.X),vertices.Max(v=>v.pos.Y)));
+                                if(Math.Abs(du-1)<.0001f&&Math.Abs(vertices.Min(v=>v.uv.Y))<.0001f&&Math.Abs(dv-112f/941)<.0001f)headerTriangles++;
+                                if(Math.Abs(du-1)<.0001f&&Math.Abs(vertices.Min(v=>v.uv.Y)-790f/941)<.0001f&&Math.Abs(vertices.Max(v=>v.uv.Y)-1)<.0001f)footerTriangles++;
                                 Check(vertices.All(v=>v.pos.X>=command.ClipRect.X-.01f&&v.pos.X<=command.ClipRect.Z+.01f&&
                                     v.pos.Y>=command.ClipRect.Y-.01f&&v.pos.Y<=command.ClipRect.W+.01f),
                                     "No image edge or corner is clipped, including beside native scrollbars: "+windowSize);
-                                wholeImageTriangles++;
+                                artworkTriangles++;
                             }
                         }
-                        Check(wholeImageTriangles==2,"Exactly one full original image is rendered, with no sliced or tiled artwork: "+windowSize);
+                        Check(artworkTriangles>=10&&headerTriangles==2&&footerTriangles==2,"Complete header and footer each span the full width once, with preserved corners: "+windowSize);
+                        Check(Vector2.Distance(artworkMin,imageStart)<1&&Vector2.Distance(artworkMax,imageStart+new Vector2(imageWidth,imageHeight))<1,
+                            "Artwork fills all viewport edges without black lateral margins: "+windowSize);
                         var cursor=ImGuiNET.ImGui.GetCursorScreenPos();var available=ImGuiNET.ImGui.GetContentRegionAvail();
-                        Check(cursor.X>=imageStart.X+imageWidth*.068f-1&&cursor.X+available.X<=imageStart.X+imageWidth*(1-.068f)+1,
+                        Check(cursor.X>=imageStart.X+imageWidth*(80f/1672)-1&&cursor.X+available.X<=imageStart.X+imageWidth*(1-80f/1672)+1,
                             "Content and fill-width controls fit between the proportional pillars: "+windowSize);
-                        Check(cursor.Y>=imageStart.Y+imageHeight*.16f&&cursor.Y+available.Y<=imageStart.Y+imageHeight*(1-.15f)+1,
+                        Check(cursor.Y>=imageStart.Y+imageWidth*(112f/1672)&&cursor.Y+available.Y<=imageStart.Y+imageHeight-imageWidth*(111f/1672)+1,
                             "The work rectangle reserves both the cartouche and the carved footer: "+windowSize);
                     }
-                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.58");ImGuiNET.ImGui.EndMenuBar();}
+                    if(ImGuiNET.ImGui.BeginMenuBar()){ImGuiNET.ImGui.MenuItem("ExileCenter P-V1.59");ImGuiNET.ImGui.EndMenuBar();}
                     ImGuiNET.ImGui.BeginChild("Navigation",new Vector2(Math.Min(220,ImGuiNET.ImGui.GetContentRegionAvail().X*.3f),0),ImGuiNET.ImGuiChildFlags.Borders);
                     foreach(var label in new[]{"Application","General","Plugins","Mises a jour","Plugins actifs","Auto-craft TP"})ImGuiNET.ImGui.Selectable(label,label=="Plugins");
                     ImGuiNET.ImGui.EndChild();ImGuiNET.ImGui.SameLine();

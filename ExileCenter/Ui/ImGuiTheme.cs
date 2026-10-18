@@ -21,10 +21,11 @@ namespace ExileCenter.Ui
         private static Vector2 backgroundSize;
         private static bool frameLoaded;
         private static IntPtr frameTexture;
-        private const float FrameAspect = 1672f / 941f;
-        private const float FrameEdge = .068f;
-        private const float FrameHeader = .16f;
-        private const float FrameFooter = .15f;
+        private const float FrameWidth = 1672f;
+        private const float FrameHeight = 941f;
+        private const float FrameEdge = 80f / FrameWidth;
+        private const float FrameHeader = 112f / FrameWidth;
+        private const float FrameFooter = 111f / FrameWidth;
         private static readonly Dictionary<(IntPtr Context, string Name), Vector2> frameSizes = new();
 
         internal static bool BeginSettingsWindow(string name, ref bool open, ImGuiWindowFlags flags)
@@ -84,10 +85,7 @@ namespace ExileCenter.Ui
         {
             float menu = (flags & ImGuiWindowFlags.MenuBar) == 0 ? 0 :
                 ImGui.GetFrameHeight() * ((flags & ImGuiWindowFlags.NoTitleBar) == 0 ? 2 : 1);
-            var available = viewport - new Vector2(0, menu);
-            float height = Math.Max(1, Math.Min(available.Y, available.X / FrameAspect));
-            var image = new Vector2(height * FrameAspect, height);
-            return ((available - image) / 2 + new Vector2(0, menu), image);
+            return (new Vector2(0, menu), Vector2.Max(Vector2.One, viewport - new Vector2(0, menu)));
         }
 
         private static float PushFramePadding(string name, ImGuiWindowFlags flags, bool forceHeading = false)
@@ -102,7 +100,7 @@ namespace ExileCenter.Ui
                 var frame = FrameLayout(size, flags);
                 scale = frame.Size.X;
                 padding = new Vector2(frame.Offset.X + frame.Size.X * FrameEdge,
-                    size.Y - frame.Offset.Y - frame.Size.Y + frame.Size.Y * FrameFooter);
+                    size.Y - frame.Offset.Y - frame.Size.Y + frame.Size.X * FrameFooter);
             }
             // Begin caches this padding in the window's work rectangle. Restore the style
             // immediately afterwards so children and controls keep their normal spacing.
@@ -142,23 +140,21 @@ namespace ExileCenter.Ui
             var end = position + imageSize;
             var windowEnd = ImGui.GetWindowPos() + size;
             scale = imageSize.X;
-            float header = imageSize.Y * FrameHeader;
+            float header = imageSize.X * FrameHeader;
             float edge = imageSize.X * FrameEdge;
-            float bottom = imageSize.Y * FrameFooter;
-            if (end.Y - position.Y < header + bottom + 12) return false;
+            float bottom = imageSize.X * FrameFooter;
+            if (end.Y - position.Y < header + imageSize.X * (151f / FrameWidth) + 12) return false;
             var draw = ImGui.GetWindowDrawList();
             draw.PushClipRect(position, end, false);
-            // Render the original image once, in full and without tint, crops or repeated
-            // sections. Letterboxing preserves every detail when window aspect ratios differ.
-            draw.AddImage(frameTexture, position, end, Vector2.Zero, Vector2.One, 0xffffffff);
+            DrawFrameArtwork(draw, position, imageSize);
             if (heading)
             {
                 var font = ImGui.GetFont();
-                float fontSize = Math.Max(ImGui.GetFontSize() * 1.10f, imageSize.Y * .025f);
-                float width = scale * .28f;
+                float fontSize = Math.Min(header * .24f, Math.Max(ImGui.GetFontSize() * 1.10f, imageSize.X * .014f));
+                float width = scale * .22f;
                 var measured = ImGui.CalcTextSize(title) * (fontSize / ImGui.GetFontSize());
                 if (measured.X > width) { fontSize *= width / measured.X; measured *= width / measured.X; }
-                var center = position + new Vector2(imageSize.X / 2, header * .575f);
+                var center = position + new Vector2(imageSize.X / 2, header * (59f / 112f));
                 draw.AddText(font, fontSize, center - measured / 2 + Vector2.One,
                     ImGui.GetColorU32(new Vector4(.87f, .76f, .48f, 1)), title);
                 draw.AddText(font, fontSize, center - measured / 2,
@@ -202,6 +198,43 @@ namespace ExileCenter.Ui
                     new Vector2(Math.Min(clip.Z, end.X - edge), Math.Min(clip.W, end.Y - bottom)), false);
             }
             return true;
+        }
+
+        private static void DrawFrameArtwork(ImDrawListPtr draw, Vector2 position, Vector2 size)
+        {
+            var sourceSize = new Vector2(FrameWidth, FrameHeight);
+            float scale = size.X / FrameWidth;
+            // Keep the full header and footer at the same uniform scale as their corners.
+            // Only the stone and the length of the shafts adapt to the window's aspect ratio.
+            var stoneMin = new Vector2(80, 112);
+            var stoneSize = new Vector2(1512, 718);
+            float cover = Math.Max(size.X / stoneSize.X, size.Y / stoneSize.Y);
+            var visibleStone = size / cover;
+            var stoneStart = stoneMin + (stoneSize - visibleStone) / 2;
+            draw.AddImage(frameTexture, position, position + size,
+                stoneStart / sourceSize, (stoneStart + visibleStone) / sourceSize, 0xffffffff);
+
+            void Patch(Vector2 start, Vector2 sourceMin, Vector2 sourceMax)
+            {
+                draw.AddImage(frameTexture, start, start + Vector2.Abs(sourceMax - sourceMin) * scale,
+                    sourceMin / sourceSize, sourceMax / sourceSize, 0xffffffff);
+            }
+
+            float top = 112 * scale;
+            float footer = 151 * scale;
+            float shaftEnd = size.Y - footer;
+            float tileHeight = 678 * scale;
+            for (float y = top; y < shaftEnd; y += tileHeight)
+            {
+                float height = Math.Min(tileHeight, shaftEnd - y) / scale;
+                bool reverse = ((int)Math.Round((y - top) / tileHeight) & 1) != 0;
+                float first = reverse ? 790 : 112;
+                float last = first + (reverse ? -height : height);
+                Patch(position + new Vector2(0, y), new Vector2(0, first), new Vector2(80, last));
+                Patch(position + new Vector2(size.X - 80 * scale, y), new Vector2(1592, first), new Vector2(1672, last));
+            }
+            Patch(position, Vector2.Zero, new Vector2(1672, 112));
+            Patch(position + new Vector2(0, size.Y - footer), new Vector2(0, 790), sourceSize);
         }
 
         private static void DrawWindowBackground(ImGuiWindowFlags flags, float shade = 0.88f)
