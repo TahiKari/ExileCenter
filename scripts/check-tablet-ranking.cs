@@ -1430,7 +1430,9 @@ internal static class TabletRankingCheck
         try
         {
             code = (IntPtr)Native("VirtualAllocEx", process, IntPtr.Zero, (nuint)0x4000, 0x3000u, 4u);
-            scratch = (IntPtr)Native("VirtualAllocEx", process, IntPtr.Zero, (nuint)4096, 0x3000u, 4u);
+            long anchor = (code.ToInt64() + 0x4000 + 65535) & ~65535L;
+            for (long delta = 0; delta < 0x20000000 && scratch == IntPtr.Zero; delta += 65536)
+                scratch = (IntPtr)Native("VirtualAllocEx", process, new IntPtr(anchor + delta), (nuint)4096, 0x3000u, 4u);
             Check(code != IntPtr.Zero && scratch != IntPtr.Zero, "Zoom fixture allocates non-executing test data pages");
             Marshal.Copy(image, 0, code, image.Length);
             Set("handle", process); Set("owner", (uint)Environment.ProcessId); Set("scratch", scratch);
