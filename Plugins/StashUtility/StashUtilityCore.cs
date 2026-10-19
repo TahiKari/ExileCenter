@@ -6664,8 +6664,7 @@ namespace StashUtility
                 if (PluginUiElementReflection.TryGetAbsoluteRect(address, out var position, out var size))
                 {
                     AddTabletOcclusion(position - new Vector2(2), size + new Vector2(4));
-                    if (TryReadUiString(address, 0x98, out var id) && id == "label" &&
-                        TryReadUiString(address, 0x360, out var text, true))
+                    if (TryReadUiString(address, 0x360, out var text, true))
                         tabletTooltipLabels.Add((position, size, text));
                 }
                 // Text and comparison panels can extend outside the fixture rectangle.

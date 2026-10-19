@@ -618,8 +618,14 @@ namespace StashUtility
         }
 
         // Match game labels rather than assuming that UI and native modifier orders agree.
-        private static string TabletTooltipTextKey(string text) => new string((text ?? "")
-            .Normalize(System.Text.NormalizationForm.FormD).Where(char.IsLetter).Select(char.ToLowerInvariant).ToArray());
+        private static string TabletTooltipTextKey(string text)
+        {
+            // Native item text contains links such as [Gold|Or] and value/style tags.
+            text = System.Text.RegularExpressions.Regex.Replace(text ?? "", @"\[(?:[^\[\]|]*\|)?([^\[\]|]+)\]", "$1");
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"<[^<>]*>", "");
+            return new string(text.Normalize(System.Text.NormalizationForm.FormD)
+                .Where(char.IsLetter).Select(char.ToLowerInvariant).ToArray());
+        }
 
         private (int Start, int Count)? FindTabletTooltipModLine(string text, TabletMod definition, TabletMetaModifier modifier)
         {

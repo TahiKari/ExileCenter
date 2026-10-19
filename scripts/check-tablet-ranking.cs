@@ -1304,8 +1304,8 @@ internal static class TabletRankingCheck
         var collect=typeof(StashUtilityCore).GetMethod("CollectTooltipOcclusions",flags);
         var labels=(IList)typeof(StashUtilityCore).GetField("tabletTooltipLabels",flags).GetValue(plugin);
         var covers=(IList)typeof(StashUtilityCore).GetField("tabletOcclusions",flags).GetValue(plugin);
-        var rowTexts=new[]{"8% d'Augmentation de la Rareté des Objets trouvés dans la Carte",
-            "Expeditions contain 2 Vaal Relics in Map","31% increased Gold found in Map","Map has 2 additional random Modifiers"};
+        var rowTexts=new[]{"<value>{8}% d'Augmentation de la [Rarity|Rareté] des Objets trouvés dans la [Map|Carte]",
+            "Expeditions contain 2 Vaal Relics in Map","<value>{31}% increased [Gold] found in [Map]","Map has 2 additional random Modifiers"};
         var io=ImGuiNET.ImGui.GetIO();var previousDisplay=io.DisplaySize;io.DisplaySize=new Vector2(960,420);
         var previousLanguage=ExileCenter.Core.GHSettings.UiLanguage;ExileCenter.Core.GHSettings.UiLanguage=ExileCenter.Localization.OverlayLanguage.French;
         try
@@ -1323,10 +1323,10 @@ internal static class TabletRankingCheck
                 {
                     Marshal.StructureToPtr(new GameOffsets.Objects.UiElement.UiElementBaseOffset{Self=nodes[i],ParentPtr=parent,Flags=1u<<11,LocalScaleMultiplier=1,
                         RelativePosition=new(40,80+i*26),UnscaledSize=new(600,24)},nodes[i],false);
-                    Text(nodes[i],0x98,"label");Text(nodes[i],0x360,rowTexts[i]);
+                    Text(nodes[i],0x98,"");Text(nodes[i],0x360,rowTexts[i]);
                 }
                 labels.Clear();covers.Clear();collect.Invoke(plugin,new object[]{parent,0,128});
-                Check(labels.Count==4,"All four real native tooltip labels are read independently of modifier order");
+                Check(labels.Count==4,"Native tooltip text without a label ID is read independently of modifier order");
                 ImGuiNET.ImGui.NewFrame();
                 draw.Invoke(plugin,new[]{observation,profile,mods});
                 var buffer=ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
