@@ -6676,6 +6676,7 @@ namespace StashUtility
                 panel.ParentPtr != itemUi || !PluginUiElementReflection.TryGetAbsoluteRect(tooltip, out var position, out var size) ||
                 size.X < 160 || size.Y < 60) return;
             tabletTooltipPanel = (position, size);
+            tabletTooltipVisible = true;
             tabletTooltipLabels.Clear();
             int remaining = 128;
             CollectTooltipOcclusions(tooltip, 0, ref remaining);
@@ -6688,7 +6689,6 @@ namespace StashUtility
                 data.Self != address || !UiElementBaseFuncs.IsVisibleChecker(data.Flags)) return;
             if (data.UnscaledSize.X > 8 && data.UnscaledSize.Y > 8)
             {
-                tabletTooltipVisible = true;
                 if (PluginUiElementReflection.TryGetAbsoluteRect(address, out var position, out var size))
                 {
                     if (!tabletTooltipPanel.HasValue)

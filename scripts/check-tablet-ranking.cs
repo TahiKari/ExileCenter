@@ -1242,6 +1242,12 @@ internal static class TabletRankingCheck
             var toggle = typeof(StashUtilityCore).GetMethod("ToggleTabletHighlights", flags);
             bool Hidden() => (bool)suppressed.Invoke(plugin, null);
             typeof(StashUtilityCore).GetField("tabletTooltipVisible", flags).SetValue(plugin, false);
+            // Live PopupManager remains visible at 54x54 with no children when no
+            // item description is open. Its rectangle must not hide the entire grid.
+            parentData.UnscaledSize=new(54,54);parentData.ChildrensPtr=default;
+            Marshal.StructureToPtr(parentData,parent,false);
+            collect.Invoke(plugin,new object[]{parent,0,128});
+            Check(!Hidden(),"Empty visible PopupManager never globally hides tablet ranks and lighting");
             void Hover(Vector2 mouse)
             {
                 ImGuiNET.ImGui.GetIO().MousePos = mouse;
@@ -1409,6 +1415,7 @@ internal static class TabletRankingCheck
             queued.Add(((ExileCenter.RemoteObjects.States.InGameStateObjects.Item)null,new Vector2(281,600)*scale,new Vector2(72)*scale,slot));
             update.Invoke(plugin,new object[]{IntPtr.Zero});covers.Clear();
             Check(labels.Count==5&&nativePanel.GetValue(plugin)!=null,"Hovered slot resolves the real title and four native modifier labels");
+            Check((bool)typeof(StashUtilityCore).GetMethod("TabletHighlightsSuppressed",flags).Invoke(plugin,null),"Real hovered item tooltip still honors automatic hiding");
             var bg=ImGuiNET.ImGui.GetBackgroundDrawList();
             bg.AddRectFilled(new(0,156*scale),new(1412*scale,600*scale),0xff151515);
             bg.AddText(new(350,120),0xffdddddd,"PROJET MYTHIQUE - TABLETTE IRRADIEE");
@@ -1426,6 +1433,7 @@ internal static class TabletRankingCheck
             io.MousePos=new Vector2(1800,900);ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;
             update.Invoke(plugin,new object[]{IntPtr.Zero});
             Check(labels.Count==0&&nativePanel.GetValue(plugin)==null,"Leaving the slot ignores its still-visible cached native tooltip");
+            Check(!(bool)typeof(StashUtilityCore).GetMethod("TabletHighlightsSuppressed",flags).Invoke(plugin,null),"Leaving the real tooltip restores grid ranks and lighting");
             ImGuiNET.ImGui.EndFrame();
             io.MousePos=new Vector2(281,600)*scale+new Vector2(5);ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=true;
             update.Invoke(plugin,new object[]{IntPtr.Zero});
