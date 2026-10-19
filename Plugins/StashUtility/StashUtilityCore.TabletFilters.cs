@@ -624,13 +624,23 @@ namespace StashUtility
             // Native item text contains links such as [Gold|Or] and value/style tags.
             text = System.Text.RegularExpressions.Regex.Replace(text ?? "", @"\[(?:[^\[\]|]*\|)?([^\[\]|]+)\]", "$1");
             text = System.Text.RegularExpressions.Regex.Replace(text, @"<[^<>]*>", "");
+            // Rolls may be written as "1", "un/une" or "a/an". Keep the full word
+            // sequence, but ignore articles and regular plural endings when matching.
+            text = System.Text.RegularExpressions.Regex.Replace(text.ToLowerInvariant(), @"\b(un|une|a|an)\b", "");
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\p{L}{3,}", m => m.Value.TrimEnd('s'));
             return new string(text.Normalize(System.Text.NormalizationForm.FormD)
                 .Where(char.IsLetter).Select(char.ToLowerInvariant).ToArray());
         }
 
         private (int Start, int Count)? FindTabletTooltipModLine(string text, TabletMod definition, TabletMetaModifier modifier)
         {
-            var templates = new[] { definition.Name, ModDisplayName(definition.Id, definition.Name), modifier.EnglishText, modifier.FrenchText }
+            string localized = ModDisplayName(definition.Id, definition.Name);
+            // Compound catalog entries include shared waystone/pack-size bonuses.
+            // Only their distinctive encounter line identifies the modifier itself.
+            var primaryLines = localized.Contains('\n') ? localized.Split('\n').Where(line =>
+                line.StartsWith("La Carte contient ", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("La Carte est habitée par ", StringComparison.OrdinalIgnoreCase)) : Array.Empty<string>();
+            var templates = new[] { definition.Name, localized, modifier.EnglishText, modifier.FrenchText }.Concat(primaryLines)
                 .Select(TabletTooltipTextKey).Where(s => s.Length >= 12).Distinct().ToArray();
             var lines = text.Replace("\r", "").Split('\n');
             (int Start, int Count)? match = null;
@@ -685,16 +695,19 @@ namespace StashUtility
             var classification = ClassifyTabletMods(mods, profile, observation.TabletType);
             string total = string.IsNullOrEmpty(classification.RankLabel) ? "N/C" : classification.RankLabel;
             float totalWidth = ImGui.CalcTextSize(total).X * font / ImGui.GetFontSize() + 8;
-            if (totalWidth < panel.Size.X * .25f)
-                DrawTabletTooltipRank(panel.Position + new Vector2(panel.Size.X - totalWidth - 16, 8), total, font, classification.RankColor);
-            var display = ImGui.GetIO().DisplaySize;
+            var titles = tabletTooltipLabels.Where(label => label.Position.Y >= panel.Position.Y &&
+                label.Position.Y < Math.Min(first.Y, panel.Position.Y + 40) &&
+                label.Position.X >= panel.Position.X && label.Position.X + label.Size.X < panel.Position.X + panel.Size.X).ToArray();
+            float titleEnd = titles.Length > 0 ? titles.Max(label => label.Position.X + label.Size.X) : panel.Position.X + panel.Size.X / 2;
+            float rightEdge = panel.Position.X + panel.Size.X - 8;
+            if (rightEdge - titleEnd >= totalWidth + 8)
+                DrawTabletTooltipRank(new Vector2((titleEnd + rightEdge - totalWidth) / 2, panel.Position.Y + 8), total, font, classification.RankColor);
             foreach (var row in rows)
             {
                 float width = ImGui.CalcTextSize(row.Rank).X * font / ImGui.GetFontSize() + 8;
-                float x = panel.Position.X + panel.Size.X + 3;
-                if (x + width > display.X - 2) x = panel.Position.X - width - 3;
-                if (x < 2) x = panel.Position.X + 8;
-                if (x >= panel.Position.X && x < panel.Position.X + panel.Size.X && x + width + 3 > row.Position.X) continue;
+                float textEnd = row.Position.X + row.Size.X;
+                if (rightEdge - textEnd < width + 4) continue;
+                float x = (textEnd + rightEdge - width) / 2;
                 DrawTabletTooltipRank(new Vector2(x, row.Position.Y + (row.Size.Y - font - 4) / 2),
                     row.Rank, font, TabletItemRankColor(row.Rank));
             }

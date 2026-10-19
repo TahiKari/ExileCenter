@@ -1348,10 +1348,11 @@ internal static class TabletRankingCheck
             var right=Render(40);var gold=ExileCenter.Utils.ImGuiHelper.Color(new Vector4(.92f,.76f,.32f,1));
             var purple=ExileCenter.Utils.ImGuiHelper.Color(new Vector4(.27f,.58f,.86f,1));
             Check(right.Length>0&&right.Any(v=>v.Item2==gold)&&right.Any(v=>v.Item2==purple),"Total and individual badges reuse the configured grade colours: vertices="+right.Length+", colours="+string.Join(",",right.Select(v=>v.Item2.ToString("x")).Distinct()));
-            Check(right.Any(v=>v.Item1.X>742),"Modifier badges sit to the right when space is available");
+            Check(right.Where(v=>v.Item1.Y>100).All(v=>v.Item1.X>680&&v.Item1.X<740),"Modifier badges sit inside the right text margin");
             if(previewDirectory!=null){Directory.CreateDirectory(previewDirectory);SaveUiPreview(Path.Combine(previewDirectory,"native-tablet-ranks-right.png"),atlasBytes,atlasWidth,atlasHeight);}
             var left=Render(250);
-            Check(left.Any(v=>v.Item1.X<248)&&left.All(v=>v.Item1.X>=0&&v.Item1.X<=960&&v.Item1.Y>=0&&v.Item1.Y<=420),"Badges move left near the screen edge and stay on screen");
+            Check(left.Length>0&&left.All(v=>v.Item1.X>=250&&v.Item1.X<950&&v.Item1.Y>=0&&v.Item1.Y<=420)&&
+                left.Where(v=>v.Item1.Y>100).All(v=>v.Item1.X>890),"Badges stay inside the right margin even at the screen edge");
             if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"native-tablet-ranks-left.png"),atlasBytes,atlasWidth,atlasHeight);
             profile.ModRanks["TowerMapAdditionalModifier"]="F";
             var changed=Render(40);
@@ -1364,6 +1365,44 @@ internal static class TabletRankingCheck
             Check(find.Invoke(plugin,new object[]{"La Carte a 2 Modificateurs\naléatoires supplémentaires",definition,modifier})!=null,"Wrapped French modifier stays associated with one rank");
             Check(find.Invoke(plugin,new object[]{"Unrelated item description",definition,modifier})==null,"Unknown lines are never assigned an inferred rank");
             Check(find.Invoke(plugin,new object[]{rowTexts[3]+"\n"+rowTexts[3],definition,modifier})==null,"Repeated matching lines are treated as ambiguous");
+            var localizedName=typeof(StashUtilityCore).GetMethod("ModDisplayName",flags);
+            int catalogCases=0;
+            foreach(var entry in ModDatabase.AllTabletMods)
+            {
+                var meta=ModDatabase.TabletMeta.Modifiers.FirstOrDefault(m=>m.GameModIds.Contains(entry.Id));
+                if(meta==null)continue;
+                string french=(string)localizedName.Invoke(plugin,new object[]{entry.Id,entry.Name});
+                string primary=french.Split('\n').FirstOrDefault(s=>s.StartsWith("La Carte contient ")||s.StartsWith("La Carte est habitée par "))??french;
+                foreach(var template in new[]{entry.Name,primary})
+                foreach(float roll in new[]{entry.MinRoll,entry.MaxRoll})
+                {
+                    string actual=System.Text.RegularExpressions.Regex.Replace(template,@"\([0-9]+[—–-][0-9]+\)",roll.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    Check(find.Invoke(plugin,new object[]{actual,entry,meta})!=null,"Catalog tooltip matches at roll boundary: "+entry.Id+" / "+actual);catalogCases++;
+                }
+            }
+            foreach(var sample in new[]{
+                ("TowerAdditionalStrongbox","La Carte contient un [Strongbox|Coffre-fort] supplémentaire"),
+                ("TowerAdditionalShrine","La Carte contient un Autel supplémentaire"),
+                ("TowerAdditionalEssence","La Carte contient une Essence supplémentaire"),
+                ("TowerAdditionalAzmeriWisp","La Carte contient un Esprit azmérien supplémentaire"),
+                ("TowerAdditionalExile","La Carte est habitée par un Exilé renégat supplémentaire"),
+                ("TowerAdditionalStoneCircle","La Carte contient un Cercle d'invocation supplémentaire"),
+                ("TowerAbyssAdditionalChance","La Carte contient un Abysse supplémentaire"),
+                ("TowerMapBossAdditionalStrongbox","La Carte contient un Coffre-fort supplémentaire"),
+                ("TowerMapBossAdditionalShrine","La Carte contient un Autel supplémentaire"),
+                ("TowerMapBossAdditionalEssence","La Carte contient une Essence supplémentaire"),
+                ("TowerMapBossAdditionalSpirit","La Carte contient un Esprit azmérien supplémentaire"),
+                ("TowerMapAdditionalModifier","La Carte a un Modificateur aléatoire supplémentaire"),
+                ("TowerMapAdditionalUniqueMonsterModifier","Les Monstres Uniques ont un Modificateur supplémentaire")})
+            {
+                var entry=ModDatabase.AllTabletMods.Single(m=>m.Id==sample.Item1);
+                var meta=ModDatabase.TabletMeta.Modifiers.First(m=>m.GameModIds.Contains(entry.Id));
+                Check(find.Invoke(plugin,new object[]{sample.Item2,entry,meta})!=null,"Singular native line receives its rank: "+entry.Id);
+                if(((string)localizedName.Invoke(plugin,new object[]{entry.Id,entry.Name})).Contains('\n'))
+                    Check(find.Invoke(plugin,new object[]{"31% d'Augmentation de la Quantité de Pierres de téléportation trouvées dans la Carte",entry,meta})==null,
+                        "Shared bonus cannot steal the encounter rank: "+entry.Id);
+            }
+            Console.WriteLine("VALIDATION native tooltip catalog: "+catalogCases+" French/English roll-boundary cases plus singular encounter variants.");
             labels.Clear();ImGuiNET.ImGui.NewFrame();draw.Invoke(plugin,new[]{observation,profile,mods});
             Check(ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer.Size==0,"Closing the native tooltip clears its annotations");ImGuiNET.ImGui.EndFrame();
             Check(JsonConvert.SerializeObject(profile)==saved,"Rendering native annotations preserves the saved priorities");
@@ -1425,11 +1464,45 @@ internal static class TabletRankingCheck
             var rendered=Enumerable.Range(startVertex,bg.VtxBuffer.Size-startVertex).Select(i=>(bg.VtxBuffer[i].pos,bg.VtxBuffer[i].col)).ToArray();
             Check(rendered.Length>0&&rendered.Any(v=>v.pos.Y<156*scale+88*scale),"Composition is in the actual title band, above the body layout");
             foreach(int i in Enumerable.Range(0,4))
-                Check(rendered.Any(v=>v.pos.X>1412*scale&&Math.Abs(v.pos.Y-(156+88+135+33*i+16.5f)*scale)<12),"Captured modifier "+i+" has a badge on its own line");
+                Check(rendered.Any(v=>v.pos.X>1316*scale&&v.pos.X<1412*scale&&Math.Abs(v.pos.Y-(156+88+135+33*i+16.5f)*scale)<12),"Captured modifier "+i+" has a badge inside its own line's right margin");
+            var titleVertices=rendered.Where(v=>v.pos.Y<156*scale+88*scale).ToArray();
+            Check(Math.Abs((titleVertices.Min(v=>v.pos.X)+titleVertices.Max(v=>v.pos.X))/2-((573+266)*scale+1412*scale-8)/2)<2,
+                "Composition is centered between the title's right edge and the panel border");
             Check(!(bool)overlaps.Invoke(plugin,new object[]{new Vector2(281,600)*scale,new Vector2(72)*scale}),"Native tooltip touching its own item never suppresses that item's ranks");
             Check((bool)overlaps.Invoke(plugin,new object[]{new Vector2(100,200),new Vector2(40)}),"Other items behind the native tooltip remain covered");
             ImGuiNET.ImGui.Render();
             if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"native-tablet-captured-layout.png"),atlasBytes,atlasWidth,atlasHeight);
+            // User's A2CE screenshot: native order E/A/A/C differs from catalog order.
+            string[] screenshotTexts={"La Carte contient 2 Coffres Rares supplémentaires",
+                "31% d'Augmentation de la Quantité de Pierres de téléportation trouvées dans la Carte",
+                "31% d'Augmentation du nombre de Monstres Rares dans la Carte",
+                "La Carte contient un Coffre-fort supplémentaire"};
+            var screenshotMods=new Mods(IntPtr.Zero);
+            var screenshotProfile=new TabletProfile{ModRanks=new(){["TowerAdditionalStrongbox"]="C",["TowerRareChestCount"]="E",
+                ["TowerMapDroppedMapsIncrease"]="A",["TowerRarePackIncrease"]="A"}};
+            foreach(var pair in new[]{("TowerAdditionalStrongbox",1f),("TowerRareChestCount",2f),("TowerMapDroppedMapsIncrease",31f),("TowerRarePackIncrease",31f)})
+                screenshotMods.ExplicitMods.Add((pair.Item1,(pair.Item2,0f)));
+            for(int i=0;i<4;i++)Text(capturedRows[i],0x360,screenshotTexts[i]);
+            Text(title,0x360,"Sommet touché par le néant\nTablette irradiée");
+            var titleData=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(title);
+            titleData.RelativePosition=new(450*scale,8*scale);titleData.UnscaledSize=new(512*scale,73*scale);Marshal.StructureToPtr(titleData,title,false);
+            foreach(string grade in new[]{"S","A","B","C","D","E","F"})
+            {
+                screenshotProfile.ModRanks["TowerAdditionalStrongbox"]=grade;
+                ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;update.Invoke(plugin,new object[]{IntPtr.Zero});
+                draw.Invoke(plugin,new[]{observe.Invoke(null,new object[]{"Irradiated Tablet",screenshotMods}),screenshotProfile,screenshotMods});
+                var vertices=ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
+                var all=Enumerable.Range(0,vertices.Size).Select(i=>vertices[i]).ToArray();
+                string[] grades={"E","A","A",grade};
+                var colors=(Vector4[])typeof(StashUtilityCore).GetField("TabletModRankColors",flags).GetValue(null);
+                for(int i=0;i<4;i++)
+                    Check(all.Any(v=>v.pos.X>1316*scale&&v.pos.X<1412*scale&&Math.Abs(v.pos.Y-(156+88+135+33*i+16.5f)*scale)<10&&
+                        v.col==ExileCenter.Utils.ImGuiHelper.Color(colors["SABCDEF".IndexOf(grades[i])])),"Screenshot row "+i+" keeps its configured rank/color with encounter grade "+grade);
+                var heading=all.Where(v=>v.pos.Y<156*scale+88*scale).ToArray();
+                Check(Math.Abs((heading.Min(v=>v.pos.X)+heading.Max(v=>v.pos.X))/2-(962*scale+1412*scale-8)/2)<2,
+                    "Long title moves the centered composition to its actual available gap");
+                ImGuiNET.ImGui.Render();
+            }
             io.MousePos=new Vector2(1800,900);ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;
             update.Invoke(plugin,new object[]{IntPtr.Zero});
             Check(labels.Count==0&&nativePanel.GetValue(plugin)==null,"Leaving the slot ignores its still-visible cached native tooltip");
