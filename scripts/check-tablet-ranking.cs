@@ -1246,7 +1246,7 @@ internal static class TabletRankingCheck
             {
                 ImGuiNET.ImGui.GetIO().MousePos = mouse;
                 ImGuiNET.ImGui.GetIO().WantCaptureMouse = false;
-                queue.Add(((ExileCenter.RemoteObjects.States.InGameStateObjects.Item)null, new Vector2(200, 40), new Vector2(30)));
+                queue.Add(((ExileCenter.RemoteObjects.States.InGameStateObjects.Item)null, new Vector2(200, 40), new Vector2(30), IntPtr.Zero));
                 flush.Invoke(plugin, null);
             }
             Check(plugin.Settings.HideTabletHighlightsOnItemHover, "Automatic hiding enabled by default");
@@ -1361,6 +1361,84 @@ internal static class TabletRankingCheck
             labels.Clear();ImGuiNET.ImGui.NewFrame();draw.Invoke(plugin,new[]{observation,profile,mods});
             Check(ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer.Size==0,"Closing the native tooltip clears its annotations");ImGuiNET.ImGui.EndFrame();
             Check(JsonConvert.SerializeObject(profile)==saved,"Rendering native annotations preserves the saved priorities");
+
+            // Replay the live 2026-10-19 "Projet mythique" tooltip. The item owns it at
+            // +0x598; it is absent from both the widget's children and the global fixture.
+            io.DisplaySize=new Vector2(1920,1080);
+            const float scale=.675f;
+            IntPtr Node(IntPtr owner,Vector2 position,Vector2 size,params IntPtr[] childNodes)
+            {
+                var address=Allocate(0x800);var vector=Allocate(Math.Max(1,childNodes.Length)*IntPtr.Size);
+                for(int i=0;i<childNodes.Length;i++)Marshal.WriteIntPtr(vector,i*IntPtr.Size,childNodes[i]);
+                Marshal.StructureToPtr(new GameOffsets.Objects.UiElement.UiElementBaseOffset{Self=address,ParentPtr=owner,Flags=1u<<11,
+                    LocalScaleMultiplier=1,RelativePosition=new(position.X*scale,position.Y*scale),UnscaledSize=new(size.X*scale,size.Y*scale),
+                    ChildrensPtr=new(){First=vector,Last=vector+childNodes.Length*IntPtr.Size,End=vector+childNodes.Length*IntPtr.Size}},address,false);
+                foreach(var childNode in childNodes)
+                {
+                    var data=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(childNode);
+                    data.ParentPtr=address;Marshal.StructureToPtr(data,childNode,false);
+                }
+                return address;
+            }
+            string[] capturedTexts={"9% d'Augmentation de la [Rarity|Rareté] des Objets trouvés dans la Carte",
+                "17% d'Augmentation du gain d'Expérience dans la Carte",
+                "30% d'Augmentation de la Quantité de [Waystone|Pierres de téléportation] trouvées dans la Carte",
+                "La Carte a 93% d'Augmentation de chances de contenir des [Strongbox|Coffres-forts]"};
+            var capturedRows=capturedTexts.Select((text,i)=>{var node=Node(IntPtr.Zero,new(66,33*i),new(1220,33));Text(node,0x360,text);return node;}).ToArray();
+            var stats=Node(IntPtr.Zero,new(30,135),new(1352,132),capturedRows);Text(stats,0x98,"explicit-stats");
+            var layout=Node(IntPtr.Zero,new(0,88),new(1412,356),stats);Text(layout,0x98,"layout");
+            var title=Node(IntPtr.Zero,new(573,8),new(266,73));Text(title,0x360,"Projet mythique\nTablette irradiée");
+            var header=Node(IntPtr.Zero,Vector2.Zero,new(1412,88),title);
+            var frame=Node(IntPtr.Zero,Vector2.Zero,new(1412,444),header,layout);
+            var slot=Node(IntPtr.Zero,new(281,600),new(72,72));
+            var owned=Node(slot,new(-281,-444),new(1412,444),frame);
+            Marshal.WriteIntPtr(slot,0x598,owned);
+            var nativePanel=typeof(StashUtilityCore).GetField("tabletTooltipPanel",flags);
+            var update=typeof(StashUtilityCore).GetMethod("UpdateTabletOcclusions",flags);
+            var queued=(IList)typeof(StashUtilityCore).GetField("pendingItemHighlights",flags).GetValue(plugin);
+            var overlaps=typeof(StashUtilityCore).GetMethod("IsTabletOccluded",flags);
+            var capturedProfile=new TabletProfile{ModRanks=new(){["TowerDroppedItemRarityIncrease"]="B",["TowerExperienceGainIncrease"]="C",
+                ["TowerMapDroppedMapsIncrease"]="A",["TowerAdditionalStrongboxChance"]="D"}};
+            var capturedMods=new Mods(IntPtr.Zero);
+            foreach(var pair in new[]{("TowerDroppedItemRarityIncrease",9f),("TowerAdditionalStrongboxChance",93f),
+                ("TowerMapDroppedMapsIncrease",30f),("TowerExperienceGainIncrease",17f)})capturedMods.ExplicitMods.Add((pair.Item1,(pair.Item2,0f)));
+            var capturedObservation=observe.Invoke(null,new object[]{"Irradiated Tablet",capturedMods});
+            labels.Clear();covers.Clear();collect.Invoke(plugin,new object[]{slot,0,128});
+            Check(labels.Count==0,"Live item-owned tooltip cannot be found through ChildrensPtr");
+            ImGuiNET.ImGui.NewFrame();io.MousePos=new Vector2(281,600)*scale+new Vector2(5);io.WantCaptureMouse=false;
+            queued.Add(((ExileCenter.RemoteObjects.States.InGameStateObjects.Item)null,new Vector2(281,600)*scale,new Vector2(72)*scale,slot));
+            update.Invoke(plugin,new object[]{IntPtr.Zero});covers.Clear();
+            Check(labels.Count==5&&nativePanel.GetValue(plugin)!=null,"Hovered slot resolves the real title and four native modifier labels");
+            var bg=ImGuiNET.ImGui.GetBackgroundDrawList();
+            bg.AddRectFilled(new(0,156*scale),new(1412*scale,600*scale),0xff151515);
+            bg.AddText(new(350,120),0xffdddddd,"PROJET MYTHIQUE - TABLETTE IRRADIEE");
+            for(int i=0;i<4;i++)bg.AddText(new(96*scale,(156+88+135+33*i)*scale),0xffdd9999,
+                System.Text.RegularExpressions.Regex.Replace(capturedTexts[i],@"\[(?:[^\[\]|]*\|)?([^\[\]|]+)\]","$1"));
+            int startVertex=bg.VtxBuffer.Size;draw.Invoke(plugin,new[]{capturedObservation,capturedProfile,capturedMods});
+            var rendered=Enumerable.Range(startVertex,bg.VtxBuffer.Size-startVertex).Select(i=>(bg.VtxBuffer[i].pos,bg.VtxBuffer[i].col)).ToArray();
+            Check(rendered.Length>0&&rendered.Any(v=>v.pos.Y<156*scale+88*scale),"Composition is in the actual title band, above the body layout");
+            foreach(int i in Enumerable.Range(0,4))
+                Check(rendered.Any(v=>v.pos.X>1412*scale&&Math.Abs(v.pos.Y-(156+88+135+33*i+16.5f)*scale)<12),"Captured modifier "+i+" has a badge on its own line");
+            Check(!(bool)overlaps.Invoke(plugin,new object[]{new Vector2(281,600)*scale,new Vector2(72)*scale}),"Native tooltip touching its own item never suppresses that item's ranks");
+            Check((bool)overlaps.Invoke(plugin,new object[]{new Vector2(100,200),new Vector2(40)}),"Other items behind the native tooltip remain covered");
+            ImGuiNET.ImGui.Render();
+            if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"native-tablet-captured-layout.png"),atlasBytes,atlasWidth,atlasHeight);
+            io.MousePos=new Vector2(1800,900);ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;
+            update.Invoke(plugin,new object[]{IntPtr.Zero});
+            Check(labels.Count==0&&nativePanel.GetValue(plugin)==null,"Leaving the slot ignores its still-visible cached native tooltip");
+            ImGuiNET.ImGui.EndFrame();
+            io.MousePos=new Vector2(281,600)*scale+new Vector2(5);ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=true;
+            update.Invoke(plugin,new object[]{IntPtr.Zero});
+            Check(labels.Count==0&&nativePanel.GetValue(plugin)==null,"Overlay mouse capture prevents reading the underlying cached item tooltip");
+            ImGuiNET.ImGui.EndFrame();queued.Clear();io.WantCaptureMouse=false;
+            var collectOwned=typeof(StashUtilityCore).GetMethod("CollectHoveredItemTooltip",flags);
+            var ownedData=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(owned);
+            ownedData.ParentPtr=IntPtr.Zero;Marshal.StructureToPtr(ownedData,owned,false);
+            collectOwned.Invoke(plugin,new object[]{slot});
+            Check(labels.Count==0&&nativePanel.GetValue(plugin)==null,"Tooltip pointer owned by another widget is rejected");
+            ownedData.ParentPtr=slot;ownedData.Flags=0;Marshal.StructureToPtr(ownedData,owned,false);
+            collectOwned.Invoke(plugin,new object[]{slot});
+            Check(labels.Count==0&&nativePanel.GetValue(plugin)==null,"Hidden native tooltip is never annotated");
         }
         finally{io.DisplaySize=previousDisplay;ExileCenter.Core.GHSettings.UiLanguage=previousLanguage;foreach(var address in allocations)Marshal.FreeHGlobal(address);}
     }

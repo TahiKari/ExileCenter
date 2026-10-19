@@ -17,6 +17,7 @@ namespace StashUtility
         private string lastMetaItemName = "";
         private DateTime lastMetaObservedUtc;
         private readonly List<(Vector2 Position, Vector2 Size, string Text)> tabletTooltipLabels = new();
+        private (Vector2 Position, Vector2 Size)? tabletTooltipPanel;
         private string MT(string key, string fallback) => PluginText.T("stashutility.meta." + key, fallback);
         private static void MetaText(string text) => ImGuiHelper.WrappedText(text);
         private static TabletMetaCatalog MetaCatalog => Data.ModDatabase.TabletMeta;
@@ -673,7 +674,8 @@ namespace StashUtility
             if (rows.Count == 0) return;
             var first = new Vector2(rows.Min(r => r.Position.X), rows.Min(r => r.Position.Y));
             var last = new Vector2(rows.Max(r => r.Position.X + r.Size.X), rows.Max(r => r.Position.Y + r.Size.Y));
-            var panels = tabletOcclusions.Where(p => p.Size.X >= 160 && p.Size.Y >= 60 &&
+            var panels = (tabletTooltipPanel.HasValue ? new[] { tabletTooltipPanel.Value }.AsEnumerable() : tabletOcclusions)
+                .Where(p => p.Size.X >= 160 && p.Size.Y >= 60 &&
                 p.Position.X <= first.X && p.Position.Y + 24 <= first.Y &&
                 p.Position.X + p.Size.X >= last.X && p.Position.Y + p.Size.Y >= last.Y)
                 .OrderBy(p => p.Size.X * p.Size.Y).ToArray();

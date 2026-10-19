@@ -22,7 +22,7 @@ namespace StashUtility
     public sealed partial class StashUtilityCore : PCore<StashUtilitySettings>
     {
         private readonly Dictionary<string, IntPtr> tabletIconHandles = new();
-        private readonly List<(Item Item, Vector2 Position, Vector2 Size)> pendingItemHighlights = new();
+        private readonly List<(Item Item, Vector2 Position, Vector2 Size, IntPtr UiAddress)> pendingItemHighlights = new();
         private readonly List<(Vector2 Position, Vector2 Size)> tabletOcclusions = new();
         private bool tabletHighlightsHiddenManually;
         private bool tabletItemHovered;
@@ -6042,7 +6042,7 @@ namespace StashUtility
                             var item = ReadFreshItem(itemAddr);
                             if (item != null)
                             {
-                                QueueItemHighlight(item, pos, size);
+                                QueueItemHighlight(item, pos, size, slot);
                             }
                         }
                     }
@@ -6088,7 +6088,7 @@ namespace StashUtility
                         var item = ReadFreshItem(itemAddr);
                         if (item != null)
                         {
-                            QueueItemHighlight(item, pos, size);
+                            QueueItemHighlight(item, pos, size, slot);
                         }
                     }
                 }
@@ -6122,7 +6122,7 @@ namespace StashUtility
                     var item = ReadFreshItem(itemAddr);
                     if (item != null)
                     {
-                        QueueItemHighlight(item, pos, size);
+                        QueueItemHighlight(item, pos, size, slot);
                     }
                 }
             }
@@ -6150,7 +6150,7 @@ namespace StashUtility
                     if (size.X > 0 && size.Y > 0 && items.Add(itemAddress))
                     {
                         var item = ReadFreshItem(itemAddress);
-                        if (item != null) QueueItemHighlight(item, pos, size);
+                        if (item != null) QueueItemHighlight(item, pos, size, address);
                     }
                     return;
                 }
@@ -6602,6 +6602,7 @@ namespace StashUtility
         {
             tabletOcclusions.Clear();
             tabletTooltipLabels.Clear();
+            tabletTooltipPanel = null;
             tabletTooltipVisible = false;
             // No item is being drawn while fighting or while the panels are closed.
             // Do not inspect transient game UI memory or enter a native callback then.
@@ -6624,6 +6625,17 @@ namespace StashUtility
             }
             int remaining = 128;
             foreach (var container in tooltipContainers) CollectTooltipOcclusions(container, 0, ref remaining);
+            if (!ImGui.GetIO().WantCaptureMouse)
+            {
+                var mouse = ImGui.GetMousePos();
+                foreach (var pending in pendingItemHighlights)
+                    if (mouse.X >= pending.Position.X && mouse.Y >= pending.Position.Y &&
+                        mouse.X < pending.Position.X + pending.Size.X && mouse.Y < pending.Position.Y + pending.Size.Y)
+                    {
+                        CollectHoveredItemTooltip(pending.UiAddress);
+                        break;
+                    }
+            }
 
             var gameArea = Core.Process.WindowArea;
             var covers = new List<TabletWindowRect>();
@@ -6653,6 +6665,22 @@ namespace StashUtility
                     new Vector2(rect.Right - rect.Left, rect.Bottom - rect.Top));
         }
 
+        private void CollectHoveredItemTooltip(IntPtr itemUi)
+        {
+            // PoE2 item descriptions are owned by the item widget, outside ChildrensPtr.
+            // Verified on live tablet slots; never inspect another item's cached tooltip.
+            if (itemUi == IntPtr.Zero || !TryReadMemory<UiElementBaseOffset>(itemUi, out var item) ||
+                item.Self != itemUi || !UiElementBaseFuncs.IsVisibleChecker(item.Flags) ||
+                !TryReadMemory<IntPtr>(itemUi + 0x598, out var tooltip) || tooltip == IntPtr.Zero ||
+                !TryReadMemory<UiElementBaseOffset>(tooltip, out var panel) || panel.Self != tooltip ||
+                panel.ParentPtr != itemUi || !PluginUiElementReflection.TryGetAbsoluteRect(tooltip, out var position, out var size) ||
+                size.X < 160 || size.Y < 60) return;
+            tabletTooltipPanel = (position, size);
+            tabletTooltipLabels.Clear();
+            int remaining = 128;
+            CollectTooltipOcclusions(tooltip, 0, ref remaining);
+        }
+
         private void CollectTooltipOcclusions(IntPtr address, int depth, ref int remaining)
         {
             if (address == IntPtr.Zero || depth > 8 || remaining-- <= 0 ||
@@ -6663,7 +6691,8 @@ namespace StashUtility
                 tabletTooltipVisible = true;
                 if (PluginUiElementReflection.TryGetAbsoluteRect(address, out var position, out var size))
                 {
-                    AddTabletOcclusion(position - new Vector2(2), size + new Vector2(4));
+                    if (!tabletTooltipPanel.HasValue)
+                        AddTabletOcclusion(position - new Vector2(2), size + new Vector2(4));
                     if (TryReadUiString(address, 0x360, out var text, true))
                         tabletTooltipLabels.Add((position, size, text));
                 }
@@ -6687,6 +6716,16 @@ namespace StashUtility
 
         private bool IsTabletOccluded(Vector2 position, Vector2 size)
         {
+            // The native description can touch its own slot. Keep observing that slot,
+            // while still hiding other items covered by the description.
+            if (tabletTooltipPanel is { } native)
+            {
+                var mouse = ImGui.GetMousePos();
+                bool hovered = mouse.X >= position.X && mouse.Y >= position.Y &&
+                    mouse.X < position.X + size.X && mouse.Y < position.Y + size.Y;
+                if (!hovered && position.X < native.Position.X + native.Size.X && position.Y < native.Position.Y + native.Size.Y &&
+                    position.X + size.X > native.Position.X && position.Y + size.Y > native.Position.Y) return true;
+            }
             foreach (var cover in tabletOcclusions)
                 if (position.X < cover.Position.X + cover.Size.X && position.Y < cover.Position.Y + cover.Size.Y &&
                     position.X + size.X > cover.Position.X && position.Y + size.Y > cover.Position.Y) return true;
@@ -6713,10 +6752,10 @@ namespace StashUtility
         [DllImport("user32.dll", EntryPoint = "GetWindowTextW", CharSet = CharSet.Unicode)]
         private static extern int TabletGetWindowText(IntPtr window, System.Text.StringBuilder text, int count);
 
-        private void QueueItemHighlight(Item item, Vector2 pos, Vector2 size)
+        private void QueueItemHighlight(Item item, Vector2 pos, Vector2 size, IntPtr uiAddress)
         {
             if (item == null) return;
-            pendingItemHighlights.Add((item, pos, size));
+            pendingItemHighlights.Add((item, pos, size, uiAddress));
         }
 
         private void FlushItemHighlights()
