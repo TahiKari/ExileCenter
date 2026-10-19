@@ -1373,6 +1373,8 @@ internal static class TabletRankingCheck
                 if(meta==null)continue;
                 string french=(string)localizedName.Invoke(plugin,new object[]{entry.Id,entry.Name});
                 string primary=french.Split('\n').FirstOrDefault(s=>s.StartsWith("La Carte contient ")||s.StartsWith("La Carte est habitée par "))??french;
+                if(french.Contains('\n'))Check(find.Invoke(plugin,new object[]{french,entry,meta})!=null,
+                    "Compound label also matches when the game keeps all effects in one text block: "+entry.Id);
                 foreach(var template in new[]{entry.Name,primary})
                 foreach(float roll in new[]{entry.MinRoll,entry.MaxRoll})
                 {

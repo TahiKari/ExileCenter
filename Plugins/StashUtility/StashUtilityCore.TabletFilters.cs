@@ -640,7 +640,7 @@ namespace StashUtility
             var primaryLines = localized.Contains('\n') ? localized.Split('\n').Where(line =>
                 line.StartsWith("La Carte contient ", StringComparison.OrdinalIgnoreCase) ||
                 line.StartsWith("La Carte est habitée par ", StringComparison.OrdinalIgnoreCase)) : Array.Empty<string>();
-            var templates = new[] { definition.Name, localized, modifier.EnglishText, modifier.FrenchText }.Concat(primaryLines)
+            var templates = new[] { definition.Name, primaryLines.Any() ? "" : localized, modifier.EnglishText, modifier.FrenchText }.Concat(primaryLines)
                 .Select(TabletTooltipTextKey).Where(s => s.Length >= 12).Distinct().ToArray();
             var lines = text.Replace("\r", "").Split('\n');
             (int Start, int Count)? match = null;
