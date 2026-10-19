@@ -224,7 +224,7 @@ namespace LootTracker
             var size = ImGui.GetIO().DisplaySize;
             ImGui.SetNextWindowPos(System.Numerics.Vector2.Zero);
             ImGui.SetNextWindowSize(size);
-            bool visible = ExileCenter.Ui.ImGuiTheme.BeginWindow("##LootTrackerDesktop", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove |
+            bool visible = ExileCenter.Ui.ImGuiTheme.BeginFramedWindow("##LootTrackerDesktop", this.L("lt.dashboard", "LOOT TRACKER"), ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove |
                 ImGuiWindowFlags.NoSavedSettings);
             try
             {

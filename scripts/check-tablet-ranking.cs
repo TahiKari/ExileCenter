@@ -657,6 +657,12 @@ internal static class TabletRankingCheck
                 if (!File.Exists(file)) file = Path.Combine(root, "Plugins", "StashUtility", name.Name + ".dll");
                 return File.Exists(file) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(file) : null;
             };
+            if (args.Length > 1 && args[1] == "--theme-only")
+            {
+                CheckTabletSettingsUi(root, args.Length > 2 ? args[2] : null);
+                Console.WriteLine(checks + " UI theme checks passed.");
+                return 0;
+            }
             CheckWaystoneCraft(root);
             CheckWaystoneNavigation(root);
             CheckCompactCompositions();
@@ -1665,6 +1671,28 @@ internal static class TabletRankingCheck
                 frameImage.CopyPixelDataTo(framePreviewPixels);
             }
             typeof(ExileCenter.Ui.ImGuiTheme).GetField("frameTexture",flags).SetValue(null,new IntPtr(2));
+            foreach(var panel in new[]{("Butin",new Vector2(360,240)),("Kikimeter",new Vector2(460,420)),("Suivi du butin",new Vector2(820,400))})
+            for(int frame=0;frame<3;frame++)
+            {
+                ImGuiNET.ImGui.NewFrame();
+                ImGuiNET.ImGui.SetNextWindowPos(Vector2.Zero);ImGuiNET.ImGui.SetNextWindowSize(panel.Item2);
+                ExileCenter.Ui.ImGuiTheme.BeginFramedWindow("##detached-frame-fixture",panel.Item1,
+                    ImGuiNET.ImGuiWindowFlags.NoDecoration|ImGuiNET.ImGuiWindowFlags.NoMove|ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                if(frame>0)
+                {
+                    var list=ImGuiNET.ImGui.GetWindowDrawList();var clip=list.CmdBuffer[list.CmdBuffer.Size-1].ClipRect;
+                    Check(Enumerable.Range(0,list.CmdBuffer.Size).Any(i=>list.CmdBuffer[i].TextureId==new IntPtr(2)),"Independent panels use the shared artwork: "+panel.Item2);
+                    Check(clip.Y+.01f>=panel.Item2.X*(48f/1672)*1.35f&&clip.X+.01f>=panel.Item2.X*40/1672&&
+                        clip.Z<=panel.Item2.X*(1-40f/1672)+.01f&&clip.W<=panel.Item2.Y-panel.Item2.X*52/1672+.01f,
+                        "Independent panel controls stay inside the header, pillars and footer: "+panel.Item2+", clip="+clip);
+                    Check(ImGuiNET.ImGui.GetContentRegionAvail().X>panel.Item2.X*.85f&&ImGuiNET.ImGui.GetContentRegionAvail().Y>panel.Item2.Y*.75f,
+                        "Small independent panels retain usable content space: "+panel.Item2);
+                }
+                ImGuiNET.ImGui.TextUnformatted(panel.Item1);ImGuiNET.ImGui.Button("Historique");
+                if(ImGuiNET.ImGui.BeginChild("detached-body",Vector2.Zero))ImGuiNET.ImGui.TextUnformatted("Contenu du suivi");
+                ImGuiNET.ImGui.EndChild();ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
+                if(frame==2&&previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"detached-frame-"+(int)panel.Item2.X+".png"),pixels,atlasWidth,atlasHeight);
+            }
             var updatesType=typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.LocalUpdates",true);
             var offerField=updatesType.GetField("offer",flags);var previousOffer=offerField.GetValue(null);
             var settingsType=typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Settings.SettingsWindow",true);

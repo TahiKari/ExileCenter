@@ -45,13 +45,18 @@ namespace ExileCenter.Ui
 
         /// <summary>Opens a themed panel without decorating transparent gameplay markers.</summary>
         public static bool BeginWindow(string name, ImGuiWindowFlags flags = ImGuiWindowFlags.None)
+            => BeginFramedWindow(name, null, flags);
+
+        /// <summary>Decorates an independent panel while preserving its window ID and native controls.</summary>
+        public static bool BeginFramedWindow(string name, string? title, ImGuiWindowFlags flags = ImGuiWindowFlags.None)
         {
-            float scale = PushFramePadding(name, flags);
+            bool heading = title != null;
+            float scale = PushFramePadding(name, flags, heading);
             if (scale > 0) flags |= ImGuiWindowFlags.HorizontalScrollbar;
             bool visible = ImGui.Begin(name, flags);
             ImGui.PopStyleVar();
             RememberFrameSize(name, flags);
-            if (visible && !DrawOrnateWindow(name, flags, false, scale: scale)) DrawWindowBackground(flags);
+            if (visible && !DrawOrnateWindow(title ?? name, flags, false, heading, scale)) DrawWindowBackground(flags);
             return visible;
         }
 

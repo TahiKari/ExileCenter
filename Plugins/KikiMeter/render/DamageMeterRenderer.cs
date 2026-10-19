@@ -53,7 +53,9 @@ internal sealed class DamageMeterRenderer
         try
         {
             style.WindowMenuButtonPosition = ImGuiDir.Right;
-            expanded = ExileCenter.Ui.ImGuiTheme.BeginWindow(detached ? "##AuraTrackerDesktop" : text.Title("meter.title", "Damage meter (estimated)", "AuraTrackerDamageMeter"), flags);
+            expanded = detached
+                ? ExileCenter.Ui.ImGuiTheme.BeginFramedWindow("##AuraTrackerDesktop", "Kikimeter", flags)
+                : ExileCenter.Ui.ImGuiTheme.BeginWindow(text.Title("meter.title", "Damage meter (estimated)", "AuraTrackerDamageMeter"), flags);
         }
         finally { style.WindowMenuButtonPosition = previousButtonPosition; }
         if (!detached)
