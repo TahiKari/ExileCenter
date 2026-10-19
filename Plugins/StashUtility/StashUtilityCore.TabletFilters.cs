@@ -16,6 +16,7 @@ namespace StashUtility
         private TabletObservation lastMetaObservation;
         private string lastMetaItemName = "";
         private DateTime lastMetaObservedUtc;
+        private readonly List<(Vector2 Position, Vector2 Size, string Text)> tabletTooltipLabels = new();
         private string MT(string key, string fallback) => PluginText.T("stashutility.meta." + key, fallback);
         private static void MetaText(string text) => ImGuiHelper.WrappedText(text);
         private static TabletMetaCatalog MetaCatalog => Data.ModDatabase.TabletMeta;
@@ -591,6 +592,7 @@ namespace StashUtility
                 mouse.X < pos.X || mouse.Y < pos.Y || mouse.X >= pos.X + size.X || mouse.Y >= pos.Y + size.Y) return false;
             lastMetaObservation = result?.Observation ?? ObserveMetaTablet(type, mods);
             lastMetaItemName = name; lastMetaObservedUtc = DateTime.UtcNow;
+            DrawNativeTabletTooltipRanks(lastMetaObservation, settings, mods);
             if (Settings.TabletHelpTooltips)
             {
                 float width = Math.Max(200, Math.Min(460, ImGui.GetIO().DisplaySize.X - 20));
@@ -613,6 +615,92 @@ namespace StashUtility
                 }
             }
             return true;
+        }
+
+        // Match game labels rather than assuming that UI and native modifier orders agree.
+        private static string TabletTooltipTextKey(string text) => new string((text ?? "")
+            .Normalize(System.Text.NormalizationForm.FormD).Where(char.IsLetter).Select(char.ToLowerInvariant).ToArray());
+
+        private (int Start, int Count)? FindTabletTooltipModLine(string text, TabletMod definition, TabletMetaModifier modifier)
+        {
+            var templates = new[] { definition.Name, ModDisplayName(definition.Id, definition.Name), modifier.EnglishText, modifier.FrenchText }
+                .Select(TabletTooltipTextKey).Where(s => s.Length >= 12).Distinct().ToArray();
+            var lines = text.Replace("\r", "").Split('\n');
+            (int Start, int Count)? match = null;
+            for (int start = 0; start < lines.Length; start++)
+            {
+                for (int count = 1; count <= Math.Min(3, lines.Length - start); count++)
+                    if (templates.Contains(TabletTooltipTextKey(string.Join(" ", lines.Skip(start).Take(count)))))
+                    {
+                        if (match.HasValue) return null;
+                        match = (start, count);
+                        break;
+                    }
+            }
+            return match;
+        }
+
+        private void DrawNativeTabletTooltipRanks(TabletObservation observation, TabletProfile profile, Mods mods)
+        {
+            if (tabletTooltipLabels.Count == 0 || observation?.Mods.Count is not (>= 1 and <= 4)) return;
+            var quality = TabletQualityEngine.Evaluate(observation, TabletPriorities(profile, observation.TabletType));
+            var rows = new List<(Vector2 Position, Vector2 Size, string Rank)>();
+            foreach (var detected in observation.Mods)
+            {
+                if (detected?.Modifier == null) continue;
+                var definition = TabletRankingDefinitions.FirstOrDefault(d => d.TabletTypes.Contains(observation.TabletType) &&
+                    detected.Modifier.GameModIds.Contains(d.Id));
+                var ranked = quality.Modifiers.FirstOrDefault(m => m.Id == detected.Modifier.Id);
+                if (definition == null || ranked == null) continue;
+                var matches = new List<(Vector2 Position, Vector2 Size)>();
+                foreach (var label in tabletTooltipLabels)
+                {
+                    var line = FindTabletTooltipModLine(label.Text, definition, detected.Modifier);
+                    if (!line.HasValue) continue;
+                    float height = label.Size.Y / (label.Text.Count(c => c == '\n') + 1);
+                    matches.Add((label.Position + new Vector2(0, line.Value.Start * height),
+                        new Vector2(label.Size.X, height * line.Value.Count)));
+                }
+                var unique = matches.Distinct().ToArray();
+                if (unique.Length == 1) rows.Add((unique[0].Position, unique[0].Size, ranked.Rank));
+            }
+            if (rows.Count == 0) return;
+            var first = new Vector2(rows.Min(r => r.Position.X), rows.Min(r => r.Position.Y));
+            var last = new Vector2(rows.Max(r => r.Position.X + r.Size.X), rows.Max(r => r.Position.Y + r.Size.Y));
+            var panels = tabletOcclusions.Where(p => p.Size.X >= 160 && p.Size.Y >= 60 &&
+                p.Position.X <= first.X && p.Position.Y + 24 <= first.Y &&
+                p.Position.X + p.Size.X >= last.X && p.Position.Y + p.Size.Y >= last.Y)
+                .OrderBy(p => p.Size.X * p.Size.Y).ToArray();
+            if (panels.Length == 0) return;
+            var panel = panels[0];
+            float font = Math.Clamp(rows.Min(r => r.Size.Y) * .8f, 12, 20);
+            var classification = ClassifyTabletMods(mods, profile, observation.TabletType);
+            string total = string.IsNullOrEmpty(classification.RankLabel) ? "N/C" : classification.RankLabel;
+            float totalWidth = ImGui.CalcTextSize(total).X * font / ImGui.GetFontSize() + 8;
+            if (totalWidth < panel.Size.X * .25f)
+                DrawTabletTooltipRank(panel.Position + new Vector2(panel.Size.X - totalWidth - 16, 8), total, font, classification.RankColor);
+            var display = ImGui.GetIO().DisplaySize;
+            foreach (var row in rows)
+            {
+                float width = ImGui.CalcTextSize(row.Rank).X * font / ImGui.GetFontSize() + 8;
+                float x = panel.Position.X + panel.Size.X + 3;
+                if (x + width > display.X - 2) x = panel.Position.X - width - 3;
+                if (x < 2) x = panel.Position.X + 8;
+                if (x >= panel.Position.X && x < panel.Position.X + panel.Size.X && x + width + 3 > row.Position.X) continue;
+                DrawTabletTooltipRank(new Vector2(x, row.Position.Y + (row.Size.Y - font - 4) / 2),
+                    row.Rank, font, TabletItemRankColor(row.Rank));
+            }
+        }
+
+        private static void DrawTabletTooltipRank(Vector2 position, string rank, float font, Vector4 color)
+        {
+            var size = ImGui.CalcTextSize(rank) * font / ImGui.GetFontSize() + new Vector2(8, 4);
+            var display = ImGui.GetIO().DisplaySize;
+            if (position.X < 0 || position.Y < 0 || position.X + size.X > display.X || position.Y + size.Y > display.Y) return;
+            var draw = ImGui.GetBackgroundDrawList();
+            draw.AddRectFilled(position, position + size, ImGuiHelper.Color(new Vector4(.04f, .05f, .07f, .94f)), 3);
+            draw.AddRect(position, position + size, ImGuiHelper.Color(color), 3);
+            draw.AddText(ImGui.GetFont(), font, position + new Vector2(4, 2), ImGuiHelper.Color(color), rank);
         }
 
         private void DrawMetaResult(TabletFilterResult result)

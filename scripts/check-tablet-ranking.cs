@@ -663,6 +663,12 @@ internal static class TabletRankingCheck
                 Console.WriteLine(checks + " UI theme checks passed.");
                 return 0;
             }
+            if (args.Length > 1 && args[1] == "--tooltip-only")
+            {
+                CheckTooltipGeometry(root, args.Length > 2 ? args[2] : null);
+                Console.WriteLine(checks + " tablet tooltip checks passed.");
+                return 0;
+            }
             CheckWaystoneCraft(root);
             CheckWaystoneNavigation(root);
             CheckCompactCompositions();
@@ -1259,6 +1265,7 @@ internal static class TabletRankingCheck
             plugin.Settings.HideTabletHighlightsOnItemHover = false;
             Check(!Hidden(), "Disabling automatic mode overrides tooltip hiding");
             Check(queue.Count == 0, "Hover checks do not retain stale queued items");
+            CheckNativeTooltipRanks(root, previewDirectory, reader, pixels, width, height);
             CheckCompositionUi(root, previewDirectory, pixels, width, height);
         }
         finally
@@ -1269,6 +1276,93 @@ internal static class TabletRankingCheck
             ImGuiNET.ImGui.DestroyContext(context);
             Directory.SetCurrentDirectory(previousDirectory);
         }
+    }
+
+    private static void CheckNativeTooltipRanks(string root, string previewDirectory, object reader, IntPtr atlas, int atlasWidth, int atlasHeight)
+    {
+        const BindingFlags flags=BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Instance|BindingFlags.Static;
+        var plugin=new StashUtilityCore{DllDirectory=Path.Combine(root,"Plugins","StashUtility")};var allocations=new List<IntPtr>();
+        var atlasBytes=new byte[atlasWidth*atlasHeight*4];Marshal.Copy(atlas,atlasBytes,0,atlasBytes.Length);
+        typeof(StashUtilityCore).GetField("handleObj",flags).SetValue(plugin,reader);
+        typeof(StashUtilityCore).GetField("readStdWStringMethod",flags).SetValue(plugin,
+            reader.GetType().GetMethods(flags).First(m=>m.Name=="ReadStdWString"&&m.GetParameters().Length==1));
+        IntPtr Allocate(int size){var p=Marshal.AllocHGlobal(size);allocations.Add(p);Marshal.Copy(new byte[size],0,p,size);return p;}
+        void Text(IntPtr address,int offset,string value)
+        {
+            var buffer=Allocate((Math.Max(16,value.Length)+1)*2);
+            Marshal.Copy((value+'\0').ToCharArray(),0,buffer,value.Length+1);
+            Marshal.StructureToPtr(new GameOffsets.Natives.StdWString{Buffer=buffer,Length=value.Length,Capacity=Math.Max(16,value.Length)},address+offset,false);
+        }
+        var profile=new TabletProfile{ModRanks=new(){["TowerDroppedItemRarityIncrease"]="C",["TowerExpeditionVaalRemnants"]="C",
+            ["TowerDroppedGoldIncrease"]="F",["TowerMapAdditionalModifier"]="S"}};
+        var mods=new Mods(IntPtr.Zero);
+        foreach(var pair in new[]{("TowerDroppedGoldIncrease",31f),("TowerMapAdditionalModifier",2f),("TowerDroppedItemRarityIncrease",8f),("TowerExpeditionVaalRemnants",2f)})
+            mods.ExplicitMods.Add((pair.Item1,(pair.Item2,0f)));
+        var observe=typeof(StashUtilityCore).GetMethod("ObserveMetaTablet",flags);
+        var observation=observe.Invoke(null,new object[]{"Expedition Tablet",mods});
+        var draw=typeof(StashUtilityCore).GetMethod("DrawNativeTabletTooltipRanks",flags);
+        var collect=typeof(StashUtilityCore).GetMethod("CollectTooltipOcclusions",flags);
+        var labels=(IList)typeof(StashUtilityCore).GetField("tabletTooltipLabels",flags).GetValue(plugin);
+        var covers=(IList)typeof(StashUtilityCore).GetField("tabletOcclusions",flags).GetValue(plugin);
+        var rowTexts=new[]{"8% d'Augmentation de la Rareté des Objets trouvés dans la Carte",
+            "Expeditions contain 2 Vaal Relics in Map","31% increased Gold found in Map","Map has 2 additional random Modifiers"};
+        var io=ImGuiNET.ImGui.GetIO();var previousDisplay=io.DisplaySize;io.DisplaySize=new Vector2(960,420);
+        var previousLanguage=ExileCenter.Core.GHSettings.UiLanguage;ExileCenter.Core.GHSettings.UiLanguage=ExileCenter.Localization.OverlayLanguage.French;
+        try
+        {
+            var parent=Allocate(0x600);var children=Allocate(4*IntPtr.Size);var nodes=new IntPtr[4];
+            for(int i=0;i<4;i++)
+            {
+                nodes[i]=Allocate(0x600);Marshal.WriteIntPtr(children,i*IntPtr.Size,nodes[i]);
+            }
+            (Vector2,uint)[] Render(float left)
+            {
+                Marshal.StructureToPtr(new GameOffsets.Objects.UiElement.UiElementBaseOffset{Self=parent,Flags=1u<<11,LocalScaleMultiplier=1,
+                    RelativePosition=new(left,30),UnscaledSize=new(700,230),ChildrensPtr=new(){First=children,Last=children+4*IntPtr.Size,End=children+4*IntPtr.Size}},parent,false);
+                for(int i=0;i<4;i++)
+                {
+                    Marshal.StructureToPtr(new GameOffsets.Objects.UiElement.UiElementBaseOffset{Self=nodes[i],ParentPtr=parent,Flags=1u<<11,LocalScaleMultiplier=1,
+                        RelativePosition=new(40,80+i*26),UnscaledSize=new(600,24)},nodes[i],false);
+                    Text(nodes[i],0x98,"label");Text(nodes[i],0x360,rowTexts[i]);
+                }
+                labels.Clear();covers.Clear();collect.Invoke(plugin,new object[]{parent,0,128});
+                Check(labels.Count==4,"All four real native tooltip labels are read independently of modifier order");
+                ImGuiNET.ImGui.NewFrame();
+                draw.Invoke(plugin,new[]{observation,profile,mods});
+                var buffer=ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
+                var result=Enumerable.Range(0,buffer.Size).Select(i=>(buffer[i].pos,buffer[i].col)).ToArray();
+                var background=ImGuiNET.ImGui.GetBackgroundDrawList();
+                background.AddRectFilled(new Vector2(left,30),new Vector2(left+700,260),0xff151515);
+                background.AddText(new Vector2(left+240,50),0xffdddddd,"TABLETTE D'EXPEDITION");
+                for(int i=0;i<4;i++)background.AddText(new Vector2(left+40,110+i*26),0xffdd9999,rowTexts[i]);
+                // Draw a second time over the preview's simulated game tooltip.
+                draw.Invoke(plugin,new[]{observation,profile,mods});
+                ImGuiNET.ImGui.Render();return result;
+            }
+            var right=Render(40);var gold=ExileCenter.Utils.ImGuiHelper.Color(new Vector4(.92f,.76f,.32f,1));
+            var purple=ExileCenter.Utils.ImGuiHelper.Color(new Vector4(.27f,.58f,.86f,1));
+            Check(right.Length>0&&right.Any(v=>v.Item2==gold)&&right.Any(v=>v.Item2==purple),"Total and individual badges reuse the configured grade colours: vertices="+right.Length+", colours="+string.Join(",",right.Select(v=>v.Item2.ToString("x")).Distinct()));
+            Check(right.Any(v=>v.Item1.X>742),"Modifier badges sit to the right when space is available");
+            if(previewDirectory!=null){Directory.CreateDirectory(previewDirectory);SaveUiPreview(Path.Combine(previewDirectory,"native-tablet-ranks-right.png"),atlasBytes,atlasWidth,atlasHeight);}
+            var left=Render(250);
+            Check(left.Any(v=>v.Item1.X<248)&&left.All(v=>v.Item1.X>=0&&v.Item1.X<=960&&v.Item1.Y>=0&&v.Item1.Y<=420),"Badges move left near the screen edge and stay on screen");
+            if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"native-tablet-ranks-left.png"),atlasBytes,atlasWidth,atlasHeight);
+            profile.ModRanks["TowerMapAdditionalModifier"]="F";
+            var changed=Render(40);
+            Check(!changed.Any(v=>v.Item2==gold),"Changing a saved priority immediately updates both total and modifier colours");
+            profile.ModRanks["TowerMapAdditionalModifier"]="S";
+            string saved=JsonConvert.SerializeObject(profile);
+            var find=typeof(StashUtilityCore).GetMethod("FindTabletTooltipModLine",flags);
+            var definition=ModDatabase.AllTabletMods.Single(m=>m.Id=="TowerMapAdditionalModifier");
+            var modifier=ModDatabase.TabletMeta.ForType("Expedition Tablet").Single(m=>m.GameModIds.Contains(definition.Id));
+            Check(find.Invoke(plugin,new object[]{"La Carte a 2 Modificateurs\naléatoires supplémentaires",definition,modifier})!=null,"Wrapped French modifier stays associated with one rank");
+            Check(find.Invoke(plugin,new object[]{"Unrelated item description",definition,modifier})==null,"Unknown lines are never assigned an inferred rank");
+            Check(find.Invoke(plugin,new object[]{rowTexts[3]+"\n"+rowTexts[3],definition,modifier})==null,"Repeated matching lines are treated as ambiguous");
+            labels.Clear();ImGuiNET.ImGui.NewFrame();draw.Invoke(plugin,new[]{observation,profile,mods});
+            Check(ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer.Size==0,"Closing the native tooltip clears its annotations");ImGuiNET.ImGui.EndFrame();
+            Check(JsonConvert.SerializeObject(profile)==saved,"Rendering native annotations preserves the saved priorities");
+        }
+        finally{io.DisplaySize=previousDisplay;ExileCenter.Core.GHSettings.UiLanguage=previousLanguage;foreach(var address in allocations)Marshal.FreeHGlobal(address);}
     }
 
     private static void CheckCompositionUi(string root, string previewDirectory, IntPtr atlas, int atlasWidth, int atlasHeight)

@@ -6601,6 +6601,7 @@ namespace StashUtility
         private void UpdateTabletOcclusions(IntPtr uiRoot)
         {
             tabletOcclusions.Clear();
+            tabletTooltipLabels.Clear();
             tabletTooltipVisible = false;
             // No item is being drawn while fighting or while the panels are closed.
             // Do not inspect transient game UI memory or enter a native callback then.
@@ -6661,7 +6662,12 @@ namespace StashUtility
             {
                 tabletTooltipVisible = true;
                 if (PluginUiElementReflection.TryGetAbsoluteRect(address, out var position, out var size))
+                {
                     AddTabletOcclusion(position - new Vector2(2), size + new Vector2(4));
+                    if (TryReadUiString(address, 0x98, out var id) && id == "label" &&
+                        TryReadUiString(address, 0x360, out var text, true))
+                        tabletTooltipLabels.Add((position, size, text));
+                }
                 // Text and comparison panels can extend outside the fixture rectangle.
                 // Include their rectangles rather than stopping at the first sized parent.
             }
@@ -7728,18 +7734,19 @@ namespace StashUtility
             }
         }
 
-        private bool TryReadUiString(IntPtr address, int offset, out string text)
+        private bool TryReadUiString(IntPtr address, int offset, out string text, bool multiline = false)
         {
             text = string.Empty;
             if (!TryReadMemory<StdWString>(address + offset, out var container) ||
-                container.Length <= 0 || container.Length > 128 ||
-                container.Capacity < container.Length || container.Capacity > 512 ||
+                container.Length <= 0 || container.Length > (multiline ? 1024 : 128) ||
+                container.Capacity < container.Length || container.Capacity > (multiline ? 2048 : 512) ||
                 container.PAD_14 != 0 || container.PAD_1C != 0 ||
                 (container.Capacity > 8 && (container.Buffer.ToInt64() < 0x10000 ||
                     container.Buffer.ToInt64() > 0x7FFFFFFFFFFF))) return false;
 
             text = ReadStdWString(container);
-            return text.Length == container.Length && !text.Any(char.IsControl) && !text.Contains('\uFFFD');
+            return text.Length == container.Length && !text.Any(c => char.IsControl(c) &&
+                !(multiline && c is '\r' or '\n')) && !text.Contains('\uFFFD');
         }
 
         private static bool hasClearedDumpFile = false;
