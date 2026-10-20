@@ -706,9 +706,12 @@ namespace StashUtility
                 label.Position.Y < Math.Min(first.Y, panel.Position.Y + 40) &&
                 label.Position.X >= panel.Position.X && label.Position.X + label.Size.X < panel.Position.X + panel.Size.X).ToArray();
             float titleEnd = titles.Length > 0 ? titles.Max(label => label.Position.X + label.Size.X) : panel.Position.X + panel.Size.X / 2;
+            float totalHeight = ImGui.CalcTextSize(total).Y * font / ImGui.GetFontSize() + 4;
+            float totalY = titles.Length > 0 ?
+                (titles.Min(label => label.Position.Y) + titles.Max(label => label.Position.Y + label.Size.Y) - totalHeight) / 2 : panel.Position.Y + 8;
             float rightEdge = panel.Position.X + panel.Size.X - 8;
             if (rightEdge - titleEnd >= totalWidth + 8)
-                DrawTabletTooltipRank(new Vector2((titleEnd + rightEdge - totalWidth) / 2, panel.Position.Y + 8), total, font, classification.RankColor);
+                DrawTabletTooltipRank(new Vector2((titleEnd + rightEdge - totalWidth) / 2, totalY), total, font, classification.RankColor);
             foreach (var row in rows)
             {
                 float width = ImGui.CalcTextSize(row.Rank).X * font / ImGui.GetFontSize() + 8;

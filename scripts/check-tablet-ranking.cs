@@ -1459,7 +1459,9 @@ internal static class TabletRankingCheck
             Check((bool)typeof(StashUtilityCore).GetMethod("TabletHighlightsSuppressed",flags).Invoke(plugin,null),"Real hovered item tooltip still honors automatic hiding");
             var bg=ImGuiNET.ImGui.GetBackgroundDrawList();
             bg.AddRectFilled(new(0,156*scale),new(1412*scale,600*scale),0xff151515);
-            bg.AddText(new(350,120),0xffdddddd,"PROJET MYTHIQUE - TABLETTE IRRADIEE");
+            bg.AddLine(new(0,156*scale),new(1412*scale,156*scale),0xff777777);
+            bg.AddLine(new(0,244*scale),new(1412*scale,244*scale),0xff777777);
+            bg.AddText(new(573*scale,(156+44)*scale-ImGuiNET.ImGui.GetFontSize()),0xffdddddd,"PROJET MYTHIQUE\nTABLETTE IRRADIEE");
             for(int i=0;i<4;i++)bg.AddText(new(96*scale,(156+88+135+33*i)*scale),0xffdd9999,
                 System.Text.RegularExpressions.Regex.Replace(capturedTexts[i],@"\[(?:[^\[\]|]*\|)?([^\[\]|]+)\]","$1"));
             int startVertex=bg.VtxBuffer.Size;draw.Invoke(plugin,new[]{capturedObservation,capturedProfile,capturedMods});
@@ -1468,6 +1470,8 @@ internal static class TabletRankingCheck
             foreach(int i in Enumerable.Range(0,4))
                 Check(rendered.Any(v=>v.pos.X>1316*scale&&v.pos.X<1412*scale&&Math.Abs(v.pos.Y-(156+88+135+33*i+16.5f)*scale)<12),"Captured modifier "+i+" has a badge inside its own line's right margin");
             var titleVertices=rendered.Where(v=>v.pos.Y<156*scale+88*scale).ToArray();
+            Check(Math.Abs((titleVertices.Min(v=>v.pos.Y)+titleVertices.Max(v=>v.pos.Y))/2-(156+44)*scale)<2,
+                "Composition is vertically centered between the upper and lower borders of the native title band");
             Check(Math.Abs((titleVertices.Min(v=>v.pos.X)+titleVertices.Max(v=>v.pos.X))/2-((573+266)*scale+1412*scale-8)/2)<2,
                 "Composition is centered between the title's right edge and the panel border");
             Check(!(bool)overlaps.Invoke(plugin,new object[]{new Vector2(281,600)*scale,new Vector2(72)*scale}),"Native tooltip touching its own item never suppresses that item's ranks");
@@ -1501,8 +1505,25 @@ internal static class TabletRankingCheck
                     Check(all.Any(v=>v.pos.X>1316*scale&&v.pos.X<1412*scale&&Math.Abs(v.pos.Y-(156+88+135+33*i+16.5f)*scale)<10&&
                         v.col==ExileCenter.Utils.ImGuiHelper.Color(colors["SABCDEF".IndexOf(grades[i])])),"Screenshot row "+i+" keeps its configured rank/color with encounter grade "+grade);
                 var heading=all.Where(v=>v.pos.Y<156*scale+88*scale).ToArray();
+                Check(Math.Abs((heading.Min(v=>v.pos.Y)+heading.Max(v=>v.pos.Y))/2-(156+44)*scale)<2,
+                    "Long title preserves vertical centering of the composition for grade "+grade);
                 Check(Math.Abs((heading.Min(v=>v.pos.X)+heading.Max(v=>v.pos.X))/2-(962*scale+1412*scale-8)/2)<2,
                     "Long title moves the centered composition to its actual available gap");
+                ImGuiNET.ImGui.Render();
+            }
+            foreach(float headerHeight in new[]{64f,88f,112f})
+            {
+                titleData.UnscaledSize=new(512*scale,(headerHeight-16)*scale);Marshal.StructureToPtr(titleData,title,false);
+                var headerData=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(header);
+                headerData.UnscaledSize=new(1412*scale,headerHeight*scale);Marshal.StructureToPtr(headerData,header,false);
+                var layoutData=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(layout);
+                layoutData.RelativePosition=new(0,headerHeight*scale);Marshal.StructureToPtr(layoutData,layout,false);
+                ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;update.Invoke(plugin,new object[]{IntPtr.Zero});
+                draw.Invoke(plugin,new[]{capturedObservation,capturedProfile,capturedMods});
+                var vertices=ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
+                var heading=Enumerable.Range(0,vertices.Size).Select(i=>vertices[i].pos).Where(p=>p.Y<(156+headerHeight)*scale).ToArray();
+                Check(heading.Length>0&&Math.Abs((heading.Min(p=>p.Y)+heading.Max(p=>p.Y))/2-(156+headerHeight/2)*scale)<2,
+                    "Composition follows native title-band height instead of a fixed top offset: "+headerHeight);
                 ImGuiNET.ImGui.Render();
             }
             io.MousePos=new Vector2(1800,900);ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;
