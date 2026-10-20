@@ -559,7 +559,14 @@ namespace StashUtility
         {
             var priorities = TabletPriorities(settings, observation.TabletType);
             var quality = TabletQualityEngine.Evaluate(observation, priorities);
-            MetaText(MT("priority_badge", "Badge (matching selected modifiers)") + " : " + quality.PriorityBadgeLabel);
+            MetaText((compact ? MT("hover_badge", "Badge") : MT("priority_badge", "Badge (matching selected modifiers)")) + " : " + quality.PriorityBadgeLabel);
+            bool accepted = quality.PriorityCount > 0 && (!settings.RequireAllRankedMods || quality.PriorityCount == priorities.Count);
+            if (compact)
+            {
+                MetaText((settings.RequireAllRankedMods ? "ET / AND" : "OU / OR") + " : " + (accepted ? "OK" : "NON"));
+                if (quality.Uncertain) MetaText(MT("hover_incomplete", "Incomplete observation"));
+                return;
+            }
             MetaText(MT("composition", "Composition") + " : " + (quality.Composition?.Label ?? "N/C"));
             MetaText(MT("global_grade", "Global grade (your priorities)") + " : " + (quality.Rank.Length > 0 ? quality.Rank : "N/C"));
             MetaText(MT("global_position", "Global position") + " : " + MT("position_unverified", "Unavailable: combination restrictions are not fully verified."));
@@ -576,7 +583,6 @@ namespace StashUtility
                     (priority.Minimum.HasValue ? " · min " + priority.Minimum + " · " + (detected.Roll.HasValue ? detected.Roll.Value.ToString() : "?") : "") : "";
                 MetaText((ranked?.Rank ?? "?") + " · " + selection + " · " + MT("reference_rank", "Reference") + " " + modifier.RankLabel + minimum + " · " + MetaDisplayText(modifier));
             }
-            bool accepted = quality.PriorityCount > 0 && (!settings.RequireAllRankedMods || quality.PriorityCount == priorities.Count);
             MetaText((settings.RequireAllRankedMods ? "ET / AND" : "OU / OR") + " : " + (accepted ? "OK" : "NON"));
             MetaText(MT("quality_order", "Sort order: global grade, count of matching priorities of that grade, secondary grades, then individual reference subranks. Equal quality stays tied. Composition is not a drop probability or a unique item identifier."));
             if (quality.Composition == null) MetaText(MT("composition_unknown", "N/C: the effective grades of exactly four distinct, readable modifiers are required."));
@@ -594,18 +600,19 @@ namespace StashUtility
             lastMetaObservation = result?.Observation ?? ObserveMetaTablet(type, mods);
             lastMetaItemName = name; lastMetaObservedUtc = DateTime.UtcNow;
             DrawNativeTabletTooltipRanks(lastMetaObservation, settings, mods);
-            if (Settings.TabletHelpTooltips)
+            if (Settings.TabletHelpTooltips && Settings.TabletHoverDetailsMode > 0)
             {
-                float width = Math.Max(200, Math.Min(460, ImGui.GetIO().DisplaySize.X - 20));
+                bool compact = Settings.TabletHoverDetailsMode != 2;
+                float width = Math.Max(100, Math.Min(compact ? 300 : 460, ImGui.GetIO().DisplaySize.X - 20));
                 ImGui.SetNextWindowSize(new Vector2(width, 0), ImGuiCond.Always);
                 ImGui.SetNextWindowSizeConstraints(new Vector2(width, 0), new Vector2(width,
                     Math.Max(200, ImGui.GetIO().DisplaySize.Y - 20)));
                 if (ImGui.BeginTooltip())
                 {
-                    ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + Math.Min(430, Math.Max(180, ImGui.GetIO().DisplaySize.X - 40)));
+                    ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + width - ImGui.GetStyle().WindowPadding.X * 2);
                     MetaText(name);
-                    DrawTabletQuality(lastMetaObservation, settings ?? new TabletProfile(), true);
-                    if (result != null)
+                    DrawTabletQuality(lastMetaObservation, settings ?? new TabletProfile(), compact);
+                    if (!compact && result != null)
                     {
                         MetaText(MT("advanced", "Advanced conditions (optional)") + " : " +
                             MT(result.State.ToString().ToLowerInvariant(), result.State.ToString().ToUpperInvariant()));

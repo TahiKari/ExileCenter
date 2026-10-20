@@ -13,6 +13,7 @@ namespace StashUtility
         public Dictionary<string, WaystoneCraftPreset> WaystoneCraftPresets = new();
         public bool EnableTabletManager = true;
         public bool TabletHelpTooltips = true;
+        public int TabletHoverDetailsMode = 1; // 0: hidden, 1: summary, 2: detailed.
         public bool EnableTabletUI = true;
         public bool HideTabletHighlightsOnItemHover = true;
         public bool DisableBadTabletHighlight = false;

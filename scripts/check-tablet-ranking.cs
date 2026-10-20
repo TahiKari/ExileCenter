@@ -1628,6 +1628,8 @@ internal static class TabletRankingCheck
         var highlight=typeof(StashUtilityCore).GetMethod("EvaluateAndHighlightItem",flags);
         typeof(StashUtilityCore).GetField("tabletItemHovered",flags).SetValue(plugin,true);
         typeof(StashUtilityCore).GetField("tabletTooltipVisible",flags).SetValue(plugin,true);
+        Check(plugin.Settings.TabletHoverDetailsMode==1,"Existing settings default to the compact hover summary");
+        plugin.Settings.TabletHoverDetailsMode=2;
         string savedSettings=JsonConvert.SerializeObject(plugin.Settings);
         int hoverBackgroundVertices=0;
         for(int frame=0;frame<3;frame++)
@@ -1641,6 +1643,8 @@ internal static class TabletRankingCheck
         var tooltipData=ImGuiNET.ImGui.GetDrawData();
         var tooltipXs=Enumerable.Range(0,tooltipData.CmdListsCount).SelectMany(i=>Enumerable.Range(0,tooltipData.CmdLists[i].VtxBuffer.Size).Select(j=>tooltipData.CmdLists[i].VtxBuffer[j].pos.X)).ToArray();
         Check(tooltipData.TotalVtxCount>500&&tooltipXs.Max()-tooltipXs.Min()>200&&tooltipXs.Max()-tooltipXs.Min()<500,"Tooltip has a readable text area, not an empty narrow auto-size column");
+        var detailedYs=Enumerable.Range(0,tooltipData.CmdListsCount).SelectMany(i=>Enumerable.Range(0,tooltipData.CmdLists[i].VtxBuffer.Size).Select(j=>tooltipData.CmdLists[i].VtxBuffer[j].pos.Y)).ToArray();
+        float detailedHeight=detailedYs.Max()-detailedYs.Min();
         Check(hoverBackgroundVertices==0,"Hover tooltip does not restore the hidden item badge or cover its quantity");
         Check(((TabletObservation)typeof(StashUtilityCore).GetField("lastMetaObservation",flags).GetValue(plugin)).Mods.Count==4,"Hover shares the same four observed modifiers with Analysis");
         if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"tablet-composition-tooltip.png"),atlasBytes,atlasWidth,atlasHeight);
@@ -1655,6 +1659,31 @@ internal static class TabletRankingCheck
             var data=ImGuiNET.ImGui.GetDrawData();
             var points=Enumerable.Range(0,data.CmdListsCount).SelectMany(i=>Enumerable.Range(0,data.CmdLists[i].VtxBuffer.Size).Select(j=>data.CmdLists[i].VtxBuffer[j].pos)).ToArray();
             Check(data.TotalVtxCount>500&&points.All(p=>p.X>=-2&&p.Y>=-2&&p.X<=io.DisplaySize.X+2&&p.Y<=io.DisplaySize.Y+2),"Tooltip text fits the viewport near each corner");
+        }
+        plugin.Settings.TabletHoverDetailsMode=1;
+        for(int frame=0;frame<3;frame++)
+        {
+            io.AddMousePosEvent(110,90);ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;
+            highlight.Invoke(plugin,new object[]{item,new Vector2(100,80),new Vector2(52)});ImGuiNET.ImGui.Render();
+        }
+        var summaryData=ImGuiNET.ImGui.GetDrawData();
+        var summaryPoints=Enumerable.Range(0,summaryData.CmdListsCount).SelectMany(i=>Enumerable.Range(0,summaryData.CmdLists[i].VtxBuffer.Size).Select(j=>summaryData.CmdLists[i].VtxBuffer[j].pos)).ToArray();
+        Check(summaryPoints.Length>0&&summaryPoints.Max(p=>p.Y)-summaryPoints.Min(p=>p.Y)<detailedHeight/3,
+            "Default summary occupies less than a third of the detailed panel height");
+        Check(summaryPoints.Max(p=>p.X)-summaryPoints.Min(p=>p.X)<=302,"Summary stays within its compact 300 pixel width");
+        if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"tablet-hover-summary.png"),atlasBytes,atlasWidth,atlasHeight);
+        plugin.Settings.TabletHoverDetailsMode=0;
+        io.AddMousePosEvent(110,90);ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;
+        highlight.Invoke(plugin,new object[]{item,new Vector2(100,80),new Vector2(52)});ImGuiNET.ImGui.Render();
+        Check(ImGuiNET.ImGui.GetDrawData().TotalVtxCount==0&&plugin.Settings.TabletHelpTooltips,
+            "Hover panel can be disabled independently while settings help remains enabled");
+        Check(((TabletObservation)typeof(StashUtilityCore).GetField("lastMetaObservation",flags).GetValue(plugin)).Mods.Count==4,
+            "Disabling the hover panel preserves tablet observation for Analysis");
+        foreach(int mode in new[]{0,1,2})
+        {
+            plugin.Settings.TabletHoverDetailsMode=mode;
+            var restored=JsonConvert.DeserializeObject<StashUtilitySettings>(JsonConvert.SerializeObject(plugin.Settings));
+            Check(restored.TabletHoverDetailsMode==mode,"Hover panel mode survives settings serialization: "+mode);
         }
         plugin.Settings.TabletHelpTooltips=false;
         io.AddMousePosEvent(110,90);ImGuiNET.ImGui.NewFrame();io.WantCaptureMouse=false;

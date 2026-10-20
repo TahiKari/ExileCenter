@@ -873,6 +873,9 @@ namespace StashUtility
             { Settings.TabletHelpTooltips = !Settings.TabletHelpTooltips; SaveSettings(); }
             using var help = ImGuiHelper.UseHelpTooltips(Settings.TabletHelpTooltips);
             if (!Settings.EnableTabletManager) return;
+            ImGui.SetNextItemWidth(180);
+            if (ImGui.Combo(MT("hover_details", "Hover details"), ref Settings.TabletHoverDetailsMode,
+                MT("hover_details_modes", "Disabled\0Summary\0Detailed\0"))) SaveSettings();
             DrawTabletVisibilityButton(false);
             TabletProfile SelectedProfile(string selectedType)
             {
