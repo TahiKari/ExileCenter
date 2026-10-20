@@ -355,6 +355,49 @@ internal static class TabletRankingCheck
             Check((bool)Call("CraftSelectTargetPage",false),"The unload test's target page is already selected, so acknowledging it cannot send native input");
             Check(!(bool)Call("CraftLocateStashTarget",true)&&(int)GetCraft("craftTargetProbeIndex")==1,
                 "An unloaded bucket advances a bounded loading probe without replacing the tracked map; the already-selected page needs no OS input");
+            SetCraft("craftSource",presetSource);SetCraft("craftSelectedT14",null);SetCraft("craftSelectedT16",null);
+            var t14Names=(string[])Call("CraftPageNames",presetSource,13);
+            var t16Names=(string[])Call("CraftPageNames",presetSource,15);
+            SetCraft("craftT14PageName",t14Names[0]);SetCraft("craftT16PageName",t16Names[5]);
+            Check((bool)Call("CraftResultDestinationsLoaded"),"Loaded corruption destinations are validated without visiting either tier or sending any input");
+            SetCraft("craftSelectedT16",presetMoney);
+            Check(!(bool)Call("CraftResultDestinationsLoaded"),"An unloaded destination still requires verified preparation rather than guessing its sub-tab");
+            SetCraft("craftSelectedT16",null);SetCraft("craftT14PageName","Missing destination");
+            bool missingResult=false;
+            try{Call("CraftResultDestinationsLoaded");}catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){missingResult=true;}
+            Check(missingResult,"A missing destination name is rejected without pointless navigation or currency consumption");
+            var probeTiers=typeof(StashUtilityCore).GetMethod("CraftProbeTiers",flags);
+            int[] ProbeTiers(int actual,int source,int previous)=>((IEnumerable<int>)probeTiers.Invoke(null,new object[]{actual,source,previous})).ToArray();
+            Check(ProbeTiers(14,14,14).SequenceEqual(new[]{14}),"After alchemy or exalt, loading probes remain within the T15 tier instead of visiting all 96 pages");
+            Check(ProbeTiers(13,14,14).SequenceEqual(new[]{13,14})&&ProbeTiers(15,14,14).SequenceEqual(new[]{15,14}),
+                "Corruption probes prioritize the verified new tier and retain only the possible original container");
+            Check(ProbeTiers(-1,14,-1).SequenceEqual(new[]{14}),"Unreadable tier metadata never expands the probe to unrelated tiers");
+            var pointType=typeof(StashUtilityCore).GetNestedType("NativePoint",flags);
+            object Point(int x,int y){var point=Activator.CreateInstance(pointType);pointType.GetField("X").SetValue(point,x);pointType.GetField("Y").SetValue(point,y);return point;}
+            var cursorTime=DateTime.UtcNow;
+            SetCraft("affinityCursor",Point(120,400));
+            bool Cursor(bool readable,int x,int y,int elapsed)=>(bool)Call("CraftCheckCursor",readable,Point(x,y),cursorTime.AddMilliseconds(elapsed));
+            Check(!Cursor(false,0,0,0)&&!Cursor(false,0,0,200),"An unreadable Windows cursor suspends all craft actions instead of falsely reporting mouse movement");
+            Check(Cursor(true,120,400,220),"Reading the unchanged cursor resumes after a temporary read failure without rebasing its expected position");
+            Check(!Cursor(false,0,0,300),"A recovered cursor resets the bounded read-failure interval");
+            bool unavailableCursor=false;
+            try{Cursor(false,0,0,550);}catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){unavailableCursor=true;}
+            Check(unavailableCursor,"A persistent unreadable cursor stops crafting after 250 ms without sending input");
+            foreach(var delta in new[]{(3,0),(0,3),(-3,0),(0,-3),(20,30)})
+            {
+                bool moved=false;try{Cursor(true,120+delta.Item1,400+delta.Item2,600);}catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){moved=true;}
+                Check(moved,"Real displacement still stops immediately, including during currency confirmation: "+delta);
+            }
+            Check(Cursor(true,122,398,700),"The original two-pixel cursor tolerance is preserved");
+            Call("CraftRecordCursorMove",Point(120,400),true,Point(121,401));
+            Check(Cursor(true,121,401,800),"A verified Windows readback is stable as the next movement baseline");
+            foreach(var result in new[]{(true,123,400),(false,0,0)})
+            {
+                bool rejected=false;
+                try{Call("CraftRecordCursorMove",Point(120,400),result.Item1,Point(result.Item2,result.Item3));}
+                catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){rejected=true;}
+                Check(rejected&&Cursor(true,121,401,900),"A failed or constrained automatic move cannot silently rebase the safety cursor: "+result);
+            }
             var window=new System.Drawing.Rectangle(0,0,1297,908);var offset=new Vector2(405,-86);
             var start=new Vector2(790,236);var currency=new Vector2(300,750);
             Vector2 Toolbar(Vector2 proposed,bool locked,Vector2 savedOffset,System.Drawing.Rectangle area)=>(Vector2)Call("PreserveLockedStashToolbarLocation",proposed,locked,savedOffset,area);

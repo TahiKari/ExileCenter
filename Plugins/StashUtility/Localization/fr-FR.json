@@ -1,4 +1,7 @@
 {
+  "stashutility.craft.cursor_position": "Curseur attendu : {0}, {1} ; lu : {2}, {3}.",
+  "stashutility.craft.cursor_target": "Windows n’a pas placé le curseur sur la cible vérifiée. Auto-craft arrêté.",
+  "stashutility.craft.cursor_unavailable": "La position du curseur n’a pas pu être lue. Auto-craft arrêté.",
   "stashutility.craft.result_destination": "Choisir un coffre de pierres et un nom de sous-onglet valide pour les résultats T14 et T16.",
   "stashutility.craft.result_stash": "Coffre de destination des pierres",
   "stashutility.craft.same_stash": "Utiliser le coffre des pierres source",

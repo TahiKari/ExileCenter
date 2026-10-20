@@ -1,4 +1,7 @@
 {
+  "stashutility.craft.cursor_position": "Cursor expected: {0}, {1}; read: {2}, {3}.",
+  "stashutility.craft.cursor_target": "Windows did not place the cursor on the verified target. Crafting stopped.",
+  "stashutility.craft.cursor_unavailable": "The cursor position could not be read. Crafting stopped.",
   "stashutility.craft.result_destination": "Choose a valid waystone stash and sub-tab name for T14 and T16 results.",
   "stashutility.craft.result_stash": "Destination waystone stash",
   "stashutility.craft.same_stash": "Use the source waystone stash",

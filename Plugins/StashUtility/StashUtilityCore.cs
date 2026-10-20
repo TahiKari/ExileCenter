@@ -1895,6 +1895,7 @@ namespace StashUtility
         private string craftIdentity, craftCurrency, craftStatus = "", craftClipboardBefore;
         private uint craftClipboardSequence;
         private DateTime craftDeadline, craftFeedbackUntil;
+        private DateTime craftCursorUnavailableSince;
         private const string CraftAlchemy = "CurrencyUpgradeToRare", CraftExalted = "CurrencyAddModToRare", CraftVaal = "CurrencyCorrupt";
         [DllImport("user32.dll")] private static extern uint GetClipboardSequenceNumber();
 
@@ -2298,9 +2299,13 @@ namespace StashUtility
             // never substitute a different item when the tracked address is absent.
             if (navigate)
             {
-                var candidates = Enumerable.Range(0, 16).OrderBy(t => t == craftTargetTier ? 0 : t == craftTier ? 1 : 2)
-                    .ThenBy(t => Math.Abs(t - craftTargetTier))
-                    .SelectMany(t => Enumerable.Range(0, 6).OrderBy(p => p == craftTargetPage ? 0 : 1).Select(p => (Tier: t, Page: p))).ToArray();
+                var stone = ReadFreshItem(craftItem);
+                Base itemBase = null;
+                stone?.TryGetComponent<Base>(out itemBase);
+                var candidates = CraftProbeTiers(CraftResultTier(itemBase?.InternalName, stone?.Path), craftTier, craftTargetTier)
+                    .SelectMany(t => Enumerable.Range(0, 6).OrderBy(p => p == craftTargetPage ? 0 : 1).Select(p => (Tier: t, Page: p)))
+                    .Prepend((Tier: craftTargetTier, Page: craftTargetPage))
+                    .Where(candidate => candidate.Tier is >= 0 and < 16 && candidate.Page is >= 0 and < 6).Distinct().ToArray();
                 if (craftTargetProbeIndex < candidates.Length)
                 {
                     var candidate = candidates[craftTargetProbeIndex];
@@ -2314,6 +2319,9 @@ namespace StashUtility
             }
             return false;
         }
+
+        private static IEnumerable<int> CraftProbeTiers(int actualTier, int sourceTier, int lastTier) =>
+            new[] { actualTier, lastTier, sourceTier }.Where(tier => tier is >= 0 and < 16).Distinct();
 
         private (IntPtr Item, IntPtr Slot, int Count) CraftStashCurrency(string currency, bool required = true)
         {
@@ -2720,6 +2728,20 @@ namespace StashUtility
             !string.IsNullOrWhiteSpace(craftT14PageName) && !string.IsNullOrWhiteSpace(craftT16PageName) &&
             (craftT14UseSource || craftSelectedT14 != null) && (craftT16UseSource || craftSelectedT16 != null);
 
+        private bool CraftResultDestinationsLoaded()
+        {
+            bool loaded = true;
+            foreach (var result in new[] { (Tab: craftSelectedT14 ?? craftSource, Tier: 13, Name: craftT14PageName),
+                (Tab: craftSelectedT16 ?? craftSource, Tier: 15, Name: craftT16PageName) })
+            {
+                var names = CraftPageNames(result.Tab, result.Tier);
+                if (names.Length != 6) { loaded = false; continue; }
+                if (names.Count(name => name == result.Name) != 1)
+                    throw CraftFailure("result_destination", "The corruption destination could not be verified.");
+            }
+            return loaded;
+        }
+
         private bool SaveCraftPreset(string name)
         {
             name = name?.Trim();
@@ -2771,6 +2793,7 @@ namespace StashUtility
                 craftScanAttempted = craftScanCompleted = false;
                 craftBatch.Clear(); craftCurrent = null; craftSelectedCurrency = null; craftResultsPrepared = false;
                 craftPageSnapshot = null; craftPageReady = DateTime.MinValue;
+                craftCursorUnavailableSince = DateTime.MinValue;
                 craftMapMove = null; craftJustCorrupted = craftMapWasHeld = false; craftOriginalSource = null;
                 craftMapsBeforeCurrency = null;
                 craftTargetTier = craftTargetPage = -1;
@@ -2870,8 +2893,36 @@ namespace StashUtility
             var point = new NativePoint { X = affinityWindow.X + (int)(pos.X + size.X / 2), Y = affinityWindow.Y + (int)(pos.Y + size.Y / 2) };
             if (pos.X < 0 || pos.Y < 0 || pos.X + size.X > affinityWindow.Width || pos.Y + size.Y > affinityWindow.Height)
                 throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
-            if (point.X == affinityCursor.X && point.Y == affinityCursor.Y) return true;
+            if (CraftCursorAt(point, affinityCursor)) return true;
             MoveTransferCursor(point); affinityNextAction = DateTime.UtcNow.AddMilliseconds(affinityActionDelay); return false;
+        }
+
+        private static bool CraftCursorAt(NativePoint expected, NativePoint actual) =>
+            Math.Abs((long)actual.X - expected.X) <= 2 && Math.Abs((long)actual.Y - expected.Y) <= 2;
+
+        private void CraftRecordCursorMove(NativePoint expected, bool readable, NativePoint actual)
+        {
+            if (!readable || !CraftCursorAt(expected, actual))
+                throw CraftFailure("cursor_target", "Windows did not place the cursor on the verified target. Crafting stopped.");
+            affinityCursor = actual;
+            craftCursorUnavailableSince = DateTime.MinValue;
+        }
+
+        private bool CraftCheckCursor(bool readable, NativePoint actual, DateTime now)
+        {
+            if (!readable)
+            {
+                if (craftCursorUnavailableSince == DateTime.MinValue) craftCursorUnavailableSince = now;
+                if (now - craftCursorUnavailableSince >= TimeSpan.FromMilliseconds(250))
+                    throw CraftFailure("cursor_unavailable", "The cursor position could not be read. Crafting stopped.");
+                return false; // No navigation, click, keyboard input or acknowledgement while unreadable.
+            }
+            craftCursorUnavailableSince = DateTime.MinValue;
+            if (!CraftCursorAt(affinityCursor, actual))
+                throw new InvalidOperationException(CraftFailure("mouse", "The mouse moved. Crafting stopped.").Message + "\n" +
+                    PluginText.F("stashutility.craft.cursor_position", "Cursor expected: {0}, {1}; read: {2}, {3}.",
+                        affinityCursor.X, affinityCursor.Y, actual.X, actual.Y));
+            return true;
         }
 
         private bool CraftInput(bool control = false, bool shift = false, bool copy = false, bool right = false)
@@ -2934,8 +2985,7 @@ namespace StashUtility
             {
                 var now = DateTime.UtcNow;
                 if ((AffinityGetAsyncKeyState(0x1B) & 0x8000) != 0) { StopWaystoneCraft(); return; }
-                if (!AffinityGetCursorPos(out var mouse) || Math.Abs(mouse.X - affinityCursor.X) > 2 || Math.Abs(mouse.Y - affinityCursor.Y) > 2)
-                    throw CraftFailure("mouse", "The mouse moved. Crafting stopped.");
+                if (!CraftCheckCursor(AffinityGetCursorPos(out var mouse), mouse, now)) return;
                 if (new[] { 0x12, 0x5B, 0x5C, 0x01, 0x02 }.Any(key => (AffinityGetAsyncKeyState(key) & 0x8000) != 0) ||
                     !affinityCtrlHeld && (AffinityGetAsyncKeyState(0x11) & 0x8000) != 0 ||
                     !affinityShiftHeld && (AffinityGetAsyncKeyState(0x10) & 0x8000) != 0)
@@ -3045,7 +3095,8 @@ namespace StashUtility
                 else if (craftPhase == 5)
                 {
                     if (!CraftInventoryUnchanged(CraftInventory())) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
-                    if (!craftFromInventory && Settings.WaystoneCraftCorrupt && !craftResultsPrepared && craftBatch.Count > 0)
+                    if (!craftFromInventory && Settings.WaystoneCraftCorrupt && !craftResultsPrepared && craftBatch.Count > 0 &&
+                        !(craftResultsPrepared = CraftResultDestinationsLoaded()))
                     {
                         craftOriginalSource = craftSource; craftOriginalPage = (craftTier, craftPage, craftSelectedPageName);
                         craftResultPreparation = 0; craftPhase = 28; craftDeadline = now.AddSeconds(30); return;
@@ -5105,7 +5156,13 @@ namespace StashUtility
             if (point.X < affinityWindow.Left || point.X >= affinityWindow.Right ||
                 point.Y < affinityWindow.Top || point.Y >= affinityWindow.Bottom || !AffinitySetCursorPos(point.X, point.Y))
                 throw new InvalidOperationException(PluginText.T("stashutility.transfer.affinity_cursor_failed", "Windows could not move the cursor to the inventory item."));
-            affinityCursor = point;
+            if (waystoneCraftRunning)
+            {
+                // SetCursorPos may be constrained by Windows. Read back our own move;
+                // never accept a position outside the same two-pixel target tolerance.
+                CraftRecordCursorMove(point, AffinityGetCursorPos(out var actual), actual);
+            }
+            else affinityCursor = point;
             affinityMousePositioned = true;
         }
 
