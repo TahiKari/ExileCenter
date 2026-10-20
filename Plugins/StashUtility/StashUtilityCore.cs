@@ -1993,7 +1993,7 @@ namespace StashUtility
             sourceBefore > 0 && sourceAfter >= 0 && received > 0 && sourceBefore - sourceAfter == received;
 
         private static bool CraftLocalCurrencyDelta(int before, int after, bool sameCurrency, bool sameIdentity) =>
-            before > 0 && sameCurrency && (after == before && sameIdentity || after == before - 1 && after > 0);
+            before > 0 && sameCurrency && (after == before && sameIdentity || after == before - 1 && after >= 0);
 
         private SortItem CraftInventoryCurrency() => CraftInventory().Where(item =>
             Settings.ProtectedInventoryCells?.Contains(item.Y * InventoryColumns + item.X) != true && item.Width == 1 && item.Height == 1 &&
@@ -2121,7 +2121,7 @@ namespace StashUtility
             var matches = CraftVisibleSlots(craftMoney.Page).Where(pair =>
                 ReadFreshItem(pair.Key)?.Path == "Metadata/Items/Currency/" + currency).ToList();
             if (matches.Count == 0 && !required) return default;
-            if (matches.Count != 1 || ReadFreshItem(matches[0].Key)?.TryGetComponent<Stack>(out var stack) != true || stack.Count < 1)
+            if (matches.Count != 1 || ReadFreshItem(matches[0].Key)?.TryGetComponent<Stack>(out var stack) != true || stack.Count < 0 || required && stack.Count == 0)
                 throw CraftFailure("currency", "The required currency is missing or ambiguous. Crafting stopped.");
             return (matches[0].Key, matches[0].Value, stack.Count);
         }
@@ -2851,6 +2851,13 @@ namespace StashUtility
                     var currency = craftLocalCurrency ? (local == null ? new List<Item>() : new List<Item> { ReadFreshItem(local.Address) }) :
                         CraftVisibleSlots(craftMoney.Page).Keys.Select(ReadFreshItem).Where(item => item?.Path == "Metadata/Items/Currency/" + craftCurrency).ToList();
                     int count = currency.Count == 0 ? 0 : currency.Count == 1 && currency[0].TryGetComponent<Stack>(out var stack) ? stack.Count : -1;
+                    if (craftLocalCurrency && count == 0 && local != null)
+                    {
+                        // The final orb can briefly remain as a zero-count native item.
+                        // Wait for its removal before committing the inventory snapshot.
+                        if (now >= craftDeadline) throw CraftFailure("ack", "The game did not confirm the action. No retry was sent.");
+                        return;
+                    }
                     if (stone.TryGetComponent<Mods>(out var afterMods) && CraftCurrencyAcknowledged(craftCurrency, craftBeforeRarity,
                         craftBeforeModCount, afterMods.Rarity, afterMods.ExplicitMods.Count, craftCurrencyCount, count, SortItemIdentity(stone) != craftIdentity))
                     {

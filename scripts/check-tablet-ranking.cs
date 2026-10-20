@@ -408,6 +408,8 @@ internal static class TabletRankingCheck
         Check(defaults.WaystoneCraftCorrupt&&defaults.WaystoneCraftCurrencyLimit==200,"Existing settings receive bounded craft defaults without migration");
         var delta=typeof(StashUtilityCore).GetMethod("CraftLocalCurrencyDelta",flags);
         bool Delta(int before,int after,bool same=true,bool identity=true)=>(bool)delta.Invoke(null,new object[]{before,after,same,identity});
+        Check(Delta(1,0,identity:false),"The last consumed orb may remain as a zero-count native stack while awaiting removal");
+        Check(!Delta(2,0,identity:false)&&!Delta(1,0,same:false,identity:false),"A transient zero stack cannot hide multiple consumed or substituted orbs");
         foreach(int before in new[]{1,2,20,100})
         {
             Check(Delta(before,before),"A currency stack can remain unchanged while awaiting confirmation");
