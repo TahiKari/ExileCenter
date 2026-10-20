@@ -1851,6 +1851,10 @@ namespace StashUtility
         private SortItem craftBorrowedCurrency;
         private string craftBorrowedCurrencyId;
         private int craftCurrencyTransferCount, craftAfterCurrencyPhase;
+        private int craftBorrowCell = -1;
+        private bool craftManualCurrencyTransfer;
+        private string craftBorrowIdentity;
+        private Vector2 craftBorrowOrigin, craftBorrowCellSize;
         private int craftTargetTier = -1, craftTargetPage = -1;
         private int craftTargetProbeIndex;
         private int craftPhase, craftInputPhase, craftSpent, craftDone, craftSkipped, craftX, craftY, craftCurrencyCount;
@@ -1995,11 +1999,27 @@ namespace StashUtility
         private static bool CraftLocalCurrencyDelta(int before, int after, bool sameCurrency, bool sameIdentity) =>
             before > 0 && sameCurrency && (after == before && sameIdentity || after == before - 1 && after >= 0);
 
-        private SortItem CraftInventoryCurrency() => CraftInventory().Where(item =>
-            Settings.ProtectedInventoryCells?.Contains(item.Y * InventoryColumns + item.X) != true && item.Width == 1 && item.Height == 1 &&
+        private bool CraftCurrencyCellAllowed(SortItem item) => item.Width == 1 && item.Height == 1 &&
+            Settings.ProtectedInventoryCells?.Contains(item.Y * InventoryColumns + item.X) != true &&
+            (!craftExplicitDestinations || craftBorrowedCurrency != null && CraftSameCell(item, craftBorrowedCurrency));
+
+        private SortItem CraftInventoryCurrency() => CraftInventory().Where(item => CraftCurrencyCellAllowed(item) &&
             ReadFreshItem(item.Address)?.Path == "Metadata/Items/Currency/" + craftCurrency &&
             ReadFreshItem(item.Address)?.TryGetComponent<Stack>(out var stack) == true && stack.Count > 0)
             .OrderBy(item => item.Y).ThenBy(item => item.X).FirstOrDefault();
+
+        private static int CraftFreeCurrencyCell(List<SortItem> items, HashSet<int> protectedCells) =>
+            Enumerable.Range(0, InventoryColumns * InventoryRows).FirstOrDefault(cell =>
+                protectedCells?.Contains(cell) != true && !items.Any(item => SortCells(item, item.X, item.Y, InventoryColumns).Contains(cell)), -1);
+
+        private bool CraftBorrowCursorMatches(IntPtr cursor)
+        {
+            if (!craftManualCurrencyTransfer || craftPhase is not (20 or 21 or 4)) return false;
+            var item = ReadFreshItem(cursor);
+            return item?.Path == "Metadata/Items/Currency/" + craftCurrency &&
+                (craftPhase == 20 || SortItemIdentity(item) == craftBorrowIdentity) &&
+                item.TryGetComponent<Stack>(out var stack) && stack.Count == craftCurrencyTransferCount;
+        }
 
         private bool CraftRequireCurrency()
         {
@@ -2502,6 +2522,7 @@ namespace StashUtility
                 craftScanAttempted = craftScanCompleted = false;
                 craftLocalCurrency = craftCurrencyPending = false; craftCurrencyCell = null;
                 craftBorrowedCurrency = null; craftBorrowedCurrencyId = null;
+                craftBorrowCell = -1; craftManualCurrencyTransfer = false; craftBorrowIdentity = null;
                 craftTargetTier = craftTargetPage = -1;
                 craftTargetProbeIndex = 0;
                 craftSource = selectedDestinations ? craftSelectedSource : null;
@@ -2650,7 +2671,10 @@ namespace StashUtility
                     throw CraftFailure("input", "Release the mouse buttons and modifier keys before starting.");
                 if (Core.Process.WindowArea != affinityWindow || Core.IsSettingsMenuOpen || Core.States.GameCurrentState != GameStateTypes.InGameState ||
                     sortRunning || affinityTransferRunning || stashScanQueue.Count > 0 && craftPhase != 12 ||
-                    !TryGetCraftInventory(out var inv, out var stash) || inv != affinityInventoryRoot || stash != affinityStashRoot || ReadSortCursorItem() != IntPtr.Zero)
+                    !TryGetCraftInventory(out var inv, out var stash) || inv != affinityInventoryRoot || stash != affinityStashRoot)
+                    throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                var heldCurrency = ReadSortCursorItem();
+                if (heldCurrency != IntPtr.Zero && !CraftBorrowCursorMatches(heldCurrency))
                     throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                 if (now < affinityNextAction) return;
                 if (craftPhase == 12)
@@ -2754,7 +2778,38 @@ namespace StashUtility
                         throw CraftFailure("changed", "The item, tab or inventory changed. Crafting stopped.");
                     var currency = CraftStashCurrency(craftCurrency);
                     craftCurrencyItem = currency.Item; craftCurrencyCount = currency.Count;
-                    if (!CraftPosition(currency.Slot, currency.Item) || !CraftInput(control: true)) return;
+                    if (craftManualCurrencyTransfer)
+                    {
+                        if (!TrySortGeometry(inv, CraftInventory(), false, InventoryColumns, InventoryRows, out _, out craftBorrowOrigin, out craftBorrowCellSize))
+                            throw CraftFailure("changed", "The inventory grid could not be verified. No currency was moved.");
+                        if (ReadFreshItem(currency.Item)?.TryGetComponent<Stack>(out var stack) != true || stack.MaxStack < 1)
+                            throw CraftFailure("currency", "The required currency is missing or ambiguous. Crafting stopped.");
+                        craftCurrencyTransferCount = Math.Min(currency.Count, stack.MaxStack);
+                        craftBorrowIdentity = null;
+                    }
+                    if (!CraftPosition(currency.Slot, currency.Item) || !CraftInput(control: !craftManualCurrencyTransfer)) return;
+                    craftPhase = craftManualCurrencyTransfer ? 20 : 4; craftDeadline = now.AddSeconds(5);
+                }
+                else if (craftPhase is 20 or 21)
+                {
+                    var items = CraftInventory();
+                    if (!CraftInventoryUnchanged(items) || FindSelectedStashPage(stash) != craftMoney.Page ||
+                        CraftFreeCurrencyCell(items, Settings.ProtectedInventoryCells) != craftBorrowCell)
+                        throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (now >= craftDeadline) throw CraftFailure("ack", "The game did not confirm the action. No retry was sent. Check the inventory and press Escape.");
+                    if (heldCurrency == IntPtr.Zero) return;
+                    if (craftPhase == 20) { craftBorrowIdentity = SortItemIdentity(ReadFreshItem(heldCurrency)); craftPhase = 21; }
+                    if (!TrySortGeometry(inv, items, false, InventoryColumns, InventoryRows, out _, out var origin, out var cellSize) ||
+                        Vector2.Distance(origin, craftBorrowOrigin) > 3 || Vector2.Distance(cellSize, craftBorrowCellSize) > 3)
+                        throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    var point = new NativePoint { X = affinityWindow.X + (int)(origin.X + (craftBorrowCell % InventoryColumns + .5f) * cellSize.X),
+                        Y = affinityWindow.Y + (int)(origin.Y + (craftBorrowCell / InventoryColumns + .5f) * cellSize.Y) };
+                    if (!affinityWindow.Contains(point.X, point.Y)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (point.X != affinityCursor.X || point.Y != affinityCursor.Y)
+                    {
+                        MoveTransferCursor(point); affinityNextAction = now.AddMilliseconds(affinityActionDelay); craftPhase = 21; return;
+                    }
+                    if (!CraftInput()) return;
                     craftPhase = 4; craftDeadline = now.AddSeconds(5);
                 }
                 else if (craftPhase == 4)
@@ -2763,8 +2818,9 @@ namespace StashUtility
                     var added = items.Where(item => !craftInventoryBefore.Any(before => before.Address == item.Address)).ToList();
                     var currency = added.Count == 1 ? ReadFreshItem(added[0].Address) : null;
                     if (FindSelectedStashPage(stash) != craftMoney.Page) throw CraftFailure("changed", "The item, tab or inventory changed. Crafting stopped.");
-                    if (currency?.Path == "Metadata/Items/Currency/" + craftCurrency && currency.TryGetComponent<Stack>(out var stack) &&
+                    if (heldCurrency == IntPtr.Zero && currency?.Path == "Metadata/Items/Currency/" + craftCurrency && currency.TryGetComponent<Stack>(out var stack) &&
                         added[0].Width == 1 && added[0].Height == 1 && Settings.ProtectedInventoryCells?.Contains(added[0].Y * InventoryColumns + added[0].X) != true &&
+                        added[0].Y * InventoryColumns + added[0].X == craftBorrowCell &&
                         CraftSameInventory(craftInventoryBefore, items.Where(item => item.Address != currency.Address)) &&
                         CraftCurrencyTransferAcknowledged(craftCurrencyCount, CraftStashCurrency(craftCurrency, required: false).Count, stack.Count))
                     {
@@ -2791,13 +2847,11 @@ namespace StashUtility
                         {
                             if (!CraftRequireCurrency()) return;
                             var items = CraftInventory();
-                            if (items.Any(item => ReadFreshItem(item.Address)?.Path == "Metadata/Items/Currency/" + craftCurrency))
-                                throw CraftFailure("protected_currency", "The matching inventory currency is protected. Move it out of protected cells before restarting.");
-                            int free = Enumerable.Range(0, InventoryColumns * InventoryRows).FirstOrDefault(cell =>
-                                !items.Any(item => cell % InventoryColumns >= item.X && cell % InventoryColumns < item.X + item.Width &&
-                                    cell / InventoryColumns >= item.Y && cell / InventoryColumns < item.Y + item.Height), -1);
-                            if (free < 0 || Settings.ProtectedInventoryCells?.Contains(free) == true)
+                            craftBorrowCell = CraftFreeCurrencyCell(items, Settings.ProtectedInventoryCells);
+                            if (craftBorrowCell < 0)
                                 throw CraftFailure("space", "Keep one unprotected inventory cell free for currency. Waystones stay in the stash.");
+                            craftManualCurrencyTransfer = items.Any(item => ReadFreshItem(item.Address)?.Path == "Metadata/Items/Currency/" + craftCurrency) ||
+                                CraftFreeCurrencyCell(items, null) != craftBorrowCell;
                             if (CraftNavigate(craftMoney)) craftPhase = 3;
                         }
                         return;
@@ -2966,7 +3020,7 @@ namespace StashUtility
 
         private void DrawWaystoneCraftOptions()
         {
-            ImGui.TextWrapped(PluginText.T("stashutility.craft.help", "Craft the entire selected batch directly in its stash. Keep one unprotected inventory cell free to borrow currency; unused borrowed currency is returned. Inventory waystones stay in the inventory. White or blue: alchemy, then exalted orbs up to six actual modifiers, then optional Vaal. Already rare: fill the missing modifiers before Vaal. Unique, unidentified, mirrored, sanctified and corrupted items are skipped. Escape, mouse movement or loss of focus stops crafting. Borrowed currency can remain in the inventory on interruption; check it and press Escape."));
+            ImGui.TextWrapped(PluginText.T("stashutility.craft.help", "Craft the entire selected batch directly in its stash, using only the selected currency stash. Existing inventory currency stays untouched. Keep one unprotected inventory cell free to borrow currency; unused borrowed currency is returned. Inventory waystones stay in the inventory. White or blue: alchemy, then exalted orbs up to six actual modifiers, then optional Vaal. Already rare: fill the missing modifiers before Vaal. Unique, unidentified, mirrored, sanctified and corrupted items are skipped. Escape, mouse movement or loss of focus stops crafting. Borrowed currency can remain in the inventory on interruption; check it and press Escape."));
             if (ImGui.Checkbox(PluginText.T("stashutility.craft.corrupt", "Corrupt after six modifiers"), ref Settings.WaystoneCraftCorrupt)) SaveSettings();
             ImGui.TextWrapped(PluginText.T("stashutility.craft.limit", "Maximum currency attempts per run"));
             ImGui.SetNextItemWidth(-1);
@@ -2993,7 +3047,7 @@ namespace StashUtility
                 {
                     string stage = craftPhase switch
                     {
-                        1 or 2 or 9 or 17 => "read", 3 or 4 or 5 or 6 => "currency",
+                        1 or 2 or 9 or 17 => "read", 3 or 4 or 5 or 6 or 20 or 21 => "currency",
                         7 => "apply", 8 => "confirm", 11 or 15 => "return", _ => "navigation"
                     };
                     string fallback = stage switch { "read" => "Reading the waystone", "currency" => "Preparing currency",
