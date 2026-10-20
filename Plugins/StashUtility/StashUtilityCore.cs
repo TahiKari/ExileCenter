@@ -5378,6 +5378,14 @@ namespace StashUtility
             return lockedStashToolbarLocation.Value;
         }
 
+        private static Vector2 StashToolbarAnchor(Vector2 viewportPosition, Vector2 viewportSize,
+            Vector2 gridPosition, Vector2 gridSize, Vector2 toolbarSize, bool merchant) =>
+            // The saved personal-stash offset uses one reference across tabs and restarts.
+            // A grid-dependent reference makes a valid saved offset jump on reload.
+            viewportPosition + (merchant && gridSize.X > 100 && gridSize.Y > 100
+                ? gridPosition + new Vector2(gridSize.X - toolbarSize.X, gridSize.Y + 4)
+                : new Vector2(16, viewportSize.Y * 0.83f));
+
         private void DrawStashSortButton()
         {
             if ((!Settings.ShowStashSortButton && !Settings.EnableTabletManager && !Settings.EnableWaystoneManager) || (!Core.IsSettingsMenuOpen && !InventoryToolbarHasFocus()) ||
@@ -5419,7 +5427,7 @@ namespace StashUtility
             bool showCraft = Settings.EnableWaystoneManager && !merchant;
             var windowSize = new Vector2(4 + ((Settings.ShowStashSortButton ? 1 : 0) + (Settings.EnableTabletManager ? 1 : 0) + (toolbarLocked ? 1 : 2)) * 32 + (showCraft ? 132 : 0), 36);
             bool hasGridBounds = size.X > 100 && size.Y > 100;
-            var anchor = viewport.Pos + (hasGridBounds ? position + new Vector2(size.X - windowSize.X, size.Y + 4) : new Vector2(16, viewport.Size.Y * 0.83f));
+            var anchor = StashToolbarAnchor(viewport.Pos, viewport.Size, position, size, windowSize, merchant);
             var offset = toolbarOffset;
             if (!float.IsFinite(offset.X) || !float.IsFinite(offset.Y)) offset = Vector2.Zero;
             var location = merchant ? anchor + offset : PreserveLockedStashToolbarLocation(anchor + offset, toolbarLocked, offset, Core.Process.WindowArea);
@@ -5463,10 +5471,10 @@ namespace StashUtility
                     ImGui.SameLine();
                 }
                 DrawToolbarPositionControls(anchor, location, windowSize, ref toolbarOffset, ref toolbarLocked);
-                if (!hasGridBounds && wasLocked != toolbarLocked)
+                if ((!merchant || !hasGridBounds) && wasLocked != toolbarLocked)
                 {
-                    // Specialized tabs use a fixed left anchor. Keep the right edge in place
-                    // when the 32-pixel move button is hidden or shown, just like normal tabs.
+                    // Keep the right edge in place when the fixed-anchor toolbar
+                    // hides or shows its 32-pixel move button.
                     toolbarOffset.X = location.X - anchor.X + (toolbarLocked ? 32 : -32);
                     toolbarOffset.Y = location.Y - anchor.Y;
                     SaveSettings();

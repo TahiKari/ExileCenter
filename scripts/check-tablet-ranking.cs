@@ -364,6 +364,26 @@ internal static class TabletRankingCheck
             Check(Toolbar(currency,true,offset+Vector2.One,window)==currency,"Changing the saved toolbar offset is still applied");
             Check(Toolbar(start,true,offset+Vector2.One,new System.Drawing.Rectangle(0,0,1920,1080))==start,"Changing the game window recalculates a visible toolbar position");
             Check(Toolbar(currency,false,offset,window)==currency&&Toolbar(start,true,offset,window)==start,"Unlocking permits movement and relocking uses the new position");
+            var viewportSize = new Vector2(1920,1079);
+            var userOffset = new Vector2(413,-95.57001f);
+            var toolbarSize = new Vector2(236,36);
+            var savedLayout = new StashUtilitySettings { StashToolbarOffset=userOffset, StashToolbarLocked=true };
+            string savedLayoutJson = JsonConvert.SerializeObject(savedLayout);
+            foreach(var grid in new[]{(new Vector2(42,378),new Vector2(583,389)),
+                (new Vector2(8,162),new Vector2(630,630)),(new Vector2(20,180),new Vector2(610,610)),(Vector2.Zero,Vector2.Zero)})
+            {
+                var anchor=(Vector2)Call("StashToolbarAnchor",Vector2.Zero,viewportSize,grid.Item1,grid.Item2,toolbarSize,false);
+                var reloaded=new StashUtilityCore{Settings=JsonConvert.DeserializeObject<StashUtilitySettings>(savedLayoutJson)};
+                var firstPosition=(Vector2)typeof(StashUtilityCore).GetMethod("PreserveLockedStashToolbarLocation",flags).Invoke(reloaded,
+                    new object[]{anchor+reloaded.Settings.StashToolbarOffset,true,userOffset,new System.Drawing.Rectangle(0,0,1920,1080)});
+                Check(Vector2.Distance(firstPosition,new Vector2(429,800))<.01f,
+                    "A fresh plugin restores the user's saved position when first opened on maps, currency, normal or unreadable grids: "+grid);
+                Check(JsonConvert.SerializeObject(reloaded.Settings)==savedLayoutJson,"Restoring toolbar placement never rewrites the user's offsets, lock or other settings");
+                Check((Vector2)Call("StashToolbarAnchor",Vector2.Zero,viewportSize,grid.Item1,grid.Item2,toolbarSize+new Vector2(32,0),false)==anchor,
+                    "Showing or hiding the move icon cannot select a different personal-stash anchor");
+            }
+            var merchantAnchor=(Vector2)Call("StashToolbarAnchor",Vector2.Zero,viewportSize,new Vector2(20,180),new Vector2(610,610),toolbarSize,true);
+            Check(merchantAnchor==new Vector2(394,794),"The merchant toolbar retains its existing grid anchor");
             Console.WriteLine("VALIDATION waystone navigation: native tier tiles and numeric counters, all 96 tier/page confirmations, ambiguous labels rejected and locked toolbar position preserved; no game input executed.");
         }
         finally{coreHandleProperty.SetValue(ExileCenter.Core.Process,previousReader);coreWindowProperty.SetValue(ExileCenter.Core.Process,previousWindow);foreach(var allocation in allocations)Marshal.FreeHGlobal(allocation);((IDisposable)reader).Dispose();}
