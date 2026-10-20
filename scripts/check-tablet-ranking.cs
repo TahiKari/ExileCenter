@@ -27,6 +27,12 @@ internal static class TabletRankingCheck
         var allocations=new List<IntPtr>();
         var readerType=typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Utils.SafeMemoryHandle");
         var reader=Activator.CreateInstance(readerType,flags,null,new object[]{System.Diagnostics.Process.GetCurrentProcess().Id},null);
+        var coreHandleProperty=typeof(ExileCenter.GameProcess).GetProperty("Handle",flags);
+        var coreWindowProperty=typeof(ExileCenter.GameProcess).GetProperty("WindowArea",flags);
+        var previousReader=coreHandleProperty.GetValue(ExileCenter.Core.Process);
+        var previousWindow=coreWindowProperty.GetValue(ExileCenter.Core.Process);
+        coreHandleProperty.SetValue(ExileCenter.Core.Process,reader);
+        coreWindowProperty.SetValue(ExileCenter.Core.Process,new System.Drawing.Rectangle(0,0,1920,1080));
         var plugin=new StashUtilityCore{DllDirectory=Path.Combine(root,"Plugins","StashUtility")};
         typeof(StashUtilityCore).GetField("handleObj",flags).SetValue(plugin,reader);
         typeof(StashUtilityCore).GetField("readStdWStringMethod",flags).SetValue(plugin,
@@ -73,6 +79,28 @@ internal static class TabletRankingCheck
         object Call(string name,params object[] args)=>typeof(StashUtilityCore).GetMethod(name,flags).Invoke(plugin,args);
         try
         {
+            var emptyGrid=Node();var emptyMapPage=Node(emptyGrid);
+            var gridData=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(emptyGrid);
+            gridData.UnscaledSize=new GameOffsets.Natives.StdTuple2D<float>(864,576);Marshal.StructureToPtr(gridData,emptyGrid,false);
+            object[] gridArgs={emptyMapPage,IntPtr.Zero,Vector2.Zero,Vector2.Zero};
+            Check(((IList)Call("CraftReadMapGrid",gridArgs))?.Count==0&&(IntPtr)gridArgs[1]==IntPtr.Zero,
+                "An empty native 12x8 map destination is validated without guessing a server inventory id");
+            Visible(emptyMapPage,false);
+            Check(Call("CraftReadMapGrid",gridArgs)==null,"A hidden map grid cannot receive a corrupted waystone");Visible(emptyMapPage,true);
+            gridData.UnscaledSize=new GameOffsets.Natives.StdTuple2D<float>(864,500);Marshal.StructureToPtr(gridData,emptyGrid,false);
+            Check(Call("CraftReadMapGrid",gridArgs)==null,"A grid with inconsistent square-cell dimensions is rejected before pickup");
+            var routingHeader=Header(new[]{"Div 1","Div 2","High","Medium","Low","Craft"},Enumerable.Range(0,6).Select(_=>Node()).ToArray(),out var routingDropdown);
+            Visible(routingDropdown,false);
+            var routingButtons=(IntPtr)Call("ResolvePath",routingHeader,new[]{0});
+            var routingVector=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(routingButtons).ChildrensPtr;
+            var orderedRoutingButtons=Enumerable.Range(0,6).Select(index=>Marshal.ReadIntPtr(routingVector.First,index*8)).ToArray();
+            for(int index=0;index<6;index++)
+            {
+                var data=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(orderedRoutingButtons[index]);
+                data.RelativePosition=new GameOffsets.Natives.StdTuple2D<float>(index*60,0);Marshal.StructureToPtr(data,orderedRoutingButtons[index],false);
+                Marshal.WriteIntPtr(routingVector.First,index*8,orderedRoutingButtons[5-index]);
+            }
+            Check((string)Call("CraftSixthPageName",routingHeader)=="Craft","The sixth visible sub-tab is found by screen position even when native child order is reversed and its label is customized");
             var tiers=new IntPtr[16];var subpages=new IntPtr[16][];
             string[] roman={"I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI"};
             for(int tier=0;tier<16;tier++)
@@ -311,7 +339,7 @@ internal static class TabletRankingCheck
             Check(Toolbar(currency,false,offset,window)==currency&&Toolbar(start,true,offset,window)==start,"Unlocking permits movement and relocking uses the new position");
             Console.WriteLine("VALIDATION waystone navigation: native tier tiles and numeric counters, all 96 tier/page confirmations, ambiguous labels rejected and locked toolbar position preserved; no game input executed.");
         }
-        finally{foreach(var allocation in allocations)Marshal.FreeHGlobal(allocation);((IDisposable)reader).Dispose();}
+        finally{coreHandleProperty.SetValue(ExileCenter.Core.Process,previousReader);coreWindowProperty.SetValue(ExileCenter.Core.Process,previousWindow);foreach(var allocation in allocations)Marshal.FreeHGlobal(allocation);((IDisposable)reader).Dispose();}
     }
 
     private static void CheckWaystoneCraft(string root)
@@ -432,7 +460,58 @@ internal static class TabletRankingCheck
         var invariant=typeof(StashUtilityCore).GetMethod("CraftInventoryUnchanged",flags);
         bool Unchanged(IList current,int except=0)=>(bool)invariant.Invoke(plugin,new object[]{current,new IntPtr(except)});
         var other=Cell(1,0,"other");var coin=Cell(2,1,"one exalt");var target=Cell(3,2,"waystone");
+        var mapContents=typeof(StashUtilityCore).GetMethod("CraftMapContentsEqual",flags);
+        bool SameMaps(IList actual,IList expected)=>(bool)mapContents.Invoke(null,new object[]{actual,expected});
+        Check(SameMaps(Cells(Cell(9,0,"waystone"),Cell(10,1,"other")),Cells(other,target)),
+            "Native map-page packing may change positions and view addresses after a verified transfer");
+        Check(!SameMaps(Cells(Cell(9,0,"different mods"),other),Cells(other,target)),
+            "A different map with the same base type cannot acknowledge the routed corrupted map");
+        Check(!SameMaps(Cells(target,target),Cells(other,target)),"Duplicate map identities retain their exact multiplicities during transfer acknowledgement");
         var freeCurrencyCell=typeof(StashUtilityCore).GetMethod("CraftFreeCurrencyCell",flags);
+        var pickupCount=typeof(StashUtilityCore).GetMethod("CraftPickupCountAllowed",flags);
+        bool Pickup(int available,int capacity,int received)=>(bool)pickupCount.Invoke(null,new object[]{available,capacity,received});
+        foreach(int received in new[]{1,2,19,20})Check(Pickup(653,20,received),"Borrowing acknowledges the actual native withdrawal rather than assuming a full stack: "+received);
+        foreach(int received in new[]{-1,0,21,653})Check(!Pickup(653,20,received),"Zero, negative or oversized native withdrawals are rejected: "+received);
+        Check(Pickup(3,20,1)&&Pickup(3,20,3)&&!Pickup(3,20,4),"A partial currency source bounds the quantity actually received");
+        var changedMap=typeof(StashUtilityCore).GetMethod("CraftChangedMapAddress",flags);
+        var mapBefore=new Dictionary<IntPtr,string>{{new IntPtr(100),"white map"},{new IntPtr(200),"other map"}};
+        IntPtr ChangedMap(Dictionary<IntPtr,string> after)=>(IntPtr)changedMap.Invoke(null,new object[]{mapBefore,after,new IntPtr(100)});
+        Check(ChangedMap(new(){{new IntPtr(101),"four-mod rare map"},{new IntPtr(200),"other map"}})==new IntPtr(101),
+            "After alchemy, a recreated native map is followed only when all other stash maps are unchanged");
+        Check(ChangedMap(new(){{new IntPtr(100),"five-mod rare map"},{new IntPtr(200),"other map"}})==new IntPtr(100),
+            "A native map updated in place remains eligible for currency acknowledgement");
+        Check(ChangedMap(new(){{new IntPtr(101),"four-mod rare map"},{new IntPtr(200),"changed other map"}})==IntPtr.Zero,
+            "An unrelated stash-map change cannot be hidden by rebinding the craft target");
+        Check(ChangedMap(new(){{new IntPtr(101),"rare map"},{new IntPtr(201),"other map"}})==IntPtr.Zero,
+            "Multiple native map replacements are ambiguous and never select another map");
+        Check(ChangedMap(new(){{new IntPtr(100),"white map"},{new IntPtr(101),"rare map"},{new IntPtr(200),"other map"}})==IntPtr.Zero,
+            "A newly added map cannot be mistaken for the crafted original");
+        var corruptedPage=typeof(StashUtilityCore).GetMethod("CraftCorruptedDestinationPage",flags);
+        int CorruptedPage(int original,int result,bool corrupted)=>(int)corruptedPage.Invoke(null,new object[]{original,result,corrupted});
+        Check(CorruptedPage(14,13,true)==5,"A T15 corrupted into T14 is routed to the sixth T14 sub-tab");
+        Check(CorruptedPage(14,15,true)==5,"A T15 corrupted into T16 is routed to the sixth T16 sub-tab");
+        Check(CorruptedPage(14,14,true)==-1,"An unchanged T15 remains in its existing sub-tab");
+        foreach(int tier in Enumerable.Range(0,16))
+        {
+            Check(CorruptedPage(14,tier,false)==-1,"A map is never routed by the corruption rule before confirmed corruption: "+tier);
+            if(tier is not (13 or 15))Check(CorruptedPage(14,tier,true)==-1,"Other tiers are not redirected by the T14/T16 rule: "+tier);
+        }
+        var freeMapCell=typeof(StashUtilityCore).GetMethod("CraftFreeMapCell",flags);
+        var mapCells=Cells(Enumerable.Range(0,96).Select(index=>
+        {
+            var item=Cell(1000+index,index%12,"map "+index);cellType.GetField("Y").SetValue(item,index/12);return item;
+        }).ToArray());
+        Check((int)freeMapCell.Invoke(null,new object[]{mapCells})==-1,"A full sixth map page is detected before any map pickup");
+        mapCells.RemoveAt(95);Check((int)freeMapCell.Invoke(null,new object[]{mapCells})==95,"The last free cell of a 12x8 page remains a valid destination");
+        mapCells.RemoveAt(12);Check((int)freeMapCell.Invoke(null,new object[]{mapCells})==12,"Routing uses the first verified empty cell without swapping another map");
+        typeof(StashUtilityCore).GetField("craftOriginalPage",flags).SetValue(plugin,(14,5,"10 - 19"));
+        typeof(StashUtilityCore).GetField("craftTier",flags).SetValue(plugin,15);typeof(StashUtilityCore).GetField("craftPage",flags).SetValue(plugin,2);
+        typeof(StashUtilityCore).GetField("craftSelectedPageName",flags).SetValue(plugin,"Renamed T16 destination");
+        typeof(StashUtilityCore).GetMethod("CraftRestoreOriginalPage",flags).Invoke(plugin,null);
+        Check((int)typeof(StashUtilityCore).GetField("craftTier",flags).GetValue(plugin)==14&&
+            (int)typeof(StashUtilityCore).GetField("craftPage",flags).GetValue(plugin)==5&&
+            (string)typeof(StashUtilityCore).GetField("craftSelectedPageName",flags).GetValue(plugin)=="10 - 19",
+            "Routing restores the original T15 sub-tab and its saved name before continuing the batch");
         var allowedCurrency=typeof(StashUtilityCore).GetMethod("CraftCurrencyCellAllowed",flags);
         var protectedCells=new HashSet<int>{48,49,50,52,51,53,54,55,56,57,58,59,36,24,12,0,1,13,25,37};
         plugin.Settings.ProtectedInventoryCells=protectedCells;
