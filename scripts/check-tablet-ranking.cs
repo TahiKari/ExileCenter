@@ -488,6 +488,18 @@ internal static class TabletRankingCheck
             "A newly added map cannot be mistaken for the crafted original");
         var corruptedPage=typeof(StashUtilityCore).GetMethod("CraftCorruptedDestinationPage",flags);
         int CorruptedPage(int original,int result,bool corrupted)=>(int)corruptedPage.Invoke(null,new object[]{original,result,corrupted});
+        var resultTier=typeof(StashUtilityCore).GetMethod("CraftResultTier",flags);
+        int Tier(string name,string path)=>(int)resultTier.Invoke(null,new object[]{name,path});
+        for(int tier=1;tier<=16;tier++)
+        {
+            Check(Tier("MapKeyTier"+tier,null)==tier-1,"Routing reads the actual base-item tier independently of the containing stash page: "+tier);
+            Check(Tier(null,"Metadata/Items/Maps/MapKeyTier"+tier)==tier-1,"Native metadata paths provide a verified tier fallback: "+tier);
+            Check(Tier(null,"Metadata/Items/Maps/Waystone"+tier)==tier-1,"Alternative waystone paths preserve actual tier detection: "+tier);
+        }
+        Check(Tier("MapKeyTier14","Metadata/Items/Maps/MapKeyTier15")==13,"The result base tier takes precedence over an obsolete path or original T15 container");
+        foreach(string name in new[]{null,"","MapKeyTier0","MapKeyTier17","unreadable"})Check(Tier(name,null)==-1,"An unreadable or invalid result tier is never replaced by the containing stash tier");
+        Check(CorruptedPage(14,Tier("MapKeyTier14",null),true)==5,"A T14 result still displayed inside the original T15 container is routed to T14/6");
+        Check(CorruptedPage(14,Tier("MapKeyTier16",null),true)==5,"A T16 result still displayed inside the original T15 container is routed to T16/6");
         Check(CorruptedPage(14,13,true)==5,"A T15 corrupted into T14 is routed to the sixth T14 sub-tab");
         Check(CorruptedPage(14,15,true)==5,"A T15 corrupted into T16 is routed to the sixth T16 sub-tab");
         Check(CorruptedPage(14,14,true)==-1,"An unchanged T15 remains in its existing sub-tab");

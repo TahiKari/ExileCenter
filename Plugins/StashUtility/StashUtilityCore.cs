@@ -2111,6 +2111,13 @@ namespace StashUtility
         private static int CraftCorruptedDestinationPage(int originalTier, int resultTier, bool corrupted) =>
             corrupted && originalTier is >= 0 and < 16 && originalTier != resultTier && resultTier is 13 or 15 ? 5 : -1;
 
+        private static int CraftResultTier(string internalName, string path)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(internalName ?? "", @"^MapKeyTier(\d+)$");
+            if (!match.Success) match = System.Text.RegularExpressions.Regex.Match(path ?? "", @"(?:MapKeyTier|Waystone)(\d+)$");
+            return match.Success && int.TryParse(match.Groups[1].Value, out int tier) && tier is >= 1 and <= 16 ? tier - 1 : -1;
+        }
+
         private List<SortItem> CraftReadMapGrid(IntPtr page, out IntPtr inventory, out Vector2 origin, out Vector2 cell)
         {
             inventory = IntPtr.Zero; origin = cell = Vector2.Zero;
@@ -3176,10 +3183,12 @@ namespace StashUtility
                         craftDone++; craftItem = IntPtr.Zero; craftPhase = 1; craftRoute = null;
                         return;
                     }
-                    if (CraftCorruptedDestinationPage(craftTier, craftTargetTier, craftJustCorrupted) >= 0)
+                    stone.TryGetComponent<Base>(out var resultBase);
+                    int resultTier = CraftResultTier(resultBase?.InternalName, stone.Path);
+                    if (CraftCorruptedDestinationPage(craftTier, resultTier, craftJustCorrupted) >= 0)
                     {
                         craftOriginalPage = (craftTier, craftPage, craftSelectedPageName);
-                        craftMoveTier = craftTargetTier;
+                        craftMoveTier = resultTier;
                         craftMapMove = new TabletPlacement { Source = new SortItem { Address = stone.Address, Width = 1, Height = 1, Identity = craftIdentity, Tier = 1 } };
                         craftPhase = 22; craftDeadline = now.AddSeconds(30); return;
                     }
