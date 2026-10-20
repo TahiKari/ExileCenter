@@ -1848,6 +1848,11 @@ namespace StashUtility
         private int craftTier = -1, craftPage = -1;
         private readonly Queue<(int tier, int page)> craftPages = new();
         private SortItem craftCurrencyCell;
+        private SortItem craftBorrowedCurrency;
+        private string craftBorrowedCurrencyId;
+        private int craftCurrencyTransferCount, craftAfterCurrencyPhase;
+        private int craftTargetTier = -1, craftTargetPage = -1;
+        private int craftTargetProbeIndex;
         private int craftPhase, craftInputPhase, craftSpent, craftDone, craftSkipped, craftX, craftY, craftCurrencyCount;
         private Rarity craftBeforeRarity;
         private int craftBeforeModCount;
@@ -1919,7 +1924,7 @@ namespace StashUtility
                 mods < 6 ? CraftExalted : corrupt ? CraftVaal : null : null;
         }
 
-        private Dictionary<IntPtr, IntPtr> CraftVisibleSlots(IntPtr root)
+        private Dictionary<IntPtr, IntPtr> CraftVisibleSlots(IntPtr root, bool visibleOnly = true)
         {
             var result = new Dictionary<IntPtr, IntPtr>();
             var visited = new HashSet<IntPtr>();
@@ -1931,12 +1936,17 @@ namespace StashUtility
                 if (node.address == IntPtr.Zero || !visited.Add(node.address)) continue;
                 // The inventory grid is a layout container whose own visibility bit
                 // can be unset; TryGetAffinityInventory validates its visible panel.
-                if (!(node.address == root && root == affinityInventoryRoot) && !IsElementVisible(node.address)) continue;
+                if (visibleOnly && !(node.address == root && root == affinityInventoryRoot) && !IsElementVisible(node.address)) continue;
                 if (visited.Count > 4096 || node.depth > 18) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
-                var item = GetHighlightItemAddress(node.address);
-                if (item != IntPtr.Zero && PluginUiElementReflection.TryGetAbsoluteRect(node.address, out _, out var size) &&
-                    size.X is >= 15 and <= 110 && size.Y is >= 15 and <= 110 && !result.ContainsKey(item)) result.Add(item, node.address);
                 var data = ReadMemory<UiElementBaseOffset>(node.address);
+                var item = GetHighlightItemAddress(node.address);
+                if (item != IntPtr.Zero && !result.ContainsKey(item))
+                {
+                    bool slotSize = visibleOnly ? PluginUiElementReflection.TryGetAbsoluteRect(node.address, out _, out var size) &&
+                        size.X is >= 15 and <= 110 && size.Y is >= 15 and <= 110 :
+                        data.UnscaledSize.X is >= 15 and <= 110 && data.UnscaledSize.Y is >= 15 and <= 110;
+                    if (slotSize) result.Add(item, node.address);
+                }
                 long count = data.ChildrensPtr.TotalElements(IntPtr.Size);
                 if (count < 0 || count > 4096) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                 foreach (var child in ReadStdVector<IntPtr>(data.ChildrensPtr)) pending.Push((child, node.depth + 1));
@@ -1969,10 +1979,18 @@ namespace StashUtility
                 baseline = baseline.Where(item => !CraftSameCell(item, craftCurrencyCell));
                 current = current.Where(item => !CraftSameCell(item, craftCurrencyCell));
             }
-            var snapshot = current.ToList();
-            return snapshot.Count == baseline.Count() && baseline.All(before => snapshot.Any(item =>
-                item.Address == before.Address && item.Identity == before.Identity && CraftSameCell(item, before)));
+            return CraftSameInventory(baseline, current);
         }
+
+        private static bool CraftSameInventory(IEnumerable<SortItem> before, IEnumerable<SortItem> after)
+        {
+            var baseline = before.ToList(); var current = after.ToList();
+            return current.Count == baseline.Count && baseline.All(item => current.Any(other =>
+                other.Address == item.Address && other.Identity == item.Identity && CraftSameCell(item, other)));
+        }
+
+        private static bool CraftCurrencyTransferAcknowledged(int sourceBefore, int sourceAfter, int received) =>
+            sourceBefore > 0 && sourceAfter >= 0 && received > 0 && sourceBefore - sourceAfter == received;
 
         private static bool CraftLocalCurrencyDelta(int before, int after, bool sameCurrency, bool sameIdentity) =>
             before > 0 && sameCurrency && (after == before && sameIdentity || after == before - 1 && after > 0);
@@ -2041,6 +2059,84 @@ namespace StashUtility
             if (stone?.IsValid != true || !IsCraftWaystone(stone.Path)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
             craftItem = target.Address;
             return stone;
+        }
+
+        private Item CraftTargetStone()
+        {
+            if (craftFromInventory) return CraftInventoryStone();
+            if (!CraftInventoryUnchanged(CraftInventory())) throw CraftFailure("changed", "The item, tab or inventory changed. Crafting stopped.");
+            var stone = ReadFreshItem(craftItem);
+            if (stone?.IsValid != true || !IsCraftWaystone(stone.Path))
+                throw CraftFailure("changed", "The item, tab or inventory changed. Crafting stopped.");
+            return stone;
+        }
+
+        private bool CraftSelectTargetPage(bool navigate)
+        {
+            var tierHeader = ResolvePath(craftSource.Page, new[] { 0 });
+            var tier = CraftPageControl(tierHeader, craftTargetTier, 16, navigate);
+            return tier != IntPtr.Zero && CraftPageControl(ResolvePath(tier, new[] { 0 }), craftTargetPage, 6, navigate) != IntPtr.Zero;
+        }
+
+        private bool CraftLocateStashTarget(bool navigate = true)
+        {
+            if (FindSelectedStashPage(affinityStashRoot) != craftSource.Page) return false;
+            if (!CraftUiChildren(ResolvePath(craftSource.Page, new[] { 0, 1 }), 16, out var tiers)) return false;
+            var tierOrder = Enumerable.Range(0, 16).OrderBy(t => IsElementVisible(tiers[t]) ? 0 : t == craftTargetTier ? 1 : t == craftTier ? 2 : 3)
+                .ThenBy(t => Math.Abs(t - craftTargetTier));
+            foreach (int tier in tierOrder)
+            {
+                if (!CraftUiChildren(ResolvePath(tiers[tier], new[] { 0, 1 }), 6, out var pages)) continue;
+                foreach (int page in Enumerable.Range(0, 6).OrderBy(p => IsElementVisible(pages[p]) ? 0 : p == craftTargetPage ? 1 : 2))
+                    if (CraftVisibleSlots(pages[page], visibleOnly: false).TryGetValue(craftItem, out var slot))
+                    {
+                        craftTargetTier = tier; craftTargetPage = page; craftSlot = slot;
+                        return CraftSelectTargetPage(navigate) && IsElementVisible(slot);
+                    }
+            }
+            // Some native buckets populate their item widgets only after selection.
+            // Probe verified tier/page controls without any selected currency, and
+            // never substitute a different item when the tracked address is absent.
+            if (navigate)
+            {
+                var candidates = Enumerable.Range(0, 16).OrderBy(t => t == craftTargetTier ? 0 : t == craftTier ? 1 : 2)
+                    .ThenBy(t => Math.Abs(t - craftTargetTier))
+                    .SelectMany(t => Enumerable.Range(0, 6).OrderBy(p => p == craftTargetPage ? 0 : 1).Select(p => (Tier: t, Page: p))).ToArray();
+                if (craftTargetProbeIndex < candidates.Length)
+                {
+                    var candidate = candidates[craftTargetProbeIndex];
+                    var tier = CraftPageControl(ResolvePath(craftSource.Page, new[] { 0 }), candidate.Tier, 16, navigate: true);
+                    if (tier != IntPtr.Zero && CraftPageControl(ResolvePath(tier, new[] { 0 }), candidate.Page, 6, navigate: true) != IntPtr.Zero)
+                    {
+                        craftTargetProbeIndex++;
+                        affinityNextAction = DateTime.UtcNow.AddMilliseconds(150);
+                    }
+                }
+            }
+            return false;
+        }
+
+        private (IntPtr Item, IntPtr Slot, int Count) CraftStashCurrency(string currency, bool required = true)
+        {
+            var matches = CraftVisibleSlots(craftMoney.Page).Where(pair =>
+                ReadFreshItem(pair.Key)?.Path == "Metadata/Items/Currency/" + currency).ToList();
+            if (matches.Count == 0 && !required) return default;
+            if (matches.Count != 1 || ReadFreshItem(matches[0].Key)?.TryGetComponent<Stack>(out var stack) != true || stack.Count < 1)
+                throw CraftFailure("currency", "The required currency is missing or ambiguous. Crafting stopped.");
+            return (matches[0].Key, matches[0].Value, stack.Count);
+        }
+
+        private void CraftReturnCurrency(int nextPhase)
+        {
+            craftAfterCurrencyPhase = nextPhase; craftPhase = 15; craftRoute = null;
+            craftDeadline = DateTime.UtcNow.AddSeconds(30);
+        }
+
+        private void CraftCompleteStashWaystone()
+        {
+            if (craftBorrowedCurrency != null) { CraftReturnCurrency(10); return; }
+            craftDone++; craftItem = IntPtr.Zero; craftPhase = 16; craftRoute = null;
+            craftDeadline = DateTime.UtcNow.AddSeconds(30);
         }
 
         private static DetectedStashTab FindCraftCurrencyTab(IEnumerable<DetectedStashTab> tabs)
@@ -2405,6 +2501,9 @@ namespace StashUtility
                 craftNamedProbePage = -1;
                 craftScanAttempted = craftScanCompleted = false;
                 craftLocalCurrency = craftCurrencyPending = false; craftCurrencyCell = null;
+                craftBorrowedCurrency = null; craftBorrowedCurrencyId = null;
+                craftTargetTier = craftTargetPage = -1;
+                craftTargetProbeIndex = 0;
                 craftSource = selectedDestinations ? craftSelectedSource : null;
                 craftMoney = selectedDestinations ? craftSelectedMoney : null;
                 if (!TryGetCraftInventory(out affinityInventoryRoot, out affinityStashRoot) || Core.IsSettingsMenuOpen ||
@@ -2424,8 +2523,6 @@ namespace StashUtility
                 }
                 craftSourcePage = fromInventory ? IntPtr.Zero : page;
                 craftInventoryBefore.Clear(); craftInventoryBefore.AddRange(CraftInventory());
-                if (!fromInventory && craftInventoryBefore.Sum(item => item.Width * item.Height) >= InventoryColumns * InventoryRows)
-                    throw CraftFailure("space", "Keep at least one free inventory cell for crafting.");
                 craftQueue.Clear();
                 craftPages.Clear(); craftTier = craftPage = -1;
                 if (fromInventory)
@@ -2585,11 +2682,11 @@ namespace StashUtility
                     craftInputPhase = 0;
                     return;
                 }
-                if (!craftFromInventory && craftPhase is 1 or 2 or 3 or 4)
+                if (!craftFromInventory && craftPhase is 1 or 2)
                 {
                     if (FindSelectedStashPage(stash) != craftSource.Page || !CraftSelectWaystonePage(navigate: false)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                 }
-                else if (!craftLocalCurrency && craftPhase is 6 or 7 or 8 or 9)
+                else if (!craftLocalCurrency && craftPhase is 6 or 7 or 8 or 9 or 17)
                     if (FindSelectedStashPage(stash) != craftMoney.Page) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                 if (craftPhase == 1)
                 {
@@ -2604,6 +2701,9 @@ namespace StashUtility
                             return;
                         }
                         craftItem = craftQueue.Dequeue();
+                        craftTargetTier = craftTier; craftTargetPage = craftPage;
+                        craftTargetProbeIndex = 0;
+                        craftDeadline = now.AddSeconds(30);
                     }
                     if (!CraftVisibleSlots(craftFromInventory ? inv : craftSource.Page).TryGetValue(craftItem, out craftSlot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                     if (!CraftPosition(craftSlot, craftItem)) return;
@@ -2623,7 +2723,7 @@ namespace StashUtility
                         return;
                     }
                     craftClipboardSequence = GetClipboardSequenceNumber();
-                    var stone = craftPhase == 9 ? CraftInventoryStone() : ReadFreshItem(craftItem);
+                    var stone = craftPhase == 9 ? CraftTargetStone() : ReadFreshItem(craftItem);
                     if (stone?.IsValid != true || !stone.TryGetComponent<Mods>(out var mods) || !stone.TryGetComponent<Base>(out var itemBase) ||
                         craftPhase == 2 && SortItemIdentity(stone) != craftIdentity) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                     string previousCurrency = craftCurrency;
@@ -2643,41 +2743,79 @@ namespace StashUtility
                                 craftX = target.X; craftY = target.Y;
                                 craftInventoryBefore.Remove(target);
                             }
-                            craftPhase = craftFromInventory ? 5 : 3;
+                            craftPhase = 5;
                         }
                     }
                     else craftPhase = craftCurrency == null ? 10 : 5;
                 }
                 else if (craftPhase == 3)
                 {
-                    if (!CraftRequireCurrency()) return;
-                    if (SortItemIdentity(ReadFreshItem(craftItem)) != craftIdentity || !CraftInventoryUnchanged(CraftInventory())) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
-                    if (!CraftVisibleSlots(craftSource.Page).TryGetValue(craftItem, out craftSlot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
-                    if (!CraftPosition(craftSlot, craftItem) || !CraftInput(control: true)) return;
-                    craftPhase = 4; craftDeadline = now.AddSeconds(3);
+                    if (!CraftInventoryUnchanged(CraftInventory()) || FindSelectedStashPage(stash) != craftMoney.Page)
+                        throw CraftFailure("changed", "The item, tab or inventory changed. Crafting stopped.");
+                    var currency = CraftStashCurrency(craftCurrency);
+                    craftCurrencyItem = currency.Item; craftCurrencyCount = currency.Count;
+                    if (!CraftPosition(currency.Slot, currency.Item) || !CraftInput(control: true)) return;
+                    craftPhase = 4; craftDeadline = now.AddSeconds(5);
                 }
                 else if (craftPhase == 4)
                 {
                     var items = CraftInventory();
                     var added = items.Where(item => !craftInventoryBefore.Any(before => before.Address == item.Address)).ToList();
-                    if (added.Count == 1 && added[0].Identity == craftIdentity && CraftInventoryUnchanged(items, added[0].Address) &&
-                        !CraftVisibleSlots(craftSource.Page).ContainsKey(craftItem))
+                    var currency = added.Count == 1 ? ReadFreshItem(added[0].Address) : null;
+                    if (FindSelectedStashPage(stash) != craftMoney.Page) throw CraftFailure("changed", "The item, tab or inventory changed. Crafting stopped.");
+                    if (currency?.Path == "Metadata/Items/Currency/" + craftCurrency && currency.TryGetComponent<Stack>(out var stack) &&
+                        added[0].Width == 1 && added[0].Height == 1 && Settings.ProtectedInventoryCells?.Contains(added[0].Y * InventoryColumns + added[0].X) != true &&
+                        CraftSameInventory(craftInventoryBefore, items.Where(item => item.Address != currency.Address)) &&
+                        CraftCurrencyTransferAcknowledged(craftCurrencyCount, CraftStashCurrency(craftCurrency, required: false).Count, stack.Count))
                     {
-                        craftItem = added[0].Address; craftX = added[0].X; craftY = added[0].Y;
-                        CraftInventoryStone(); craftPhase = 5; craftRoute = null;
+                        craftBorrowedCurrency = added[0]; craftBorrowedCurrencyId = craftCurrency;
+                        craftInventoryBefore.Add(added[0]); craftLocalCurrency = true; craftPhase = 19; craftRoute = null;
+                        craftTargetProbeIndex = 0;
+                        craftDeadline = now.AddSeconds(30);
                     }
                     else if (now >= craftDeadline) throw CraftFailure("ack", "The game did not confirm the action. No retry was sent. Check the inventory and press Escape.");
                 }
                 else if (craftPhase == 5)
                 {
-                    CraftInventoryStone();
+                    if (SortItemIdentity(CraftTargetStone()) != craftIdentity) throw CraftFailure("changed", "The item, tab or inventory changed. Crafting stopped.");
+                    if (!craftFromInventory)
+                    {
+                        if (craftBorrowedCurrency != null && craftBorrowedCurrencyId != craftCurrency) { CraftReturnCurrency(5); return; }
+                        craftLocalCurrency = true;
+                        if (CraftInventoryCurrency() != null)
+                        {
+                            craftPhase = 19; craftRoute = null; craftDeadline = now.AddSeconds(30);
+                            craftTargetProbeIndex = 0;
+                        }
+                        else
+                        {
+                            if (!CraftRequireCurrency()) return;
+                            var items = CraftInventory();
+                            if (items.Any(item => ReadFreshItem(item.Address)?.Path == "Metadata/Items/Currency/" + craftCurrency))
+                                throw CraftFailure("protected_currency", "The matching inventory currency is protected. Move it out of protected cells before restarting.");
+                            int free = Enumerable.Range(0, InventoryColumns * InventoryRows).FirstOrDefault(cell =>
+                                !items.Any(item => cell % InventoryColumns >= item.X && cell % InventoryColumns < item.X + item.Width &&
+                                    cell / InventoryColumns >= item.Y && cell / InventoryColumns < item.Y + item.Height), -1);
+                            if (free < 0 || Settings.ProtectedInventoryCells?.Contains(free) == true)
+                                throw CraftFailure("space", "Keep one unprotected inventory cell free for currency. Waystones stay in the stash.");
+                            if (CraftNavigate(craftMoney)) craftPhase = 3;
+                        }
+                        return;
+                    }
                     if (!CraftRequireCurrency()) return;
                     craftLocalCurrency = !craftExplicitDestinations && CraftInventoryCurrency() != null;
                     if (craftLocalCurrency || CraftNavigate(craftMoney)) craftPhase = 6;
                 }
+                else if (craftPhase == 19)
+                {
+                    if (now >= craftDeadline) throw CraftFailure("target_page", "The current waystone could not be located in its stash. No currency was applied.");
+                    if (FindSelectedStashPage(stash) != craftSource.Page && !CraftNavigate(craftSource)) return;
+                    if (!CraftLocateStashTarget()) return;
+                    craftPhase = 6;
+                }
                 else if (craftPhase == 6)
                 {
-                    if (SortItemIdentity(CraftInventoryStone()) != craftIdentity) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (SortItemIdentity(CraftTargetStone()) != craftIdentity) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                     if (craftSpent >= Math.Clamp(Settings.WaystoneCraftCurrencyLimit, 1, 2000)) throw CraftFailure("budget", "Currency limit reached. The current waystone stays in the inventory.");
                     var local = craftLocalCurrency ? CraftInventoryCurrency() : null;
                     var currencies = CraftVisibleSlots(craftLocalCurrency ? inv : craftMoney.Page).Where(pair =>
@@ -2690,23 +2828,25 @@ namespace StashUtility
                     craftCurrencyCount = stack.Count;
                     craftCurrencyCell = local;
                     if (!CraftPosition(currencies[0].Value, craftCurrencyItem) || !CraftInput(right: true)) return;
-                    craftPhase = 7;
+                    craftPhase = 7; craftDeadline = now.AddSeconds(10);
                 }
                 else if (craftPhase == 7)
                 {
-                    var stone = CraftInventoryStone();
-                    if (!CraftVisibleSlots(inv).TryGetValue(stone.Address, out var slot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (now >= craftDeadline) throw CraftFailure("target_page", "The current waystone could not be confirmed before applying currency.");
+                    var stone = CraftTargetStone();
+                    if (!craftFromInventory && !CraftSelectTargetPage(navigate: false)) throw CraftFailure("changed", "The item, tab or inventory changed. Crafting stopped.");
+                    if (!CraftVisibleSlots(craftFromInventory ? inv : craftSource.Page).TryGetValue(stone.Address, out var slot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                     if (!CraftPosition(slot, stone.Address)) return;
                     if (SortItemIdentity(stone) != craftIdentity) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                     if (!stone.TryGetComponent<Mods>(out var beforeMods)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
                     craftBeforeRarity = beforeMods.Rarity; craftBeforeModCount = beforeMods.ExplicitMods.Count;
                     if (!CraftInput()) return;
                     craftCurrencyPending = craftLocalCurrency;
-                    craftSpent++; craftPhase = 8; craftDeadline = now.AddSeconds(3);
+                    craftSpent++; craftPhase = 8; craftDeadline = now.AddSeconds(6);
                 }
                 else if (craftPhase == 8)
                 {
-                    var stone = CraftInventoryStone();
+                    var stone = CraftTargetStone();
                     var local = craftLocalCurrency ? CraftInventory().SingleOrDefault(item => CraftSameCell(item, craftCurrencyCell)) : null;
                     var currency = craftLocalCurrency ? (local == null ? new List<Item>() : new List<Item> { ReadFreshItem(local.Address) }) :
                         CraftVisibleSlots(craftMoney.Page).Keys.Select(ReadFreshItem).Where(item => item?.Path == "Metadata/Items/Currency/" + craftCurrency).ToList();
@@ -2718,54 +2858,75 @@ namespace StashUtility
                         {
                             craftInventoryBefore.RemoveAll(item => CraftSameCell(item, craftCurrencyCell));
                             if (local != null) craftInventoryBefore.Add(local);
+                            if (craftBorrowedCurrency != null && CraftSameCell(craftBorrowedCurrency, craftCurrencyCell))
+                                craftBorrowedCurrency = local;
                             craftCurrencyPending = false;
                         }
-                        if (!CraftVisibleSlots(inv).TryGetValue(stone.Address, out var slot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
-                        if (!CraftPosition(slot, stone.Address)) return;
-                        if (craftInputPhase == 0) craftClipboardSequence = GetClipboardSequenceNumber();
-                        if (!CraftInput(control: true, copy: true)) return;
-                        craftPhase = 9; craftDeadline = now.AddSeconds(3);
+                        craftIdentity = SortItemIdentity(stone);
+                        craftTargetProbeIndex = 0;
+                        craftPhase = 17; craftDeadline = now.AddSeconds(30);
                     }
                     else if (now >= craftDeadline) throw CraftFailure("ack", "The game did not confirm the action. No retry was sent. Check the inventory and press Escape.");
                 }
+                else if (craftPhase == 17)
+                {
+                    if (now >= craftDeadline) throw CraftFailure("target_page", "The current waystone could not be located in its stash. No further currency was applied.");
+                    var stone = CraftTargetStone();
+                    if (SortItemIdentity(stone) != craftIdentity) throw CraftFailure("changed", "The item, tab or inventory changed. Crafting stopped.");
+                    if (!craftFromInventory && !CraftLocateStashTarget()) return;
+                    if (!CraftVisibleSlots(craftFromInventory ? inv : craftSource.Page).TryGetValue(stone.Address, out var slot)) return;
+                    if (!CraftPosition(slot, stone.Address)) return;
+                    if (craftInputPhase == 0) craftClipboardSequence = GetClipboardSequenceNumber();
+                    if (!CraftInput(control: true, copy: true)) return;
+                    craftPhase = 9; craftDeadline = now.AddSeconds(5);
+                }
                 else if (craftPhase == 10)
                 {
-                    var stone = CraftInventoryStone();
+                    var stone = CraftTargetStone();
                     if (craftFromInventory)
                     {
                         craftInventoryBefore.Add(CraftInventory().Single(item => item.Address == stone.Address));
                         craftDone++; craftItem = IntPtr.Zero; craftPhase = 1; craftRoute = null;
                         return;
                     }
-                    if (!CraftNavigate(craftSource)) return;
-                    craftPhase = 15; craftDeadline = now.AddSeconds(20);
+                    CraftCompleteStashWaystone();
                 }
                 else if (craftPhase == 15)
                 {
-                    var stone = CraftInventoryStone();
-                    if (now >= craftDeadline || FindSelectedStashPage(stash) != craftSource.Page)
+                    if (now >= craftDeadline || !CraftInventoryUnchanged(CraftInventory()))
                         throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
-                    if (!CraftSelectWaystonePage(navigate: true)) return;
-                    if (!CraftVisibleSlots(inv).TryGetValue(stone.Address, out var slot)) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
-                    if (!CraftPosition(slot, stone.Address) || !CraftInput(control: true, shift: true)) return;
-                    craftPhase = 11; craftDeadline = now.AddSeconds(3);
+                    if (!CraftNavigate(craftMoney)) return;
+                    var items = CraftInventory();
+                    var cell = items.SingleOrDefault(item => CraftSameCell(item, craftBorrowedCurrency));
+                    var currency = cell == null ? null : ReadFreshItem(cell.Address);
+                    if (currency?.Path != "Metadata/Items/Currency/" + craftBorrowedCurrencyId ||
+                        !currency.TryGetComponent<Stack>(out var stack) || stack.Count < 1 ||
+                        !CraftVisibleSlots(inv).TryGetValue(currency.Address, out var slot))
+                        throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    craftCurrencyCount = CraftStashCurrency(craftBorrowedCurrencyId, required: false).Count;
+                    craftCurrencyTransferCount = stack.Count;
+                    if (!CraftPosition(slot, currency.Address) || !CraftInput(control: true, shift: true)) return;
+                    craftPhase = 11; craftDeadline = now.AddSeconds(5);
                 }
                 else if (craftPhase == 11)
                 {
-                    if (FindSelectedStashPage(stash) != craftSource.Page) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
-                    if (CraftInventoryUnchanged(CraftInventory()))
+                    if (FindSelectedStashPage(stash) != craftMoney.Page) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (CraftSameInventory(craftInventoryBefore.Where(item => !CraftSameCell(item, craftBorrowedCurrency)), CraftInventory()) &&
+                        CraftCurrencyTransferAcknowledged(CraftStashCurrency(craftBorrowedCurrencyId, required: false).Count, craftCurrencyCount, craftCurrencyTransferCount))
                     {
-                        craftDone++; craftItem = IntPtr.Zero; craftPhase = 16; craftRoute = null;
-                        craftDeadline = now.AddSeconds(20);
+                        craftInventoryBefore.RemoveAll(item => CraftSameCell(item, craftBorrowedCurrency));
+                        craftBorrowedCurrency = null; craftBorrowedCurrencyId = null;
+                        craftPhase = craftAfterCurrencyPhase; craftRoute = null;
                     }
                     else if (now >= craftDeadline) throw CraftFailure("ack", "The game did not confirm the action. No retry was sent. Check the inventory and press Escape.");
                 }
                 else if (craftPhase == 16)
                 {
-                    // Depositing a changed-tier/corrupted stone can change the game's
-                    // selected bucket. Restore the pending page without rebuilding its queue.
-                    if (now >= craftDeadline || !CraftInventoryUnchanged(CraftInventory()) || FindSelectedStashPage(stash) != craftSource.Page)
+                    // A crafted stone can move to another native bucket. Restore the
+                    // original selected page, keeping the remaining batch intact.
+                    if (now >= craftDeadline || !CraftInventoryUnchanged(CraftInventory()))
                         throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
+                    if (FindSelectedStashPage(stash) != craftSource.Page && !CraftNavigate(craftSource)) return;
                     if (CraftSelectWaystonePage(navigate: true)) craftPhase = 1;
                 }
                 else if (craftPhase == 13)
@@ -2798,7 +2959,7 @@ namespace StashUtility
 
         private void DrawWaystoneCraftOptions()
         {
-            ImGui.TextWrapped(PluginText.T("stashutility.craft.help", "Scan the stash, then open the special waystone tab and the tier/page to process. Auto-craft processes only visible waystones, one at a time, through one free inventory cell. Alchemy replaces magic modifiers; exalted orbs fill six modifiers; optional Vaal corruption follows. Unique, unidentified, mirrored and corrupted items are skipped. The currency tab is identified by its contents, independently of its name. Escape, mouse movement or loss of focus stops crafting. On interruption, the current stone can stay in the inventory; press Escape to cancel any selected currency."));
+            ImGui.TextWrapped(PluginText.T("stashutility.craft.help", "Craft the entire selected batch directly in its stash. Keep one unprotected inventory cell free to borrow currency; unused borrowed currency is returned. Inventory waystones stay in the inventory. White or blue: alchemy, then exalted orbs up to six actual modifiers, then optional Vaal. Already rare: fill the missing modifiers before Vaal. Unique, unidentified, mirrored, sanctified and corrupted items are skipped. Escape, mouse movement or loss of focus stops crafting. Borrowed currency can remain in the inventory on interruption; check it and press Escape."));
             if (ImGui.Checkbox(PluginText.T("stashutility.craft.corrupt", "Corrupt after six modifiers"), ref Settings.WaystoneCraftCorrupt)) SaveSettings();
             ImGui.TextWrapped(PluginText.T("stashutility.craft.limit", "Maximum currency attempts per run"));
             ImGui.SetNextItemWidth(-1);
@@ -2813,6 +2974,7 @@ namespace StashUtility
             ImGui.SetNextWindowSize(new Vector2(Math.Min(650, Math.Max(250, viewport.Size.X - 40)), 0));
             if (ExileCenter.Ui.ImGuiTheme.BeginWindow("##waystoneCraftFeedback", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoInputs |
                 ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.AlwaysAutoResize))
+            {
                 ImGui.TextWrapped(waystoneCraftRunning ? craftPhase == 12 ?
                     PluginText.T("stashutility.craft.scanning", "Detecting loaded stash tabs and currency. Keep the stash open and the mouse still. Escape stops crafting.") :
                     craftPhase == 13 ? PluginText.T("stashutility.craft.navigating", "Opening the special waystone stash. Keep the mouse still.") :
@@ -2820,6 +2982,18 @@ namespace StashUtility
                         "Waystones: tier {0}/16, page {1}/6 · {2} crafted · {3} skipped · {4} currency attempts. Escape stops crafting.",
                         craftTier + 1, craftPage + 1, craftDone, craftSkipped, craftSpent) :
                     PluginText.F("stashutility.craft.progress", "Auto-craft: {0} crafted · {1} skipped · {2} currency attempts. Escape stops crafting.", craftDone, craftSkipped, craftSpent) : craftStatus);
+                if (waystoneCraftRunning)
+                {
+                    string stage = craftPhase switch
+                    {
+                        1 or 2 or 9 or 17 => "read", 3 or 4 or 5 or 6 => "currency",
+                        7 => "apply", 8 => "confirm", 11 or 15 => "return", _ => "navigation"
+                    };
+                    string fallback = stage switch { "read" => "Reading the waystone", "currency" => "Preparing currency",
+                        "apply" => "Applying currency", "confirm" => "Confirming the result", "return" => "Returning unused currency", _ => "Selecting the waystone in the stash" };
+                    ImGui.TextWrapped(PluginText.F("stashutility.craft.stage", "Step: {0}", PluginText.T("stashutility.craft.stage_" + stage, fallback)));
+                }
+            }
             ImGui.End();
         }
 

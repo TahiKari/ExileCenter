@@ -260,6 +260,46 @@ internal static class TabletRankingCheck
             Text(liveXVLabel,0x360,"XV");
             var liveXIVLabel=(IntPtr)Call("ResolvePath",liveButtons[13],new[]{2});Text(liveXIVLabel,0x360,"XV");
             Check((IntPtr)Call("CraftPageButton",liveHeader,14,16)==IntPtr.Zero,"Two XV labels are rejected before sending any navigation input");
+            SetCraft("craftSource",presetSource);SetCraft("craftTier",14);SetCraft("craftPage",5);
+            foreach(var t in tiers)Visible(t,false);Visible(tiers[14],true);
+            foreach(var p in subpages[14])Visible(p,false);Visible(subpages[14][2],true);
+            SetCraft("craftTargetTier",14);SetCraft("craftTargetPage",2);
+            Check((bool)Call("CraftSelectTargetPage",false),"A crafted map can be followed into another bucket without overwriting the original T15 batch page");
+            SetCraft("craftTargetPage",5);
+            Check(!(bool)Call("CraftSelectTargetPage",false),"A map is never clicked while a different native target bucket is visible");
+            Visible(tiers[14],false);Visible(tiers[15],true);foreach(var p in subpages[15])Visible(p,false);Visible(subpages[15][1],true);
+            SetCraft("craftTargetTier",15);SetCraft("craftTargetPage",1);
+            Check((bool)Call("CraftSelectTargetPage",false)&&(int)GetCraft("craftTier")==14&&(int)GetCraft("craftPage")==5,
+                "Following a corrupted map to a changed tier preserves the original T15/selected-page batch");
+            var nativeStone=Allocate(0x100);var stoneDetails=Allocate(0x100);
+            Text(stoneDetails,8,"Metadata/Items/Maps/MapKeyTier15");Marshal.WriteIntPtr(nativeStone,8,stoneDetails);
+            var hiddenSlot=Node();Marshal.WriteIntPtr(hiddenSlot,0x4E0,nativeStone);
+            var hiddenPage=Node(hiddenSlot);Visible(hiddenPage,false);
+            var hiddenSlots=(Dictionary<IntPtr,IntPtr>)Call("CraftVisibleSlots",hiddenPage,false);
+            Check(hiddenSlots.TryGetValue(nativeStone,out var foundSlot)&&foundSlot==hiddenSlot,
+                "A map reclassified into an inactive native bucket can be found before navigating to it; no visible-rectangle lookup is required");
+            Check(((Dictionary<IntPtr,IntPtr>)Call("CraftVisibleSlots",hiddenPage,true)).Count==0,
+                "Hidden-bucket discovery does not make inactive maps eligible for normal visible-page crafting");
+            void AttachSlot(IntPtr page,IntPtr slot)
+            {
+                var vector=Allocate(IntPtr.Size);Marshal.WriteIntPtr(vector,slot);
+                var data=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(page);
+                data.ChildrensPtr=new(){First=vector,Last=vector+IntPtr.Size,End=vector+IntPtr.Size};Marshal.StructureToPtr(data,page,false);
+                data=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(slot);data.ParentPtr=page;Marshal.StructureToPtr(data,slot,false);
+            }
+            AttachSlot(subpages[14][2],hiddenSlot);SetCraft("craftItem",nativeStone);SetCraft("affinityStashRoot",rootHeader);
+            SetCraft("craftTargetTier",14);SetCraft("craftTargetPage",5);
+            Check(!(bool)Call("CraftLocateStashTarget",false)&&(int)GetCraft("craftTargetTier")==14&&(int)GetCraft("craftTargetPage")==2,
+                "Native target discovery follows the exact map into its hidden bucket without clicking or changing the batch selection");
+            var visibleSlot=Node();Marshal.WriteIntPtr(visibleSlot,0x4E0,nativeStone);AttachSlot(subpages[15][1],visibleSlot);
+            Check((bool)Call("CraftLocateStashTarget",false)&&(int)GetCraft("craftTargetTier")==15&&(int)GetCraft("craftTargetPage")==1,
+                "The visible post-corruption map takes precedence over a retained item reference in an inactive old bucket");
+            Marshal.WriteIntPtr(hiddenSlot,0x4E0,IntPtr.Zero);Marshal.WriteIntPtr(visibleSlot,0x4E0,IntPtr.Zero);SetCraft("craftTargetProbeIndex",0);
+            Check(!(bool)Call("CraftLocateStashTarget",false)&&(int)GetCraft("craftTargetProbeIndex")==0,
+                "A read-only lookup never probes or clicks an unloaded bucket");
+            Check((bool)Call("CraftSelectTargetPage",false),"The unload test's target page is already selected, so acknowledging it cannot send native input");
+            Check(!(bool)Call("CraftLocateStashTarget",true)&&(int)GetCraft("craftTargetProbeIndex")==1,
+                "An unloaded bucket advances a bounded loading probe without replacing the tracked map; the already-selected page needs no OS input");
             var window=new System.Drawing.Rectangle(0,0,1297,908);var offset=new Vector2(405,-86);
             var start=new Vector2(790,236);var currency=new Vector2(300,750);
             Vector2 Toolbar(Vector2 proposed,bool locked,Vector2 savedOffset,System.Drawing.Rectangle area)=>(Vector2)Call("PreserveLockedStashToolbarLocation",proposed,locked,savedOffset,area);
@@ -334,6 +374,34 @@ internal static class TabletRankingCheck
         foreach(string currency in new[]{"CurrencyUpgradeToRare","CurrencyAddModToRare","CurrencyCorrupt"})
             foreach(int afterCount in new[]{-1,18,20,21})Check(!Ack(currency,4,6,afterCurrency:afterCount),"No repeat or advance without exactly one confirmed currency consumption: "+currency+afterCount);
         var corruption=typeof(StashUtilityCore).GetMethod("CraftTextIsCorrupted",flags);
+        foreach(bool french in new[]{false,true})
+        foreach(var initial in new[]{(ExileCenter.RemoteEnums.Rarity.Normal,0),(ExileCenter.RemoteEnums.Rarity.Magic,1),
+            (ExileCenter.RemoteEnums.Rarity.Magic,2),(ExileCenter.RemoteEnums.Rarity.Rare,3),(ExileCenter.RemoteEnums.Rarity.Rare,4),
+            (ExileCenter.RemoteEnums.Rarity.Rare,5),(ExileCenter.RemoteEnums.Rarity.Rare,6)})
+        {
+            var rarity=initial.Item1;int count=initial.Item2;bool corrupted=false;
+            var operations=new List<string>();
+            for(int step=0;step<8;step++)
+            {
+                string currency=Next(rarity,count,corrupted?(french?"Corrompu":"Corrupted"):"",french:french);
+                if(currency==null)break;
+                operations.Add(currency);
+                int after=currency=="CurrencyUpgradeToRare"?4:currency=="CurrencyAddModToRare"?count+1:count;
+                Check(Ack(currency,count,after,rarity:rarity,changed:currency!="CurrencyCorrupt"),"Each full-cycle step confirms exactly one orb and its native affix result: "+initial+currency);
+                rarity=ExileCenter.RemoteEnums.Rarity.Rare;count=after;corrupted=currency=="CurrencyCorrupt";
+            }
+            int expectedExalts=initial.Item1==ExileCenter.RemoteEnums.Rarity.Rare?6-initial.Item2:2;
+            Check(corrupted&&count==6&&operations.Count(c=>c=="CurrencyAddModToRare")==expectedExalts&&
+                operations.Count(c=>c=="CurrencyUpgradeToRare")== (initial.Item1==ExileCenter.RemoteEnums.Rarity.Rare?0:1)&&operations.Last()=="CurrencyCorrupt",
+                "The complete white/blue/rare cycle reaches six real affixes, then Vaal: "+initial+" / French="+french);
+        }
+        string wrapped=Text(ExileCenter.RemoteEnums.Rarity.Rare)+"\n"+string.Join("\n",Enumerable.Repeat("One modifier can span several tooltip lines",12));
+        Check((string)planner.Invoke(plugin,new object[]{"Metadata/Items/Maps/MapKeyTier15",ExileCenter.RemoteEnums.Rarity.Rare,3,wrapped,"Waystone (Tier 15)",true})=="CurrencyAddModToRare",
+            "Tooltip line count never replaces the native explicit-modifier count");
+        var transfer=typeof(StashUtilityCore).GetMethod("CraftCurrencyTransferAcknowledged",flags);
+        bool Transfer(int before,int after,int received)=>(bool)transfer.Invoke(null,new object[]{before,after,received});
+        foreach(var receipt in new[]{(100,80,20),(20,0,20),(1,0,1)})Check(Transfer(receipt.Item1,receipt.Item2,receipt.Item3),"Currency withdrawal requires an exact source/inventory receipt: "+receipt);
+        foreach(var receipt in new[]{(100,100,20),(100,79,20),(100,80,19),(0,0,1),(20,-1,21),(20,0,0)})Check(!Transfer(receipt.Item1,receipt.Item2,receipt.Item3),"Invalid or incomplete currency receipt cannot advance to a map click: "+receipt);
         foreach(string text in new[]{"Corrupted","Corrompu","Corrompue"})Check((bool)corruption.Invoke(null,new object[]{Text(ExileCenter.RemoteEnums.Rarity.Rare,text)}),"Corruption acknowledgement accepts a standalone localized status: "+text);
         foreach(string text in new[]{"", "Unidentified", "10% chance to find corrupted items"})Check(!(bool)corruption.Invoke(null,new object[]{Text(ExileCenter.RemoteEnums.Rarity.Rare,text)}),"Item modifiers or unreadable flags cannot acknowledge corruption");
         var defaults=JsonConvert.DeserializeObject<StashUtilitySettings>("{}");
@@ -362,6 +430,29 @@ internal static class TabletRankingCheck
         var invariant=typeof(StashUtilityCore).GetMethod("CraftInventoryUnchanged",flags);
         bool Unchanged(IList current,int except=0)=>(bool)invariant.Invoke(plugin,new object[]{current,new IntPtr(except)});
         var other=Cell(1,0,"other");var coin=Cell(2,1,"one exalt");var target=Cell(3,2,"waystone");
+        var sameInventory=typeof(StashUtilityCore).GetMethod("CraftSameInventory",flags);
+        bool Same(IList before,IList after)=>(bool)sameInventory.Invoke(null,new object[]{before,after});
+        Check(Same(Cells(other,coin),Cells(coin,other)),"Stash crafting permits unchanged inventory order without moving a waystone");
+        Check(!Same(Cells(other,coin),Cells(other,coin,target)),"A waystone appearing in the player inventory is rejected by the in-stash invariant");
+        Check(!Same(Cells(other,coin),Cells(Cell(1,0,"changed"),coin)),"Currency handling never masks changes to unrelated inventory items");
+        var complete=typeof(StashUtilityCore).GetMethod("CraftCompleteStashWaystone",flags);
+        var batch=(Queue<IntPtr>)typeof(StashUtilityCore).GetField("craftQueue",flags).GetValue(plugin);
+        typeof(StashUtilityCore).GetField("craftTier",flags).SetValue(plugin,14);typeof(StashUtilityCore).GetField("craftPage",flags).SetValue(plugin,5);
+        foreach(int address in new[]{101,102,103})batch.Enqueue(new IntPtr(address));
+        for(int done=1;done<=3;done++)
+        {
+            typeof(StashUtilityCore).GetField("craftItem",flags).SetValue(plugin,batch.Dequeue());complete.Invoke(plugin,null);
+            Check((int)typeof(StashUtilityCore).GetField("craftDone",flags).GetValue(plugin)==done&&batch.Count==3-done&&
+                (int)typeof(StashUtilityCore).GetField("craftPhase",flags).GetValue(plugin)==16&&
+                (int)typeof(StashUtilityCore).GetField("craftTier",flags).GetValue(plugin)==14&&(int)typeof(StashUtilityCore).GetField("craftPage",flags).GetValue(plugin)==5,
+                "Completing one in-stash map preserves every remaining map and restores the original T15 subpage: "+done);
+        }
+        typeof(StashUtilityCore).GetField("craftBorrowedCurrency",flags).SetValue(plugin,coin);complete.Invoke(plugin,null);
+        Check((int)typeof(StashUtilityCore).GetField("craftDone",flags).GetValue(plugin)==3&&
+            (int)typeof(StashUtilityCore).GetField("craftPhase",flags).GetValue(plugin)==15&&
+            (int)typeof(StashUtilityCore).GetField("craftAfterCurrencyPhase",flags).GetValue(plugin)==10,
+            "Unused borrowed currency is returned before counting the map complete or advancing the batch");
+        typeof(StashUtilityCore).GetField("craftBorrowedCurrency",flags).SetValue(plugin,null);
         baseline.Add(other);baseline.Add(coin);baseline.Add(target);
         Check(Unchanged(Cells(other,coin,target)),"Inventory targets start in the unchanged baseline");
         baseline.Remove(target);
