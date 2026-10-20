@@ -716,8 +716,11 @@ namespace StashUtility
             {
                 float width = ImGui.CalcTextSize(row.Rank).X * font / ImGui.GetFontSize() + 8;
                 float textEnd = row.Position.X + row.Size.X;
-                if (rightEdge - textEnd < width + 4) continue;
-                float x = (textEnd + rightEdge - width) / 2;
+                // A centered native label can span the whole panel; its rectangle
+                // does not describe the visible text edge. Keep its rank in the
+                // inner right gutter instead of silently dropping the annotation.
+                float x = rightEdge - textEnd >= width + 4
+                    ? (textEnd + rightEdge - width) / 2 : rightEdge - width;
                 DrawTabletTooltipRank(new Vector2(x, row.Position.Y + (row.Size.Y - font - 4) / 2),
                     row.Rank, font, TabletItemRankColor(row.Rank));
             }

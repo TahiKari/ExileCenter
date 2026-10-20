@@ -1656,6 +1656,53 @@ internal static class TabletRankingCheck
             Check(!changed.Any(v=>v.Item2==gold),"Changing a saved priority immediately updates both total and modifier colours");
             profile.ModRanks["TowerMapAdditionalModifier"]="S";
             string saved=JsonConvert.SerializeObject(profile);
+            // Replay the SCDF Expedition screenshot with full-width native text
+            // containers, both as individual labels and one shared multiline label.
+            var captureProfile=new TabletProfile{ModRanks=new(){["TowerDroppedGoldIncrease"]="F",["TowerMapAdditionalModifier"]="S",
+                ["TowerAdditionalAzmeriWisp"]="C",["TowerAdditionalShrineChance"]="D"}};
+            var captureMods=new Mods(IntPtr.Zero);
+            foreach(var pair in new[]{("TowerDroppedGoldIncrease",26f),("TowerMapAdditionalModifier",1f),
+                ("TowerAdditionalAzmeriWisp",1f),("TowerAdditionalShrineChance",85f)})captureMods.ExplicitMods.Add((pair.Item1,(pair.Item2,0f)));
+            var captureObservation=observe.Invoke(null,new object[]{"Expedition Tablet",captureMods});
+            string[] captureTexts={"26% d'Augmentation de l'Or trouvé dans la Carte","La Carte a 1 Modificateur aléatoire supplémentaire",
+                "La Carte contient 1 Esprit azmérien supplémentaire","La Carte a 85% d'Augmentation de chances de contenir des Autels"};
+            string captureSettings=JsonConvert.SerializeObject(captureProfile);
+            var panelField=typeof(StashUtilityCore).GetField("tabletTooltipPanel",flags);
+            foreach(bool grouped in new[]{false,true})
+            {
+                labels.Clear();covers.Clear();panelField.SetValue(plugin,(new Vector2(8,16),new Vector2(826,328)));
+                labels.Add((new Vector2(260,20),new Vector2(320,48),"Injonction légendaire\nTablette d'Expédition"));
+                if(grouped)labels.Add((new Vector2(8,168),new Vector2(826,88),string.Join("\n",captureTexts)));
+                else for(int i=0;i<4;i++)labels.Add((new Vector2(8,168+22*i),new Vector2(826,22),captureTexts[i]));
+                ImGuiNET.ImGui.NewFrame();
+                draw.Invoke(plugin,new[]{captureObservation,captureProfile,captureMods});
+                var vertices=ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
+                var all=Enumerable.Range(0,vertices.Size).Select(i=>vertices[i]).ToArray();
+                Check(all.Any(v=>v.pos.Y<80),"The SCDF composition remains visible with full-width native labels: "+grouped);
+                string[] grades={"F","S","C","D"};
+                var colors=(Vector4[])typeof(StashUtilityCore).GetField("TabletModRankColors",flags).GetValue(null);
+                for(int i=0;i<4;i++)Check(all.Any(v=>v.pos.X>780&&v.pos.X<834&&Math.Abs(v.pos.Y-(179+22*i))<10&&
+                    v.col==ExileCenter.Utils.ImGuiHelper.Color(colors["SABCDEF".IndexOf(grades[i])])),
+                    "SCDF screenshot shows its configured "+grades[i]+" rank beside mod "+i+" even when the label spans the panel: "+grouped);
+                Check(all.All(v=>v.pos.X>=8&&v.pos.X<=834&&v.pos.Y>=16&&v.pos.Y<=344),"SCDF annotations remain inside the native tooltip");
+                if(previewDirectory!=null)
+                {
+                    var background=ImGuiNET.ImGui.GetBackgroundDrawList();
+                    background.AddRectFilled(new Vector2(8,16),new Vector2(834,344),0xff151515);
+                    background.AddText(new Vector2(260,24),0xffdddddd,"INJONCTION LEGENDAIRE");
+                    background.AddText(new Vector2(260,48),0xffdddddd,"TABLETTE D'EXPEDITION");
+                    for(int i=0;i<4;i++)
+                    {
+                        float textWidth=ImGuiNET.ImGui.CalcTextSize(captureTexts[i]).X*19/ImGuiNET.ImGui.GetFontSize();
+                        background.AddText(ImGuiNET.ImGui.GetFont(),19,new Vector2(421-textWidth/2,168+22*i),0xffdd9999,captureTexts[i]);
+                    }
+                    draw.Invoke(plugin,new[]{captureObservation,captureProfile,captureMods});
+                }
+                ImGuiNET.ImGui.Render();
+                if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"native-tablet-scdf-"+grouped+".png"),atlasBytes,atlasWidth,atlasHeight);
+            }
+            Check(JsonConvert.SerializeObject(captureProfile)==captureSettings,"SCDF rendering preserves the user's priorities, colours and minima");
+            panelField.SetValue(plugin,null);
             var find=typeof(StashUtilityCore).GetMethod("FindTabletTooltipModLine",flags);
             var definition=ModDatabase.AllTabletMods.Single(m=>m.Id=="TowerMapAdditionalModifier");
             var modifier=ModDatabase.TabletMeta.ForType("Expedition Tablet").Single(m=>m.GameModIds.Contains(definition.Id));
