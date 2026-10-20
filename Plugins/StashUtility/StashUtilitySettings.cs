@@ -11,6 +11,10 @@ namespace StashUtility
         public bool WaystoneCraftCorrupt = true;
         public int WaystoneCraftCurrencyLimit = 200;
         public Dictionary<string, WaystoneCraftPreset> WaystoneCraftPresets = new();
+        public StashDestination WaystoneCraftT14Destination = new();
+        public StashDestination WaystoneCraftT16Destination = new();
+        public string WaystoneCraftT14PageName = "Craft";
+        public string WaystoneCraftT16PageName = "Craft";
         public bool EnableTabletManager = true;
         public bool TabletHelpTooltips = true;
         public int TabletHoverDetailsMode = 1; // 0: hidden, 1: summary, 2: detailed.
@@ -191,6 +195,10 @@ namespace StashUtility
         public StashDestination Money = new();
         public int Tier = -1;
         public string PageName = string.Empty;
+        public StashDestination T14Destination = new();
+        public StashDestination T16Destination = new();
+        public string T14PageName = "Craft";
+        public string T16PageName = "Craft";
     }
 
     public class StashDestination

@@ -138,6 +138,10 @@ internal static class TabletRankingCheck
             bool blockedCopy=false;
             try{Call("CraftInput",true,false,true,false);}catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){blockedCopy=true;}
             Check(blockedCopy,"A lost Ctrl modifier blocks C before any keyboard input is sent");
+            SetCraft("craftInputPhase",1);
+            bool blockedShiftClick=false;
+            try{Call("CraftInput",false,true,false,false);}catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){blockedShiftClick=true;}
+            Check(blockedShiftClick,"A lost Shift modifier blocks a currency application before any mouse input is sent");
             SetCraft("craftInputPhase",0);
             var presetSource=Tab("PTP",waystone);var presetMoney=Tab("Currencies",other);
             tabType.GetField("Folders").SetValue(presetSource,new List<string>{"01 - Mapping"});
@@ -145,6 +149,8 @@ internal static class TabletRankingCheck
             var presetChoices=(IList)GetCraft("craftTabChoices");presetChoices.Add(presetSource);presetChoices.Add(presetMoney);
             SetCraft("craftSelectedSource",presetSource);SetCraft("craftSelectedMoney",presetMoney);
             SetCraft("craftSelectedTier",0);SetCraft("craftSelectedPageName","Div - 1");
+            SetCraft("craftSelectedT14",presetSource);SetCraft("craftT14UseSource",false);SetCraft("craftT14PageName","Craft XIV");
+            SetCraft("craftSelectedT16",presetMoney);SetCraft("craftT16UseSource",false);SetCraft("craftT16PageName","Craft XVI");
             Check((bool)Call("SaveCraftPreset"," Mapping "),"A named craft preset can be saved");
             var presetJson=JsonConvert.SerializeObject(plugin.Settings.WaystoneCraftPresets);
             plugin.Settings.WaystoneCraftPresets=JsonConvert.DeserializeObject<Dictionary<string,WaystoneCraftPreset>>(presetJson);
@@ -153,12 +159,16 @@ internal static class TabletRankingCheck
             Call("LoadCraftPreset","Mapping");
             Check(ReferenceEquals(GetCraft("craftSelectedSource"),presetSource)&&ReferenceEquals(GetCraft("craftSelectedMoney"),presetMoney)&&
                 (int)GetCraft("craftSelectedPage")==0,"Reloaded presets resolve current source, currency and named sub-tab");
+            Check(ReferenceEquals(GetCraft("craftSelectedT14"),presetSource)&&ReferenceEquals(GetCraft("craftSelectedT16"),presetMoney)&&
+                (string)GetCraft("craftT14PageName")=="Craft XIV"&&(string)GetCraft("craftT16PageName")=="Craft XVI",
+                "T14 and T16 destination stashes, folder paths and custom sub-tab names survive preset serialization");
             SetCraft("craftSelectedPageName","Div - 2");Call("SaveCraftPreset","Mapping");
             Check(plugin.Settings.WaystoneCraftPresets.Count==1&&plugin.Settings.WaystoneCraftPresets["Mapping"].PageName=="Div - 2","Saving the same preset name replaces its selection");
             presetChoices.Add(Tab("PTP",waystone));
             tabType.GetField("Folders").SetValue(presetChoices[2],new List<string>{"01 - Mapping"});
             Call("LoadCraftPreset","Mapping");
             Check(GetCraft("craftSelectedSource")==null,"Ambiguous preset destinations require manual selection and cannot start crafting");
+            Check(!(bool)Call("CraftResultChoicesValid"),"An unavailable custom corruption destination never silently falls back to the source stash");
             presetChoices.Clear();SetCraft("craftSelectedSource",null);SetCraft("craftSelectedMoney",null);
             Call("LoadCraftPreset","Mapping");
             Check(GetCraft("craftSelectedSource")==null&&GetCraft("craftSelectedMoney")==null,"Missing preset destinations never reuse stale pointers");
@@ -167,6 +177,7 @@ internal static class TabletRankingCheck
             Call("LoadCraftPreset","Mapping");
             Check(ReferenceEquals(GetCraft("craftSelectedMoney"),presetMoney),"A stash preset cannot change an inventory-mode selection");
             SetCraft("craftSelectionFromInventory",false);
+            SetCraft("craftT14UseSource",true);SetCraft("craftT16UseSource",true);
             object Select(IntPtr preferred,params object[] tabs){var array=Array.CreateInstance(tabType,tabs.Length);for(int i=0;i<tabs.Length;i++)array.SetValue(tabs[i],i);return Call("FindCraftWaystoneTab",array,preferred);}
             var source=Tab("Any renamed tab",waystone);
             Check(ReferenceEquals(Select(other,Tab("PTP",other),source),source),"A misleading name never overrides the actual special-tab structure");
@@ -299,6 +310,22 @@ internal static class TabletRankingCheck
             SetCraft("craftTargetTier",15);SetCraft("craftTargetPage",1);
             Check((bool)Call("CraftSelectTargetPage",false)&&(int)GetCraft("craftTier")==14&&(int)GetCraft("craftPage")==5,
                 "Following a corrupted map to a changed tier preserves the original T15/selected-page batch");
+            SetCraft("craftSource",presetSource);SetCraft("craftTier",14);SetCraft("craftPage",5);SetCraft("craftSelectedPageName","Original T15");
+            SetCraft("craftItem",new IntPtr(7654));SetCraft("craftIdentity","verified Vaal result");
+            SetCraft("craftSelectedT14",presetSource);SetCraft("craftSelectedT16",presetMoney);
+            SetCraft("craftT14PageName","My XIV Craft");SetCraft("craftT16PageName","My XVI Craft");
+            foreach(int resultTier in new[]{13,15})foreach(bool held in new[]{false,true})
+            {
+                Call("CraftStartMapMove",resultTier,held);
+                Check(ReferenceEquals(GetCraft("craftMoveDestination"),resultTier==13?presetSource:presetMoney)&&
+                    (string)GetCraft("craftMovePageName")== (resultTier==13?"My XIV Craft":"My XVI Craft")&&
+                    (int)GetCraft("craftMoveTier")==resultTier,"Routing uses the separately configured stash and named sub-tab for the actual Vaal tier: "+resultTier+held);
+                Check((bool)GetCraft("craftMapWasHeld")==held&&(int)GetCraft("craftPhase")==22&&
+                    ReferenceEquals(GetCraft("craftSource"),presetSource)&&(int)GetCraft("craftTier")==14,
+                    "An ejected map enters destination navigation without returning it to T15 or requiring another pickup: "+held);
+                Call("CraftRestoreOriginalPage");SetCraft("craftMapMove",null);
+            }
+            SetCraft("craftIdentity",null);SetCraft("craftItem",IntPtr.Zero);SetCraft("craftMapWasHeld",false);SetCraft("craftPhase",0);
             var nativeStone=Allocate(0x100);var stoneDetails=Allocate(0x100);
             Text(stoneDetails,8,"Metadata/Items/Maps/MapKeyTier15");Marshal.WriteIntPtr(nativeStone,8,stoneDetails);
             var hiddenSlot=Node();Marshal.WriteIntPtr(hiddenSlot,0x4E0,nativeStone);
@@ -426,26 +453,10 @@ internal static class TabletRankingCheck
         string wrapped=Text(ExileCenter.RemoteEnums.Rarity.Rare)+"\n"+string.Join("\n",Enumerable.Repeat("One modifier can span several tooltip lines",12));
         Check((string)planner.Invoke(plugin,new object[]{"Metadata/Items/Maps/MapKeyTier15",ExileCenter.RemoteEnums.Rarity.Rare,3,wrapped,"Waystone (Tier 15)",true})=="CurrencyAddModToRare",
             "Tooltip line count never replaces the native explicit-modifier count");
-        var transfer=typeof(StashUtilityCore).GetMethod("CraftCurrencyTransferAcknowledged",flags);
-        bool Transfer(int before,int after,int received)=>(bool)transfer.Invoke(null,new object[]{before,after,received});
-        foreach(var receipt in new[]{(100,80,20),(20,0,20),(1,0,1)})Check(Transfer(receipt.Item1,receipt.Item2,receipt.Item3),"Currency withdrawal requires an exact source/inventory receipt: "+receipt);
-        foreach(var receipt in new[]{(100,100,20),(100,79,20),(100,80,19),(0,0,1),(20,-1,21),(20,0,0)})Check(!Transfer(receipt.Item1,receipt.Item2,receipt.Item3),"Invalid or incomplete currency receipt cannot advance to a map click: "+receipt);
         foreach(string text in new[]{"Corrupted","Corrompu","Corrompue"})Check((bool)corruption.Invoke(null,new object[]{Text(ExileCenter.RemoteEnums.Rarity.Rare,text)}),"Corruption acknowledgement accepts a standalone localized status: "+text);
         foreach(string text in new[]{"", "Unidentified", "10% chance to find corrupted items"})Check(!(bool)corruption.Invoke(null,new object[]{Text(ExileCenter.RemoteEnums.Rarity.Rare,text)}),"Item modifiers or unreadable flags cannot acknowledge corruption");
         var defaults=JsonConvert.DeserializeObject<StashUtilitySettings>("{}");
         Check(defaults.WaystoneCraftCorrupt&&defaults.WaystoneCraftCurrencyLimit==200,"Existing settings receive bounded craft defaults without migration");
-        var delta=typeof(StashUtilityCore).GetMethod("CraftLocalCurrencyDelta",flags);
-        bool Delta(int before,int after,bool same=true,bool identity=true)=>(bool)delta.Invoke(null,new object[]{before,after,same,identity});
-        Check(Delta(1,0,identity:false),"The last consumed orb may remain as a zero-count native stack while awaiting removal");
-        Check(!Delta(2,0,identity:false)&&!Delta(1,0,same:false,identity:false),"A transient zero stack cannot hide multiple consumed or substituted orbs");
-        foreach(int before in new[]{1,2,20,100})
-        {
-            Check(Delta(before,before),"A currency stack can remain unchanged while awaiting confirmation");
-            Check(!Delta(before,before,identity:false),"An unrelated change to the selected currency is rejected");
-            if(before>1)Check(Delta(before,before-1,identity:false),"Exactly one local orb may be consumed");
-            foreach(int after in new[]{-1,before+1,before-2})Check(!Delta(before,after),"Invalid local currency delta stops the craft");
-            Check(!Delta(before,before-1,same:false),"Replacing local currency with another item is rejected");
-        }
         var cellType=typeof(StashUtilityCore).GetNestedType("SortItem",BindingFlags.NonPublic);
         object Cell(int address,int x,string identity)
         {
@@ -467,12 +478,35 @@ internal static class TabletRankingCheck
         Check(!SameMaps(Cells(Cell(9,0,"different mods"),other),Cells(other,target)),
             "A different map with the same base type cannot acknowledge the routed corrupted map");
         Check(!SameMaps(Cells(target,target),Cells(other,target)),"Duplicate map identities retain their exact multiplicities during transfer acknowledgement");
-        var freeCurrencyCell=typeof(StashUtilityCore).GetMethod("CraftFreeCurrencyCell",flags);
-        var pickupCount=typeof(StashUtilityCore).GetMethod("CraftPickupCountAllowed",flags);
-        bool Pickup(int available,int capacity,int received)=>(bool)pickupCount.Invoke(null,new object[]{available,capacity,received});
-        foreach(int received in new[]{1,2,19,20})Check(Pickup(653,20,received),"Borrowing acknowledges the actual native withdrawal rather than assuming a full stack: "+received);
-        foreach(int received in new[]{-1,0,21,653})Check(!Pickup(653,20,received),"Zero, negative or oversized native withdrawals are rejected: "+received);
-        Check(Pickup(3,20,1)&&Pickup(3,20,3)&&!Pickup(3,20,4),"A partial currency source bounds the quantity actually received");
+        var ready=typeof(StashUtilityCore).GetMethod("CraftPageIsReady",flags);
+        var now=DateTime.UtcNow;
+        bool Ready(IList items,int milliseconds)=>(bool)ready.Invoke(plugin,new object[]{items,now.AddMilliseconds(milliseconds)});
+        Check(!Ready(null,0)&&!Ready(Cells(),10)&&!Ready(Cells(),500),"Initial hidden or empty native grids are allowed to load within the first run");
+        Check(!Ready(Cells(target),600)&&!Ready(Cells(target),900)&&Ready(Cells(target),1100),"A loaded initial map grid starts after one stable half-second without restarting");
+        Check(!Ready(Cells(Cell(3,2,"changed map")),1200),"Changing native item content restarts the readiness interval");
+        Check(!Ready(null,1300)&&!Ready(Cells(target),1400)&&Ready(Cells(target),1900),"A temporarily unavailable grid cannot retain an obsolete ready state");
+        var batchCurrency=typeof(StashUtilityCore).GetMethod("CraftBatchCurrency",flags);
+        string BatchCurrency(IEnumerable<string> currencies)=>(string)batchCurrency.Invoke(null,new object[]{currencies});
+        var batchRarities=new[]{ExileCenter.RemoteEnums.Rarity.Normal,ExileCenter.RemoteEnums.Rarity.Magic,ExileCenter.RemoteEnums.Rarity.Rare,ExileCenter.RemoteEnums.Rarity.Rare,ExileCenter.RemoteEnums.Rarity.Rare};
+        var batchCounts=new[]{0,2,3,5,6};var batchCorrupted=new bool[5];var passes=new List<string>();
+        string Plan(int i)=>(string)planner.Invoke(plugin,new object[]{"Metadata/Items/Maps/MapKeyTier15",batchRarities[i],batchCounts[i],Text(batchRarities[i],batchCorrupted[i]?"Corrupted":""),"Waystone (Tier 15)",true});
+        for(int action=0;action<50;action++)
+        {
+            var plans=Enumerable.Range(0,5).Select(Plan).ToArray();string currency=BatchCurrency(plans);if(currency==null)break;
+            int i=Array.IndexOf(plans,currency);passes.Add(currency);
+            if(currency=="CurrencyUpgradeToRare"){batchRarities[i]=ExileCenter.RemoteEnums.Rarity.Rare;batchCounts[i]=4;}
+            else if(currency=="CurrencyAddModToRare")batchCounts[i]++;
+            else if(currency=="CurrencyCorrupt")batchCorrupted[i]=true;
+        }
+        Check(batchCorrupted.All(value=>value)&&batchCounts.All(count=>count==6),"Every white, blue and partially rare map in a mixed batch reaches six actual affixes and corruption");
+        Check(passes.Count(value=>value=="CurrencyUpgradeToRare")==2&&passes.Count(value=>value=="CurrencyAddModToRare")==8&&passes.Count(value=>value=="CurrencyCorrupt")==5,
+            "Mixed batch consumes exactly two alchemies, eight exalts and five Vaals");
+        Check(passes.SequenceEqual(passes.OrderBy(value=>value=="CurrencyUpgradeToRare"?0:value=="CurrencyAddModToRare"?1:2)),"All alchemies precede every exalt and all exalts precede every Vaal");
+        Check(BatchCurrency(new string[]{null,null})==null,"A completed or excluded batch cannot select additional currency");
+        Check(defaults.WaystoneCraftT14PageName=="Craft"&&defaults.WaystoneCraftT16PageName=="Craft"&&string.IsNullOrEmpty(defaults.WaystoneCraftT14Destination.TabName),
+            "Existing settings default to the source stash and named Craft destination for each changed tier");
+        var layoutSettings=JsonConvert.DeserializeObject<StashUtilitySettings>("{\"StashToolbarOffset\":{\"X\":41,\"Y\":-27},\"StashToolbarLocked\":true}");
+        Check(layoutSettings.StashToolbarOffset==new Vector2(41,-27)&&layoutSettings.StashToolbarLocked,"Adding corruption settings preserves a user-positioned locked toolbar");
         var changedMap=typeof(StashUtilityCore).GetMethod("CraftChangedMapAddress",flags);
         var mapBefore=new Dictionary<IntPtr,string>{{new IntPtr(100),"white map"},{new IntPtr(200),"other map"}};
         IntPtr ChangedMap(Dictionary<IntPtr,string> after)=>(IntPtr)changedMap.Invoke(null,new object[]{mapBefore,after,new IntPtr(100)});
@@ -524,28 +558,6 @@ internal static class TabletRankingCheck
             (int)typeof(StashUtilityCore).GetField("craftPage",flags).GetValue(plugin)==5&&
             (string)typeof(StashUtilityCore).GetField("craftSelectedPageName",flags).GetValue(plugin)=="10 - 19",
             "Routing restores the original T15 sub-tab and its saved name before continuing the batch");
-        var allowedCurrency=typeof(StashUtilityCore).GetMethod("CraftCurrencyCellAllowed",flags);
-        var protectedCells=new HashSet<int>{48,49,50,52,51,53,54,55,56,57,58,59,36,24,12,0,1,13,25,37};
-        plugin.Settings.ProtectedInventoryCells=protectedCells;
-        var savedProtection=protectedCells.ToHashSet();
-        int Free(IList items,HashSet<int> protection)=>(int)freeCurrencyCell.Invoke(null,new object[]{items,protection});
-        Check(Free(Cells(),protectedCells)==2,"The real protected-first-columns layout selects the first free UNPROTECTED currency cell instead of stopping");
-        Check(Free(Cells(target),protectedCells)==3,"Occupied unprotected cells are skipped when placing borrowed currency");
-        var wide=Cell(4,2,"wide item");cellType.GetField("Width").SetValue(wide,3);cellType.GetField("Height").SetValue(wide,2);
-        Check(Free(Cells(wide),protectedCells)==5,"A borrowed currency stack never overlaps any cell of a larger inventory item");
-        Check(Free(Cells(),Enumerable.Range(0,60).ToHashSet())==-1,"A fully protected inventory cannot receive borrowed currency");
-        Check(Free(Cells(),null)==0,"Without protection, the automatic transfer may use the first inventory cell");
-        typeof(StashUtilityCore).GetField("craftExplicitDestinations",flags).SetValue(plugin,true);
-        bool Allowed(object item)=>(bool)allowedCurrency.Invoke(plugin,new[]{item});
-        Check(!Allowed(target)&&!Allowed(other),"With a selected money stash, existing inventory currency is excluded in both protected and unprotected cells");
-        typeof(StashUtilityCore).GetField("craftBorrowedCurrency",flags).SetValue(plugin,target);
-        Check(Allowed(target)&&Allowed(Cell(99,2,"updated borrowed currency")),"Only the borrowed stack's verified unprotected cell can supply the in-stash craft");
-        Check(!Allowed(coin)&&!Allowed(wide),"Borrowing a currency stack does not authorize other inventory cells or larger items");
-        protectedCells.Add(2);Check(!Allowed(target),"Even the borrowed currency cannot be used if its cell becomes protected");protectedCells.Remove(2);
-        Check(protectedCells.SetEquals(savedProtection),"Currency preparation leaves the user's protected-cell settings intact");
-        typeof(StashUtilityCore).GetField("craftExplicitDestinations",flags).SetValue(plugin,false);
-        typeof(StashUtilityCore).GetField("craftBorrowedCurrency",flags).SetValue(plugin,null);
-        plugin.Settings.ProtectedInventoryCells=new();
         var sameInventory=typeof(StashUtilityCore).GetMethod("CraftSameInventory",flags);
         bool Same(IList before,IList after)=>(bool)sameInventory.Invoke(null,new object[]{before,after});
         Check(Same(Cells(other,coin),Cells(coin,other)),"Stash crafting permits unchanged inventory order without moving a waystone");
@@ -559,30 +571,17 @@ internal static class TabletRankingCheck
         {
             typeof(StashUtilityCore).GetField("craftItem",flags).SetValue(plugin,batch.Dequeue());complete.Invoke(plugin,null);
             Check((int)typeof(StashUtilityCore).GetField("craftDone",flags).GetValue(plugin)==done&&batch.Count==3-done&&
-                (int)typeof(StashUtilityCore).GetField("craftPhase",flags).GetValue(plugin)==16&&
+                (int)typeof(StashUtilityCore).GetField("craftPhase",flags).GetValue(plugin)==5&&
                 (int)typeof(StashUtilityCore).GetField("craftTier",flags).GetValue(plugin)==14&&(int)typeof(StashUtilityCore).GetField("craftPage",flags).GetValue(plugin)==5,
                 "Completing one in-stash map preserves every remaining map and restores the original T15 subpage: "+done);
         }
-        typeof(StashUtilityCore).GetField("craftBorrowedCurrency",flags).SetValue(plugin,coin);complete.Invoke(plugin,null);
-        Check((int)typeof(StashUtilityCore).GetField("craftDone",flags).GetValue(plugin)==3&&
-            (int)typeof(StashUtilityCore).GetField("craftPhase",flags).GetValue(plugin)==15&&
-            (int)typeof(StashUtilityCore).GetField("craftAfterCurrencyPhase",flags).GetValue(plugin)==10,
-            "Unused borrowed currency is returned before counting the map complete or advancing the batch");
-        typeof(StashUtilityCore).GetField("craftBorrowedCurrency",flags).SetValue(plugin,null);
         baseline.Add(other);baseline.Add(coin);baseline.Add(target);
         Check(Unchanged(Cells(other,coin,target)),"Inventory targets start in the unchanged baseline");
         baseline.Remove(target);
         Check(Unchanged(Cells(other,coin,Cell(4,2,"crafted waystone")),4),"Only the active inventory waystone may change");
         Check(!Unchanged(Cells(Cell(1,0,"changed other"),coin,target),3),"Unrelated inventory changes stop the craft");
         Check(!Unchanged(Cells(other,Cell(2,3,"one exalt"),target),3),"Currency movement cannot be mistaken for consumption");
-        typeof(StashUtilityCore).GetField("craftLocalCurrency",flags).SetValue(plugin,true);
-        typeof(StashUtilityCore).GetField("craftCurrencyPending",flags).SetValue(plugin,true);
-        typeof(StashUtilityCore).GetField("craftCurrencyCell",flags).SetValue(plugin,coin);
-        typeof(StashUtilityCore).GetField("craftCurrencyCount",flags).SetValue(plugin,1);
-        Check(Unchanged(Cells(other,target),3),"The last local orb may disappear pending acknowledgement");
-        Check(!Unchanged(Cells(Cell(1,0,"changed other"),target),3),"Last-orb consumption still protects unrelated inventory items");
-        typeof(StashUtilityCore).GetField("craftCurrencyCount",flags).SetValue(plugin,2);
-        Check(!Unchanged(Cells(other,target),3),"A nonempty local currency stack may not disappear");
+        Check(!Unchanged(Cells(other,target),3),"Direct-stash crafting never permits an inventory currency stack to disappear");
         baseline.Clear();
         var scanFlag=typeof(StashUtilityCore).GetField("stashScanForCraft",flags);
         var scanComplete=typeof(StashUtilityCore).GetField("craftScanCompleted",flags);
@@ -2768,6 +2767,18 @@ internal static class TabletRankingCheck
             }
             Check(!(bool)typeof(StashUtilityCore).GetField("waystoneCraftRunning",flags).GetValue(plugin)&&
                 JsonConvert.SerializeObject(plugin.Settings)==craftSettings,"Craft selection sends no game input and preserves saved settings before confirmation");
+            var resultEditor=typeof(StashUtilityCore).GetMethod("DrawCraftResultDestination",flags);
+            foreach(float width in new[]{460f,580f})
+            {
+                io.AddMousePosEvent(-100,-100);ImGuiNET.ImGui.NewFrame();
+                ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width,750));
+                ImGuiNET.ImGui.Begin("Destinations T14 et T16##routing-fixture",ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                resultEditor.Invoke(plugin,new object[]{13,true,null,new List<string>(),"Craft"});
+                resultEditor.Invoke(plugin,new object[]{15,false,craftSource,new List<string>{"01 - Mapping"},"My T16 craft"});
+                Check(ImGuiNET.ImGui.GetCursorPosY()<700&&ImGuiNET.ImGui.GetItemRectMax().X<=16+width,"Both default and custom corruption destinations fit at width "+width);
+                ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
+                if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"waystone-destinations-"+width+".png"),pixels,atlasWidth,atlasHeight);
+            }
             var selectionWindow=typeof(StashUtilityCore).GetMethod("DrawWaystoneCraftSelection",flags);
             typeof(StashUtilityCore).GetField("craftSelectionOpen",flags).SetValue(plugin,true);
             foreach(bool focused in new[]{false,true,true})
