@@ -3,6 +3,9 @@
 Consulter ce fichier avant chaque intervention dans ce dépôt. Répondre en français.
 
 - Lire uniquement les fichiers nécessaires, appliquer un patch minimal et préserver les modifications existantes.
+- Modifier uniquement le comportement demandé. Ne pas déplacer, réorganiser, masquer ou redimensionner des icônes, boutons ou barres sans demande explicite.
+- Préserver les réglages personnalisés, notamment la position de la barre du coffre et de ses icônes, ses décalages, son ancrage et son verrouillage. Une position remise en place par l'utilisateur fait référence ; ne pas la réinitialiser lors d'une correction, d'un changement d'onglet ou d'une mise à jour.
+- Prévenir les régressions dans le périmètre modifié : vérifier le comportement demandé et la conservation des réglages et de l'affichage existants avant publication. Une modification de l'auto-craft n'autorise pas à changer la barre d'icônes. Si une vérification réelle manque, le signaler sans présenter le comportement en jeu comme confirmé.
 - Aucun audit global, refactor massif ou installation de dépendances sans demande explicite.
 - Ne jamais reconstruire ni remplacer `GameOffsets.dll` ; conserver le binaire validé à l'identique.
 - Ne pas arrêter ExileCenter (ni une ancienne instance GameHelper), déplacer la souris ni cliquer dans le jeu pendant que l'utilisateur joue. Conserver l'arrêt de sécurité lorsque la souris bouge.
