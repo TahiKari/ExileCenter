@@ -27,6 +27,9 @@ namespace StashUtility
         private bool tabletHighlightsHiddenManually;
         private bool tabletItemHovered;
         private bool tabletTooltipVisible;
+        private Vector2? lockedStashToolbarLocation;
+        private Vector2 lockedStashToolbarOffset;
+        private System.Drawing.Rectangle lockedStashToolbarWindow;
         private readonly List<IntPtr> tooltipContainers = new();
         private IntPtr tooltipUiRoot;
         private double nextTooltipContainerScan;
@@ -2115,7 +2118,7 @@ namespace StashUtility
             foreach (var node in StashUiNodes(ReadStashUiBranch(ResolvePath(header, new[] { 0 }))))
             {
                 if (visibleOnly && !IsElementVisible(node.Address)) continue;
-                foreach (var path in new[] { new[] { 0, 1 }, new[] { 0 } })
+                foreach (var path in new[] { new[] { 0, 1 }, new[] { 0 }, new[] { 2 } })
                     if (TryReadUiString(ResolvePath(node.Address, path), 0x360, out var text) && !string.IsNullOrWhiteSpace(text))
                     { buttons.Add((node.Address, text)); break; }
             }
@@ -4912,6 +4915,18 @@ namespace StashUtility
             }
         }
 
+        private Vector2 PreserveLockedStashToolbarLocation(Vector2 proposed, bool locked, Vector2 offset, System.Drawing.Rectangle window)
+        {
+            if (!locked) { lockedStashToolbarLocation = null; return proposed; }
+            if (!lockedStashToolbarLocation.HasValue || lockedStashToolbarOffset != offset || lockedStashToolbarWindow != window)
+            {
+                lockedStashToolbarLocation = proposed;
+                lockedStashToolbarOffset = offset;
+                lockedStashToolbarWindow = window;
+            }
+            return lockedStashToolbarLocation.Value;
+        }
+
         private void DrawStashSortButton()
         {
             if ((!Settings.ShowStashSortButton && !Settings.EnableTabletManager && !Settings.EnableWaystoneManager) || (!Core.IsSettingsMenuOpen && !InventoryToolbarHasFocus()) ||
@@ -4931,6 +4946,10 @@ namespace StashUtility
                 merchant = TryReadUiString(title, 0x98, out var titleId) && titleId == "label_title" &&
                     TryReadUiString(title, 0x360, out var titleText) &&
                     (titleText == "Marchand" || titleText == "Merchant");
+            }
+            catch (Exception) { return; }
+            try
+            {
                 var inventory = FindPlayerInventoryAddress(InventoryName.StashInventoryId);
                 var dimensions = inventory == IntPtr.Zero ? (0, 0) : (ReadMemory<int>(inventory + 0x150), ReadMemory<int>(inventory + 0x154));
                 var surface = FindSortSurface(true);
@@ -4942,7 +4961,7 @@ namespace StashUtility
                         if (candidate != IntPtr.Zero && IsElementVisible(candidate) &&
                             PluginUiElementReflection.TryGetAbsoluteRect(candidate, out position, out size) && size.X > 100 && size.Y > 100) break;
             }
-            catch (Exception) { return; }
+            catch (Exception) { canSort = false; position = size = Vector2.Zero; }
             ref var toolbarOffset = ref (merchant ? ref Settings.MerchantToolbarOffset : ref Settings.StashToolbarOffset);
             ref var toolbarLocked = ref (merchant ? ref Settings.MerchantToolbarLocked : ref Settings.StashToolbarLocked);
             var viewport = ImGui.GetMainViewport();
@@ -4952,7 +4971,8 @@ namespace StashUtility
             var anchor = viewport.Pos + (hasGridBounds ? position + new Vector2(size.X - windowSize.X, size.Y + 4) : new Vector2(16, viewport.Size.Y * 0.83f));
             var offset = toolbarOffset;
             if (!float.IsFinite(offset.X) || !float.IsFinite(offset.Y)) offset = Vector2.Zero;
-            var location = Vector2.Clamp(anchor + offset, viewport.Pos, viewport.Pos + Vector2.Max(Vector2.Zero, viewport.Size - windowSize));
+            var location = merchant ? anchor + offset : PreserveLockedStashToolbarLocation(anchor + offset, toolbarLocked, offset, Core.Process.WindowArea);
+            location = Vector2.Clamp(location, viewport.Pos, viewport.Pos + Vector2.Max(Vector2.Zero, viewport.Size - windowSize));
             ImGui.SetNextWindowPos(location, ImGuiCond.Always);
             ImGui.SetNextWindowSize(windowSize, ImGuiCond.Always);
             var flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing;

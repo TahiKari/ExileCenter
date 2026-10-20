@@ -246,7 +246,30 @@ internal static class TabletRankingCheck
                 Text(label,0x98,"waystone_tier_label");
                 Check((IntPtr)Call("CraftPageButton",groupedHeader,i,16)==originalButtons[i],"A specialized native label ID still resolves the exact Roman tier: "+roman[i]);
             }
-            Console.WriteLine("VALIDATION waystone navigation: real native-memory fixture; nested open dropdowns, renamed special tabs and all 96 tier/page confirmations; no game input executed.");
+            var liveButtons=roman.Select((name,i)=>
+            {
+                var label=Label(name);Text(label,0x98,"");
+                return Node(Node(),Node(),label,Node(Label((i*11).ToString())),Node());
+            }).ToArray();
+            var liveHeader=Node(Node(liveButtons.Reverse().ToArray()),Node(tiers),Node(),Node(),Node());
+            for(int i=0;i<16;i++)Check((IntPtr)Call("CraftPageButton",liveHeader,i,16)==liveButtons[i],
+                "Live tier tile resolves its direct unnamed Roman label, ignoring the item count and button order: "+roman[i]);
+            var liveXVLabel=(IntPtr)Call("ResolvePath",liveButtons[14],new[]{2});
+            Text(liveXVLabel,0x360,"unreadable");
+            Check((IntPtr)Call("CraftPageButton",liveHeader,14,16)==IntPtr.Zero,"An unreadable XV never falls back to a button index or item count");
+            Text(liveXVLabel,0x360,"XV");
+            var liveXIVLabel=(IntPtr)Call("ResolvePath",liveButtons[13],new[]{2});Text(liveXIVLabel,0x360,"XV");
+            Check((IntPtr)Call("CraftPageButton",liveHeader,14,16)==IntPtr.Zero,"Two XV labels are rejected before sending any navigation input");
+            var window=new System.Drawing.Rectangle(0,0,1297,908);var offset=new Vector2(405,-86);
+            var start=new Vector2(790,236);var currency=new Vector2(300,750);
+            Vector2 Toolbar(Vector2 proposed,bool locked,Vector2 savedOffset,System.Drawing.Rectangle area)=>(Vector2)Call("PreserveLockedStashToolbarLocation",proposed,locked,savedOffset,area);
+            Check(Toolbar(start,true,offset,window)==start,"Locked stash toolbar records its displayed position");
+            Check(Toolbar(currency,true,offset,window)==start,"Changing from waystones to currency preserves all four locked toolbar controls at the same position");
+            Check(Toolbar(Vector2.Zero,true,offset,window)==start,"A temporarily unreadable grid cannot move the locked toolbar off its saved position");
+            Check(Toolbar(currency,true,offset+Vector2.One,window)==currency,"Changing the saved toolbar offset is still applied");
+            Check(Toolbar(start,true,offset+Vector2.One,new System.Drawing.Rectangle(0,0,1920,1080))==start,"Changing the game window recalculates a visible toolbar position");
+            Check(Toolbar(currency,false,offset,window)==currency&&Toolbar(start,true,offset,window)==start,"Unlocking permits movement and relocking uses the new position");
+            Console.WriteLine("VALIDATION waystone navigation: native tier tiles and numeric counters, all 96 tier/page confirmations, ambiguous labels rejected and locked toolbar position preserved; no game input executed.");
         }
         finally{foreach(var allocation in allocations)Marshal.FreeHGlobal(allocation);((IDisposable)reader).Dispose();}
     }
@@ -657,6 +680,11 @@ internal static class TabletRankingCheck
                 if (!File.Exists(file)) file = Path.Combine(root, "Plugins", "StashUtility", name.Name + ".dll");
                 return File.Exists(file) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(file) : null;
             };
+            if (args.Length > 1 && args[1] == "--craft-only")
+            {
+                CheckWaystoneCraft(root); CheckWaystoneNavigation(root);
+                Console.WriteLine(checks + " waystone craft checks passed."); return 0;
+            }
             if (args.Length > 1 && args[1] == "--theme-only")
             {
                 CheckTabletSettingsUi(root, args.Length > 2 ? args[2] : null);
