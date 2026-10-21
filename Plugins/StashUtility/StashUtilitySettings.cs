@@ -8,7 +8,15 @@ namespace StashUtility
     {
         // General
         public bool EnableWaystoneManager = true;
+        public bool WaystoneCraftAlchemy = true;
+        public bool WaystoneCraftMagic = true;
+        public bool WaystoneCraftMagicAlchemy = true;
+        public bool WaystoneCraftExalted = true;
         public bool WaystoneCraftCorrupt = true;
+        public bool WaystoneCraftStopOnMissingCurrency = true;
+        public bool WaystoneCraftDiagnostic = false;
+        public bool WaystoneCraftDryRun = false;
+        public int WaystoneCraftDelayMs = 80;
         public int WaystoneCraftCurrencyLimit = 200;
         public Dictionary<string, WaystoneCraftPreset> WaystoneCraftPresets = new();
         public StashDestination WaystoneCraftT14Destination = new();

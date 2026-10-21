@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -328,6 +329,51 @@ internal static class TabletRankingCheck
             SetCraft("craftIdentity",null);SetCraft("craftItem",IntPtr.Zero);SetCraft("craftMapWasHeld",false);SetCraft("craftPhase",0);
             var nativeStone=Allocate(0x100);var stoneDetails=Allocate(0x100);
             Text(stoneDetails,8,"Metadata/Items/Maps/MapKeyTier15");Marshal.WriteIntPtr(nativeStone,8,stoneDetails);
+            var currencyInventory=Allocate(0x200);var currencyCells=Allocate(IntPtr.Size);var currencyCell=Allocate(IntPtr.Size);
+            Marshal.WriteInt32(currencyInventory,0x150,1);Marshal.WriteInt32(currencyInventory,0x154,1);
+            Marshal.StructureToPtr(new GameOffsets.Natives.StdVector{First=currencyCells,Last=currencyCells+IntPtr.Size,End=currencyCells+IntPtr.Size},currencyInventory+0x170,false);
+            bool CurrencyCells(IntPtr inventory,out IntPtr[] cells)
+            {
+                object[] values={inventory,null};bool valid=(bool)Call("CraftCurrencyCells",values);cells=(IntPtr[])values[1];return valid;
+            }
+            Check(!CurrencyCells(IntPtr.Zero,out var emptyCurrencyCells)&&emptyCurrencyCells.Length==0,"An unavailable currency server inventory cannot acknowledge consumption");
+            foreach(var dimensions in new[]{(0,1),(257,1),(128,129),(2,1)})
+            {
+                Marshal.WriteInt32(currencyInventory,0x150,dimensions.Item1);Marshal.WriteInt32(currencyInventory,0x154,dimensions.Item2);
+                Check(!CurrencyCells(currencyInventory,out _),"Malformed currency grids or inconsistent cell counts are rejected: "+dimensions);
+            }
+            Marshal.WriteInt32(currencyInventory,0x150,1);Marshal.WriteInt32(currencyInventory,0x154,1);
+            Marshal.WriteIntPtr(currencyCells,currencyCell);
+            Check(CurrencyCells(currencyInventory,out var oneCurrencyCell)&&oneCurrencyCell.SequenceEqual(new[]{currencyCell}),"A verified 1x1 currency inventory preserves its server cell reference");
+            SetCraft("craftCurrencyInventory",currencyInventory);SetCraft("craftCurrency","CurrencyAddModToRare");
+            int Receipt(int index){SetCraft("craftCurrencyCell",index);return (int)Call("CraftCurrencyReceiptCount");}
+            Check(Receipt(-1)==-1&&Receipt(1)==-1,"Currency receipt lookup rejects cells outside the validated server grid");
+            Check(Receipt(0)==-1,"A server cell with no readable item reference is unknown, not a confirmed empty stock");
+            IntPtr CurrencyItem(string currency,int count,out IntPtr stack)
+            {
+                var item=Allocate(0x100);var details=Allocate(0x100);var lookup=Allocate(0x100);var componentNames=Allocate(16);var componentPointers=Allocate(IntPtr.Size);
+                var componentName=Allocate(6);Marshal.Copy(System.Text.Encoding.UTF8.GetBytes("Stack\0"),0,componentName,6);
+                Marshal.StructureToPtr(new GameOffsets.Objects.States.InGameState.ComponentNameAndIndexStruct{NamePtr=componentName,Index=0},componentNames,false);
+                Marshal.StructureToPtr(new GameOffsets.Objects.States.InGameState.ComponentLookUpStruct
+                {
+                    ComponentsNameAndIndex=new GameOffsets.Natives.StdBucket{Capacity=1,Data=new GameOffsets.Natives.StdVector{First=componentNames,Last=componentNames+16,End=componentNames+16}}
+                },lookup,false);
+                stack=Allocate(0x40);Marshal.WriteInt32(stack,0x18,count);Marshal.WriteIntPtr(componentPointers,stack);
+                Text(details,8,"Metadata/Items/Currency/"+currency);Marshal.WriteIntPtr(details,0x28,lookup);
+                Marshal.WriteIntPtr(item,8,details);
+                Marshal.StructureToPtr(new GameOffsets.Natives.StdVector{First=componentPointers,Last=componentPointers+IntPtr.Size,End=componentPointers+IntPtr.Size},item+0x10,false);
+                return item;
+            }
+            var firstCurrency=CurrencyItem("CurrencyAddModToRare",20,out _);Marshal.WriteIntPtr(currencyCell,firstCurrency);
+            Check(Receipt(0)==20,"Currency receipts read the stack count from the bound server inventory without visible currency widgets");
+            var replacementCurrency=CurrencyItem("CurrencyAddModToRare",19,out var replacementStack);Marshal.WriteIntPtr(currencyCell,replacementCurrency);
+            Check(Receipt(0)==19,"A replaced native currency pointer is followed through its stable server cell, so a hidden currency tab can confirm one consumed orb");
+            Marshal.WriteInt32(replacementStack,0x18,-1);Check(Receipt(0)==-1,"A negative native stack count cannot acknowledge consumption");Marshal.WriteInt32(replacementStack,0x18,19);
+            Marshal.WriteIntPtr(currencyCell,CurrencyItem("CurrencyCorrupt",19,out _));
+            Check(Receipt(0)==-1,"A different currency placed in the tracked server cell cannot acknowledge the planned orb");
+            Marshal.WriteIntPtr(currencyCells,IntPtr.Zero);Check(Receipt(0)==0,"An empty verified server cell confirms that its selected currency stack is exhausted");
+            SetCraft("craftCurrencyInventory",IntPtr.Zero);Check(Receipt(0)==-1,"An unreadable currency inventory reports an unknown receipt instead of a zero stock");
+            SetCraft("craftCurrency",null);
             var hiddenSlot=Node();Marshal.WriteIntPtr(hiddenSlot,0x4E0,nativeStone);
             var hiddenPage=Node(hiddenSlot);Visible(hiddenPage,false);
             var hiddenSlots=(Dictionary<IntPtr,IntPtr>)Call("CraftVisibleSlots",hiddenPage,false);
@@ -432,9 +478,83 @@ internal static class TabletRankingCheck
         finally{coreHandleProperty.SetValue(ExileCenter.Core.Process,previousReader);coreWindowProperty.SetValue(ExileCenter.Core.Process,previousWindow);foreach(var allocation in allocations)Marshal.FreeHGlobal(allocation);((IDisposable)reader).Dispose();}
     }
 
+    private static void CheckWaystoneCraftInput(string root)
+    {
+        const BindingFlags flags=BindingFlags.Instance|BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic;
+        var plugin=new StashUtilityCore{DllDirectory=Path.Combine(root,"Plugins","StashUtility")};
+        var events=new List<string>();var pressed=new HashSet<int>();
+        void Set(string name,object value)=>typeof(StashUtilityCore).GetField(name,flags).SetValue(plugin,value);
+        object Get(string name)=>typeof(StashUtilityCore).GetField(name,flags).GetValue(plugin);
+        object Call(string name,params object[] values)=>typeof(StashUtilityCore).GetMethod(name,flags).Invoke(plugin,values);
+        Set("craftKeyDown",(Func<int,bool>)(key=>pressed.Contains(key)));
+        var sendField=typeof(StashUtilityCore).GetField("craftSendInputs",flags);
+        var inputParameter=Expression.Parameter(sendField.FieldType.GetGenericArguments()[0],"inputs");
+        Func<Array,uint> record=inputs=>
+        {
+            foreach(var input in inputs)
+            {
+                var type=input.GetType();uint kind=(uint)type.GetField("Type").GetValue(input);
+                var data=type.GetField("Data").GetValue(input);
+                if(kind==1)
+                {
+                    var key=data.GetType().GetField("Key").GetValue(data);int code=(ushort)key.GetType().GetField("Key").GetValue(key);
+                    bool up=((uint)key.GetType().GetField("Flags").GetValue(key)&2)!=0;
+                    if(up)pressed.Remove(code);else pressed.Add(code);
+                    events.Add((code==0x10?"SHIFT":code==0x11?"CTRL":"KEY_"+code)+(up?"_UP":"_DOWN"));
+                }
+                else
+                {
+                    var mouse=data.GetType().GetField("Mouse").GetValue(data);
+                    events.Add((uint)mouse.GetType().GetField("Flags").GetValue(mouse) switch
+                        {2=>"LEFT_DOWN",4=>"LEFT_UP",8=>"RIGHT_DOWN",16=>"RIGHT_UP",_=>"OTHER_MOUSE"});
+                }
+            }
+            return (uint)inputs.Length;
+        };
+        Set("craftSendInputs",Expression.Lambda(sendField.FieldType,Expression.Invoke(Expression.Constant(record),Expression.Convert(inputParameter,typeof(Array))),inputParameter).Compile());
+        bool Input(bool right=false)=>(bool)Call("CraftInput",false,true,false,right);
+        void Release(bool end=false)=>Call("CraftReleaseInput",end);
+        Check(!Input(true)&&events.SequenceEqual(new[]{"SHIFT_DOWN"}),"Currency selection sends Shift DOWN before its right click");
+        Check(Input(true),"The selected currency receives one completed right click while Shift remains held");
+        Release();
+        Check((int)Get("craftInputPhase")==0&&(bool)Get("affinityShiftHeld")&&pressed.Contains(0x10),"Finishing a currency-selection click resets input timing and keeps Shift held");
+        foreach(string action in new[]{"stash navigation","first waystone","next waystone"})
+        {
+            Check(Input(),"A completed left click is emitted with the existing Shift hold: "+action);
+            Release();
+            Check((bool)Get("affinityShiftHeld")&&pressed.Contains(0x10)&&!events.Contains("SHIFT_UP"),"No function boundary releases Shift during "+action);
+        }
+        Release(true);
+        Check(events.SequenceEqual(new[]{"SHIFT_DOWN","RIGHT_DOWN","RIGHT_UP","LEFT_DOWN","LEFT_UP","LEFT_DOWN","LEFT_UP","LEFT_DOWN","LEFT_UP","SHIFT_UP"}),
+            "The production craft-input dispatch emits one continuous Shift session across currency selection, navigation and two applications");
+        Check(!(bool)Get("affinityShiftHeld")&&!pressed.Contains(0x10)&&(int)Get("craftInputPhase")==0,"Ending a currency pass releases Shift and clears its pending click state");
+        events.Clear();Check(!Input(true)&&Input(true),"A later currency pass starts a new Shift and right-click session");Release();
+        pressed.Remove(0x10);int sentBeforeLoss=events.Count;bool lostShift=false;
+        try{Input();}catch(TargetInvocationException error)when(error.InnerException is InvalidOperationException){lostShift=true;}
+        Check(lostShift&&events.Count==sentBeforeLoss,"An involuntary Shift release blocks navigation or application before any further click");
+        Set("affinityCtrlHeld",true);pressed.Add(0x11);Release(true);
+        Check(!(bool)Get("affinityShiftHeld")&&!(bool)Get("affinityCtrlHeld")&&pressed.Count==0,"An emergency release clears every craft-owned modifier without real native input");
+        bool NavigationAllowed()=>(bool)Call("CraftNavigationModifiersAllowed");
+        int navigationEventCount=events.Count;
+        Check(NavigationAllowed(),"Both stash-navigation guards allow navigation without held modifiers");
+        Set("affinityCtrlHeld",true);
+        Check(!NavigationAllowed(),"Both stash-navigation guards reject held Ctrl even without Shift");
+        Set("affinityShiftHeld",true);pressed.Add(0x10);Set("waystoneCraftRunning",true);
+        Check(!NavigationAllowed(),"Both stash-navigation guards reject held Ctrl during an otherwise valid craft Shift session");
+        Set("affinityCtrlHeld",false);Set("waystoneCraftRunning",false);
+        Check(!NavigationAllowed(),"Both stash-navigation guards reject a held Shift that is not owned by a running craft");
+        Set("waystoneCraftRunning",true);
+        Check(NavigationAllowed(),"Both stash-navigation guards preserve the running craft's verified Shift hold while changing tabs");
+        pressed.Remove(0x10);
+        Check(!NavigationAllowed()&&events.Count==navigationEventCount,"Both stash-navigation guards reject a lost Shift without emitting any input");
+        Set("affinityShiftHeld",false);Set("waystoneCraftRunning",false);
+        Console.WriteLine("VALIDATION craft input: intercepted production event dispatch preserves Shift through selection/navigation/applications, rejects lost Shift, and releases modifiers; no Windows input executed.");
+    }
+
     private static void CheckWaystoneCraft(string root)
     {
         const BindingFlags flags=BindingFlags.Static|BindingFlags.Instance|BindingFlags.NonPublic;
+        CheckWaystoneCraftInput(root);
         var plugin=new StashUtilityCore{DllDirectory=Path.Combine(root,"Plugins","StashUtility")};
         var planner=typeof(StashUtilityCore).GetMethod("NextWaystoneCurrency",flags);
         string Text(ExileCenter.RemoteEnums.Rarity rarity,string flag="",bool french=false) => french ?
@@ -443,13 +563,23 @@ internal static class TabletRankingCheck
             "Item Class: Waystones\r\nRarity: "+rarity+"\r\nWaystone (Tier 15)\r\n--------\r\nItem Level: 83\r\n"+flag;
         string Next(ExileCenter.RemoteEnums.Rarity rarity,int count,string flag="",bool corrupt=true,bool french=false,string path="Metadata/Items/Maps/MapKeyTier15") =>
             (string)planner.Invoke(plugin,new object[]{path,rarity,count,Text(rarity,flag,french),french?"Pierre de téléportation (Palier 15)":"Waystone (Tier 15)",corrupt});
-        foreach(bool french in new[]{false,true})foreach(bool corrupt in new[]{false,true})
+        foreach(bool magicAlchemy in new[]{true,false})foreach(bool french in new[]{false,true})foreach(bool corrupt in new[]{false,true})
         {
+            plugin.Settings.WaystoneCraftMagicAlchemy=magicAlchemy;
             Check(Next(ExileCenter.RemoteEnums.Rarity.Normal,0,corrupt:corrupt,french:french)=="CurrencyUpgradeToRare","White waystone uses alchemy "+french+corrupt);
-            foreach(int count in new[]{1,2})Check(Next(ExileCenter.RemoteEnums.Rarity.Magic,count,corrupt:corrupt,french:french)=="CurrencyUpgradeToRare","Magic waystone uses alchemy "+count+french+corrupt);
+            foreach(int count in new[]{1,2})Check(Next(ExileCenter.RemoteEnums.Rarity.Magic,count,corrupt:corrupt,french:french)==
+                (magicAlchemy?"CurrencyUpgradeToRare":"CurrencyUpgradeMagicToRare"),"Magic waystone respects the configured alchemy or Regal conversion "+count+french+corrupt+magicAlchemy);
             for(int count=0;count<=6;count++)Check(Next(ExileCenter.RemoteEnums.Rarity.Rare,count,corrupt:corrupt,french:french)==
                 (count<6?"CurrencyAddModToRare":corrupt?"CurrencyCorrupt":null),"Rare waystone fills six explicit modifiers before optional Vaal "+count+french+corrupt);
         }
+        plugin.Settings.WaystoneCraftMagicAlchemy=true;
+        plugin.Settings.WaystoneCraftAlchemy=false;
+        Check(Next(ExileCenter.RemoteEnums.Rarity.Normal,0)==null,"Disabling normal-waystone conversion cannot schedule alchemy");
+        plugin.Settings.WaystoneCraftAlchemy=true;plugin.Settings.WaystoneCraftMagic=false;
+        Check(Next(ExileCenter.RemoteEnums.Rarity.Magic,2)==null,"Disabling magic-waystone conversion cannot schedule alchemy or Regal");
+        plugin.Settings.WaystoneCraftMagic=true;plugin.Settings.WaystoneCraftExalted=false;
+        Check(Next(ExileCenter.RemoteEnums.Rarity.Rare,5)==null&&Next(ExileCenter.RemoteEnums.Rarity.Rare,6)=="CurrencyCorrupt", "Disabling exaltation skips incomplete rares and never prevents an already maximized rare from reaching optional corruption");
+        plugin.Settings.WaystoneCraftExalted=true;
         foreach(string flag in new[]{"Corrupted","Corrompu","Corrompue","Unidentified","Non identifié","Non identifiée","Mirrored","Dupliqué","Dupliquée","Sanctified","Sanctifié","Sanctifiée"})
             foreach(int count in new[]{2,6,8})Check(Next(ExileCenter.RemoteEnums.Rarity.Rare,count,flag)==null,"Read-only waystone never consumes currency: "+flag+count);
         Check(Next(ExileCenter.RemoteEnums.Rarity.Unique,6)==null,"Unique waystones are excluded");
@@ -485,18 +615,26 @@ internal static class TabletRankingCheck
             (bool)acknowledge.Invoke(null,new object[]{currency,rarity,before,ExileCenter.RemoteEnums.Rarity.Rare,after,beforeCurrency,afterCurrency,changed});
         Check(Ack("CurrencyUpgradeToRare",0,4,rarity:ExileCenter.RemoteEnums.Rarity.Normal),"Alchemy requires the confirmed four-mod rare result");
         Check(!Ack("CurrencyUpgradeToRare",1,3,rarity:ExileCenter.RemoteEnums.Rarity.Magic),"An unexpected alchemy result cannot advance the craft");
+        foreach(int before in new[]{1,2})
+        {
+            Check(Ack("CurrencyUpgradeMagicToRare",before,before+1,rarity:ExileCenter.RemoteEnums.Rarity.Magic),"Regal confirms the conversion of a magic waystone and exactly one additional affix: "+before);
+            Check(!Ack("CurrencyUpgradeMagicToRare",before,before,rarity:ExileCenter.RemoteEnums.Rarity.Magic)&&
+                !Ack("CurrencyUpgradeMagicToRare",before,4,rarity:ExileCenter.RemoteEnums.Rarity.Magic)&&
+                !Ack("CurrencyUpgradeMagicToRare",before,before+1,rarity:ExileCenter.RemoteEnums.Rarity.Normal),"Regal never acknowledges an unchanged, incompatible or unexpected result: "+before);
+        }
         Check(Ack("CurrencyAddModToRare",5,6)&&Ack("CurrencyAddModToRare",4,6),"Exaltation confirms one or multiple added mods within six slots");
         Check(!Ack("CurrencyAddModToRare",6,7)&&!Ack("CurrencyAddModToRare",5,5)&&!Ack("CurrencyAddModToRare",5,6,changed:false),"A full or unchanged waystone cannot acknowledge exaltation");
         Check(Ack("CurrencyCorrupt",6,6,changed:false),"Vaal can leave native mods unchanged; fresh corrupted item text is still required");
         Check(!Ack("CurrencyCorrupt",5,6)&&!Ack("CurrencyCorrupt",7,8)&&!Ack("CurrencyChaos",4,5),"Only the planned currency at the expected stage can acknowledge");
-        foreach(string currency in new[]{"CurrencyUpgradeToRare","CurrencyAddModToRare","CurrencyCorrupt"})
+        foreach(string currency in new[]{"CurrencyUpgradeToRare","CurrencyUpgradeMagicToRare","CurrencyAddModToRare","CurrencyCorrupt"})
             foreach(int afterCount in new[]{-1,18,20,21})Check(!Ack(currency,4,6,afterCurrency:afterCount),"No repeat or advance without exactly one confirmed currency consumption: "+currency+afterCount);
         var corruption=typeof(StashUtilityCore).GetMethod("CraftTextIsCorrupted",flags);
-        foreach(bool french in new[]{false,true})
+        foreach(bool magicAlchemy in new[]{true,false})foreach(bool french in new[]{false,true})
         foreach(var initial in new[]{(ExileCenter.RemoteEnums.Rarity.Normal,0),(ExileCenter.RemoteEnums.Rarity.Magic,1),
             (ExileCenter.RemoteEnums.Rarity.Magic,2),(ExileCenter.RemoteEnums.Rarity.Rare,3),(ExileCenter.RemoteEnums.Rarity.Rare,4),
             (ExileCenter.RemoteEnums.Rarity.Rare,5),(ExileCenter.RemoteEnums.Rarity.Rare,6)})
         {
+            plugin.Settings.WaystoneCraftMagicAlchemy=magicAlchemy;
             var rarity=initial.Item1;int count=initial.Item2;bool corrupted=false;
             var operations=new List<string>();
             for(int step=0;step<8;step++)
@@ -504,32 +642,94 @@ internal static class TabletRankingCheck
                 string currency=Next(rarity,count,corrupted?(french?"Corrompu":"Corrupted"):"",french:french);
                 if(currency==null)break;
                 operations.Add(currency);
-                int after=currency=="CurrencyUpgradeToRare"?4:currency=="CurrencyAddModToRare"?count+1:count;
+                int after=currency=="CurrencyUpgradeToRare"?4:currency is "CurrencyAddModToRare" or "CurrencyUpgradeMagicToRare"?count+1:count;
                 Check(Ack(currency,count,after,rarity:rarity,changed:currency!="CurrencyCorrupt"),"Each full-cycle step confirms exactly one orb and its native affix result: "+initial+currency);
                 rarity=ExileCenter.RemoteEnums.Rarity.Rare;count=after;corrupted=currency=="CurrencyCorrupt";
             }
-            int expectedExalts=initial.Item1==ExileCenter.RemoteEnums.Rarity.Rare?6-initial.Item2:2;
+            bool usesRegal=initial.Item1==ExileCenter.RemoteEnums.Rarity.Magic&&!magicAlchemy;
+            int expectedExalts=initial.Item1==ExileCenter.RemoteEnums.Rarity.Rare?6-initial.Item2:usesRegal?5-initial.Item2:2;
             Check(corrupted&&count==6&&operations.Count(c=>c=="CurrencyAddModToRare")==expectedExalts&&
-                operations.Count(c=>c=="CurrencyUpgradeToRare")== (initial.Item1==ExileCenter.RemoteEnums.Rarity.Rare?0:1)&&operations.Last()=="CurrencyCorrupt",
-                "The complete white/blue/rare cycle reaches six real affixes, then Vaal: "+initial+" / French="+french);
+                operations.Count(c=>c=="CurrencyUpgradeToRare")== (initial.Item1==ExileCenter.RemoteEnums.Rarity.Rare||usesRegal?0:1)&&
+                operations.Count(c=>c=="CurrencyUpgradeMagicToRare")== (usesRegal?1:0)&&operations.Last()=="CurrencyCorrupt",
+                "The complete white/blue/rare cycle reaches six real affixes, then Vaal: "+initial+" / French="+french+" / magic alchemy="+magicAlchemy);
         }
+        plugin.Settings.WaystoneCraftMagicAlchemy=true;
         string wrapped=Text(ExileCenter.RemoteEnums.Rarity.Rare)+"\n"+string.Join("\n",Enumerable.Repeat("One modifier can span several tooltip lines",12));
         Check((string)planner.Invoke(plugin,new object[]{"Metadata/Items/Maps/MapKeyTier15",ExileCenter.RemoteEnums.Rarity.Rare,3,wrapped,"Waystone (Tier 15)",true})=="CurrencyAddModToRare",
             "Tooltip line count never replaces the native explicit-modifier count");
         foreach(string text in new[]{"Corrupted","Corrompu","Corrompue"})Check((bool)corruption.Invoke(null,new object[]{Text(ExileCenter.RemoteEnums.Rarity.Rare,text)}),"Corruption acknowledgement accepts a standalone localized status: "+text);
         foreach(string text in new[]{"", "Unidentified", "10% chance to find corrupted items"})Check(!(bool)corruption.Invoke(null,new object[]{Text(ExileCenter.RemoteEnums.Rarity.Rare,text)}),"Item modifiers or unreadable flags cannot acknowledge corruption");
         var defaults=JsonConvert.DeserializeObject<StashUtilitySettings>("{}");
-        Check(defaults.WaystoneCraftCorrupt&&defaults.WaystoneCraftCurrencyLimit==200,"Existing settings receive bounded craft defaults without migration");
+        Check(defaults.WaystoneCraftAlchemy&&defaults.WaystoneCraftMagic&&defaults.WaystoneCraftMagicAlchemy&&defaults.WaystoneCraftExalted&&
+            defaults.WaystoneCraftCorrupt&&defaults.WaystoneCraftStopOnMissingCurrency&&defaults.WaystoneCraftCurrencyLimit==200&&
+            defaults.WaystoneCraftDelayMs==80&&!defaults.WaystoneCraftDiagnostic&&!defaults.WaystoneCraftDryRun,
+            "Existing settings receive bounded craft defaults, compatible magic-alchemy policy, and inactive diagnostic modes without migration");
         var cellType=typeof(StashUtilityCore).GetNestedType("SortItem",BindingFlags.NonPublic);
-        object Cell(int address,int x,string identity)
+        object Cell(int address,int x,string identity,int y=0)
         {
             var cell=Activator.CreateInstance(cellType,true);
-            foreach(var pair in new Dictionary<string,object>{{"Address",new IntPtr(address)},{"X",x},{"Y",0},{"Width",1},{"Height",1},{"Identity",identity}})
+            foreach(var pair in new Dictionary<string,object>{{"Address",new IntPtr(address)},{"X",x},{"Y",y},{"Width",1},{"Height",1},{"Identity",identity}})
                 cellType.GetField(pair.Key).SetValue(cell,pair.Value);
             return cell;
         }
         var listType=typeof(List<>).MakeGenericType(cellType);
         IList Cells(params object[] cells){var list=(IList)Activator.CreateInstance(listType);foreach(var cell in cells)list.Add(cell);return list;}
+        var columnOrder=typeof(StashUtilityCore).GetMethod("CraftColumnOrder",flags);
+        var sparseCells=Cells(Cell(405,2,"last column",7),Cell(403,1,"second column",0),Cell(402,0,"first column below a hole",7),
+            Cell(404,1,"second column below a hole",5),Cell(401,0,"first column top",0));
+        int[] Ordered(IList cells)=>((IEnumerable)columnOrder.Invoke(null,new object[]{cells})).Cast<object>().Select(cell=>(int)((IntPtr)cellType.GetField("Address").GetValue(cell)).ToInt64()).ToArray();
+        Check(Ordered(sparseCells).SequenceEqual(new[]{401,402,403,404,405}),"Sparse map grids are read top to bottom in each column; empty cells never terminate the scan");
+        var fullGrid=Cells(Enumerable.Range(0,96).Reverse().Select(index=>Cell(500+index,index%12,"grid map "+index,index/12)).ToArray());
+        Check(Ordered(fullGrid).SequenceEqual(Enumerable.Range(0,12).SelectMany(x=>Enumerable.Range(0,8).Select(y=>500+y*12+x))),"A full 12x8 map grid is read vertically regardless of native child order");
+        var craftStoneType=typeof(StashUtilityCore).GetNestedType("CraftStone",BindingFlags.NonPublic);
+        var trackedBatch=(IList)typeof(StashUtilityCore).GetField("craftBatch",flags).GetValue(plugin);
+        object TrackedStone(int address,int x,int y,bool completed=false)
+        {
+            var stone=Activator.CreateInstance(craftStoneType,true);
+            foreach(var pair in new Dictionary<string,object>{{"Address",new IntPtr(address)},{"X",x},{"Y",y},{"Completed",completed},{"Identity","original map "+address},{"Currency","CurrencyAddModToRare"}})
+                craftStoneType.GetField(pair.Key).SetValue(stone,pair.Value);
+            trackedBatch.Add(stone);return stone;
+        }
+        var trackedLast=TrackedStone(805,2,7);TrackedStone(803,1,0);TrackedStone(802,0,7,true);TrackedStone(804,1,5);var trackedFirst=TrackedStone(801,0,0);
+        var rescanQueue=(Queue<IntPtr>)typeof(StashUtilityCore).GetField("craftQueue",flags).GetValue(plugin);rescanQueue.Enqueue(new IntPtr(999));
+        typeof(StashUtilityCore).GetField("craftCurrent",flags).SetValue(plugin,trackedLast);typeof(StashUtilityCore).GetField("craftItem",flags).SetValue(plugin,new IntPtr(805));
+        var beginRescan=typeof(StashUtilityCore).GetMethod("CraftBeginRescan",flags);
+        foreach(bool final in new[]{false,true})
+        {
+            beginRescan.Invoke(plugin,new object[]{final});
+            Check(rescanQueue.SequenceEqual(new[]{801,803,804,805}.Select(address=>new IntPtr(address)))&&trackedBatch.Count==5,
+                "A phase or final rescan queues only the original unfinished maps in their original column order, excludes completed maps, and discards stale queued objects: final="+final);
+            Check((bool)typeof(StashUtilityCore).GetField("craftRescanning",flags).GetValue(plugin)&&
+                (bool)typeof(StashUtilityCore).GetField("craftFinalScan",flags).GetValue(plugin)==final&&
+                (int)typeof(StashUtilityCore).GetField("craftPhase",flags).GetValue(plugin)==1&&
+                typeof(StashUtilityCore).GetField("craftCurrent",flags).GetValue(plugin)==null&&
+                (IntPtr)typeof(StashUtilityCore).GetField("craftItem",flags).GetValue(plugin)==IntPtr.Zero,
+                "Rescanning starts a fresh verified read without retaining a pending application target: final="+final);
+        }
+        craftStoneType.GetField("Completed").SetValue(trackedFirst,true);craftStoneType.GetField("Address").SetValue(trackedLast,new IntPtr(815));
+        beginRescan.Invoke(plugin,new object[]{true});
+        Check(rescanQueue.SequenceEqual(new[]{803,804,815}.Select(address=>new IntPtr(address)))&&trackedBatch.Count==5,
+            "Later rescans follow verified replacement addresses, preserve the initial column positions, and never recollect a newly visible map");
+        var confirmedCurrency=(Dictionary<string,int>)typeof(StashUtilityCore).GetField("craftConfirmedCurrency",flags).GetValue(plugin);
+        typeof(StashUtilityCore).GetField("craftCurrent",flags).SetValue(plugin,trackedLast);
+        typeof(StashUtilityCore).GetField("craftItem",flags).SetValue(plugin,new IntPtr(815));
+        var recordReceipt=typeof(StashUtilityCore).GetMethod("CraftRecordReceipt",flags);
+        void Record(string currency,int mods)
+        {
+            typeof(StashUtilityCore).GetField("craftCurrency",flags).SetValue(plugin,currency);
+            recordReceipt.Invoke(plugin,new object[]{ExileCenter.RemoteEnums.Rarity.Rare,mods});
+        }
+        Record("CurrencyUpgradeToRare",4);Record("CurrencyAddModToRare",5);Record("CurrencyAddModToRare",6);Record("CurrencyCorrupt",6);
+        typeof(StashUtilityCore).GetMethod("CraftConfirmCorruption",flags).Invoke(plugin,null);
+        typeof(StashUtilityCore).GetMethod("CraftConfirmCorruption",flags).Invoke(plugin,null);
+        Check(confirmedCurrency["CurrencyUpgradeToRare"]==1&&confirmedCurrency["CurrencyAddModToRare"]==2&&confirmedCurrency["CurrencyCorrupt"]==1&&
+            (int)typeof(StashUtilityCore).GetField("craftRareConfirmed",flags).GetValue(plugin)==1&&
+            (int)typeof(StashUtilityCore).GetField("craftMaximized",flags).GetValue(plugin)==1&&
+            (int)typeof(StashUtilityCore).GetField("craftCorrupted",flags).GetValue(plugin)==1&&
+            (int)typeof(StashUtilityCore).GetField("craftDone",flags).GetValue(plugin)==0,
+            "Confirmed receipts report actual per-currency usage and one maximization/corruption per map without prematurely marking the map complete");
+        typeof(StashUtilityCore).GetField("craftCurrent",flags).SetValue(plugin,null);typeof(StashUtilityCore).GetField("craftItem",flags).SetValue(plugin,IntPtr.Zero);
+        trackedBatch.Clear();rescanQueue.Clear();
         var baseline=(IList)typeof(StashUtilityCore).GetField("craftInventoryBefore",flags).GetValue(plugin);
         var invariant=typeof(StashUtilityCore).GetMethod("CraftInventoryUnchanged",flags);
         bool Unchanged(IList current,int except=0)=>(bool)invariant.Invoke(plugin,new object[]{current,new IntPtr(except)});
@@ -541,6 +741,13 @@ internal static class TabletRankingCheck
         Check(!SameMaps(Cells(Cell(9,0,"different mods"),other),Cells(other,target)),
             "A different map with the same base type cannot acknowledge the routed corrupted map");
         Check(!SameMaps(Cells(target,target),Cells(other,target)),"Duplicate map identities retain their exact multiplicities during transfer acknowledgement");
+        var placedMap=typeof(StashUtilityCore).GetMethod("CraftPlacedMap",flags);
+        object Placed(IList after,IList before,string identity="waystone")=>placedMap.Invoke(null,new object[]{after,before,identity});
+        var newPlaced=Cell(900,4,"waystone");
+        Check(ReferenceEquals(Placed(Cells(other,target,newPlaced),Cells(other,target)),newPlaced),"Routing binds the unique newly deposited native map even when an identical map already existed in the destination");
+        Check(Placed(Cells(other,target),Cells(other,target))==null,"An existing identical destination map cannot stand in for the deposited result");
+        Check(Placed(Cells(other,target,newPlaced,Cell(901,5,"waystone")),Cells(other,target))==null,"Two newly visible identical maps make the deposited native address ambiguous");
+        Check(Placed(Cells(other,target,Cell(902,4,"different waystone")),Cells(other,target))==null,"A new destination item with different verified content cannot acknowledge the deposited map");
         var ready=typeof(StashUtilityCore).GetMethod("CraftPageIsReady",flags);
         var now=DateTime.UtcNow;
         bool Ready(IList items,int milliseconds)=>(bool)ready.Invoke(plugin,new object[]{items,now.AddMilliseconds(milliseconds)});
@@ -550,21 +757,34 @@ internal static class TabletRankingCheck
         Check(!Ready(null,1300)&&!Ready(Cells(target),1400)&&Ready(Cells(target),1900),"A temporarily unavailable grid cannot retain an obsolete ready state");
         var batchCurrency=typeof(StashUtilityCore).GetMethod("CraftBatchCurrency",flags);
         string BatchCurrency(IEnumerable<string> currencies)=>(string)batchCurrency.Invoke(null,new object[]{currencies});
-        var batchRarities=new[]{ExileCenter.RemoteEnums.Rarity.Normal,ExileCenter.RemoteEnums.Rarity.Magic,ExileCenter.RemoteEnums.Rarity.Rare,ExileCenter.RemoteEnums.Rarity.Rare,ExileCenter.RemoteEnums.Rarity.Rare};
-        var batchCounts=new[]{0,2,3,5,6};var batchCorrupted=new bool[5];var passes=new List<string>();
-        string Plan(int i)=>(string)planner.Invoke(plugin,new object[]{"Metadata/Items/Maps/MapKeyTier15",batchRarities[i],batchCounts[i],Text(batchRarities[i],batchCorrupted[i]?"Corrupted":""),"Waystone (Tier 15)",true});
-        for(int action=0;action<50;action++)
+        foreach(bool magicAlchemy in new[]{true,false})
         {
-            var plans=Enumerable.Range(0,5).Select(Plan).ToArray();string currency=BatchCurrency(plans);if(currency==null)break;
-            int i=Array.IndexOf(plans,currency);passes.Add(currency);
-            if(currency=="CurrencyUpgradeToRare"){batchRarities[i]=ExileCenter.RemoteEnums.Rarity.Rare;batchCounts[i]=4;}
-            else if(currency=="CurrencyAddModToRare")batchCounts[i]++;
-            else if(currency=="CurrencyCorrupt")batchCorrupted[i]=true;
+            plugin.Settings.WaystoneCraftMagicAlchemy=magicAlchemy;
+            var batchRarities=new[]{ExileCenter.RemoteEnums.Rarity.Normal,ExileCenter.RemoteEnums.Rarity.Magic,ExileCenter.RemoteEnums.Rarity.Rare,ExileCenter.RemoteEnums.Rarity.Rare,ExileCenter.RemoteEnums.Rarity.Rare};
+            var batchCounts=new[]{0,2,3,5,6};var batchCorrupted=new bool[5];var passes=new List<string>();int confirmed=0;
+            string Plan(int i)=>(string)planner.Invoke(plugin,new object[]{"Metadata/Items/Maps/MapKeyTier15",batchRarities[i],batchCounts[i],Text(batchRarities[i],batchCorrupted[i]?"Corrupted":""),"Waystone (Tier 15)",true});
+            for(int action=0;action<50;action++)
+            {
+                var plans=Enumerable.Range(0,5).Select(Plan).ToArray();string currency=BatchCurrency(plans);if(currency==null)break;
+                int i=Array.IndexOf(plans,currency);int before=batchCounts[i];var rarity=batchRarities[i];
+                int after=currency=="CurrencyUpgradeToRare"?4:currency is "CurrencyAddModToRare" or "CurrencyUpgradeMagicToRare"?before+1:before;
+                bool changed=currency!="CurrencyCorrupt";
+                Check(!Ack(currency,before,after,afterCurrency:20,rarity:rarity,changed:changed)&&
+                    batchCounts[i]==before&&batchRarities[i]==rarity&&!batchCorrupted[i],"A requested action without a currency receipt cannot change the observed state or complete a map: "+i+currency);
+                Check(Ack(currency,before,after,rarity:rarity,changed:changed),"Each batch action requires exactly one verified orb and its compatible observed result: "+i+currency);
+                passes.Add(currency);confirmed++;
+                batchRarities[i]=ExileCenter.RemoteEnums.Rarity.Rare;batchCounts[i]=after;
+                if(currency=="CurrencyCorrupt")batchCorrupted[i]=true;
+            }
+            Check(batchCorrupted.All(value=>value)&&batchCounts.All(count=>count==6),"All five white, blue and partially rare maps reach six verified affixes followed by corruption: magic alchemy="+magicAlchemy);
+            Check(passes.Count(value=>value=="CurrencyUpgradeToRare")== (magicAlchemy?2:1)&&
+                passes.Count(value=>value=="CurrencyUpgradeMagicToRare")== (magicAlchemy?0:1)&&
+                passes.Count(value=>value=="CurrencyAddModToRare")== (magicAlchemy?8:9)&&passes.Count(value=>value=="CurrencyCorrupt")==5&&confirmed==passes.Count,
+                "The five-map batch records precisely the confirmed alchemies, optional Regal, required exalts and five Vaals");
+            int CurrencyRank(string currency)=>currency=="CurrencyUpgradeToRare"?0:currency=="CurrencyUpgradeMagicToRare"?1:currency=="CurrencyAddModToRare"?2:3;
+            Check(passes.SequenceEqual(passes.OrderBy(CurrencyRank)),"Every rarity conversion precedes exaltation, and every exaltation precedes the first Vaal");
         }
-        Check(batchCorrupted.All(value=>value)&&batchCounts.All(count=>count==6),"Every white, blue and partially rare map in a mixed batch reaches six actual affixes and corruption");
-        Check(passes.Count(value=>value=="CurrencyUpgradeToRare")==2&&passes.Count(value=>value=="CurrencyAddModToRare")==8&&passes.Count(value=>value=="CurrencyCorrupt")==5,
-            "Mixed batch consumes exactly two alchemies, eight exalts and five Vaals");
-        Check(passes.SequenceEqual(passes.OrderBy(value=>value=="CurrencyUpgradeToRare"?0:value=="CurrencyAddModToRare"?1:2)),"All alchemies precede every exalt and all exalts precede every Vaal");
+        plugin.Settings.WaystoneCraftMagicAlchemy=true;
         Check(BatchCurrency(new string[]{null,null})==null,"A completed or excluded batch cannot select additional currency");
         Check(defaults.WaystoneCraftT14PageName=="Craft"&&defaults.WaystoneCraftT16PageName=="Craft"&&string.IsNullOrEmpty(defaults.WaystoneCraftT14Destination.TabName),
             "Existing settings default to the source stash and named Craft destination for each changed tier");
@@ -629,11 +849,11 @@ internal static class TabletRankingCheck
         var complete=typeof(StashUtilityCore).GetMethod("CraftCompleteStashWaystone",flags);
         var batch=(Queue<IntPtr>)typeof(StashUtilityCore).GetField("craftQueue",flags).GetValue(plugin);
         typeof(StashUtilityCore).GetField("craftTier",flags).SetValue(plugin,14);typeof(StashUtilityCore).GetField("craftPage",flags).SetValue(plugin,5);
-        foreach(int address in new[]{101,102,103})batch.Enqueue(new IntPtr(address));
-        for(int done=1;done<=3;done++)
+        foreach(int address in new[]{101,102,103,104,105})batch.Enqueue(new IntPtr(address));
+        for(int done=1;done<=5;done++)
         {
             typeof(StashUtilityCore).GetField("craftItem",flags).SetValue(plugin,batch.Dequeue());complete.Invoke(plugin,null);
-            Check((int)typeof(StashUtilityCore).GetField("craftDone",flags).GetValue(plugin)==done&&batch.Count==3-done&&
+            Check((int)typeof(StashUtilityCore).GetField("craftDone",flags).GetValue(plugin)==done&&batch.Count==5-done&&
                 (int)typeof(StashUtilityCore).GetField("craftPhase",flags).GetValue(plugin)==5&&
                 (int)typeof(StashUtilityCore).GetField("craftTier",flags).GetValue(plugin)==14&&(int)typeof(StashUtilityCore).GetField("craftPage",flags).GetValue(plugin)==5,
                 "Completing one in-stash map preserves every remaining map and restores the original T15 subpage: "+done);
@@ -663,10 +883,10 @@ internal static class TabletRankingCheck
         int Queued()=>(int)queue.GetType().GetProperty("Count").GetValue(queue);
         var stopCraft=typeof(StashUtilityCore).GetMethod("StopWaystoneCraft",flags);
         EnqueueScan();scanFlag.SetValue(plugin,true);
-        stopCraft.Invoke(plugin,new object[]{null});
+        stopCraft.Invoke(plugin,new object[]{null,false});
         Check(Queued()==0&&!(bool)scanFlag.GetValue(plugin),"Stopping craft cancels its pending automatic scan without game input");
         EnqueueScan();
-        stopCraft.Invoke(plugin,new object[]{null});
+        stopCraft.Invoke(plugin,new object[]{null,false});
         Check(Queued()==1,"Stopping an idle craft leaves a separate manual stash scan alone");
         scanFlag.SetValue(plugin,true);scanComplete.SetValue(plugin,false);
         typeof(StashUtilityCore).GetMethod("CancelStashScan",flags).Invoke(plugin,new object[]{"fixture interruption"});
