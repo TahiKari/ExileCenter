@@ -548,6 +548,93 @@ internal static class TabletRankingCheck
         pressed.Remove(0x10);
         Check(!NavigationAllowed()&&events.Count==navigationEventCount,"Both stash-navigation guards reject a lost Shift without emitting any input");
         Set("affinityShiftHeld",false);Set("waystoneCraftRunning",false);
+        bool Copy()=>(bool)Call("CraftInput",true,false,true,false);
+        bool RejectedCopy()
+        {
+            try{Copy();return false;}catch(TargetInvocationException error)when(error.InnerException is InvalidOperationException){return true;}
+        }
+        events.Clear();Set("affinityActionDelay",80);
+        Check(!Copy()&&events.SequenceEqual(new[]{"CTRL_DOWN"})&&(DateTime)Get("affinityNextAction")<=DateTime.UtcNow,
+            "Clipboard copying presses Ctrl separately with no added interaction delay before the guarded copy frame");
+        Check(Copy()&&events.SequenceEqual(new[]{"CTRL_DOWN","KEY_67_DOWN","KEY_67_UP"})&&(bool)Get("affinityCtrlHeld")&&pressed.Contains(0x11),
+            "The copy frame requires its verified Ctrl hold and sends C down/up without releasing Ctrl before input completion");
+        Release();
+        Check(events.Last()=="CTRL_UP"&&!(bool)Get("affinityCtrlHeld")&&!pressed.Contains(0x11)&&(int)Get("craftInputPhase")==0,
+            "Completing the copy releases owned Ctrl and leaves no modifier stuck");
+        foreach(int externalModifier in new[]{0x10,0x11})
+        {
+            pressed.Add(externalModifier);int before=events.Count;
+            Check(RejectedCopy()&&events.Count==before,"An external Shift or Ctrl blocks clipboard copying before any key is sent: "+externalModifier);
+            pressed.Remove(externalModifier);
+        }
+        Check(!Copy(),"A later clipboard copy starts with an owned Ctrl press");
+        pressed.Remove(0x11);int beforeLostCtrl=events.Count;
+        Check(RejectedCopy()&&events.Count==beforeLostCtrl,"Losing Ctrl between copy frames prevents an unmodified C from reaching the game");Release(true);
+        events.Clear();Set("waystoneCraftRunning",true);Set("craftCurrency","CurrencyCorrupt");Set("craftTargetTier",14);Set("craftTargetPage",5);Set("craftFromInventory",false);
+        var stoneType=typeof(StashUtilityCore).GetNestedType("CraftStone",BindingFlags.NonPublic);
+        var batch=(IList)Get("craftBatch");
+        object Stone(int address,int tier=14)
+        {
+            var stone=Activator.CreateInstance(stoneType,true);
+            foreach(var pair in new Dictionary<string,object>{{"Address",new IntPtr(address)},{"Identity","verified result "+address},{"Currency","CurrencyCorrupt"},
+                {"Tier",tier},{"Page",5},{"X",0},{"Y",address-1001},{"Maximized",true}})stoneType.GetField(pair.Key).SetValue(stone,pair.Value);
+            return stone;
+        }
+        void Current(object stone)
+        {
+            Set("craftCurrent",stone);Set("craftItem",stoneType.GetField("Address").GetValue(stone));Set("craftIdentity",stoneType.GetField("Identity").GetValue(stone));
+        }
+        var five=Enumerable.Range(1001,5).Select(address=>Stone(address)).ToArray();foreach(var stone in five)batch.Add(stone);
+        Check(!Input(true)&&Input(true),"A five-map Vaal pass selects its currency once with Shift already pressed");Set("craftSelectedCurrency","CurrencyCorrupt");Release();
+        for(int i=0;i<five.Length;i++)
+        {
+            Current(five[i]);Check(Input(),"The same Vaal selection applies to original T15 map "+(i+1));Release();
+            Call("CraftRecordReceipt",ExileCenter.RemoteEnums.Rarity.Rare,6);
+            Check((bool)Call("CraftDeferCorruption",14)&&(bool)stoneType.GetField("CorruptionPending").GetValue(five[i])&&
+                stoneType.GetField("Currency").GetValue(five[i])==null&&Get("craftCurrent")==null&&(IntPtr)Get("craftItem")==IntPtr.Zero&&
+                (int)Get("craftPhase")==5&&(int)Get("craftDone")==0&&(bool)Get("affinityShiftHeld")&&(string)Get("craftSelectedCurrency")=="CurrencyCorrupt",
+                "A confirmed unchanged-tier Vaal receipt defers terminal copying and completion while keeping the current currency session: "+(i+1));
+        }
+        Check(events.Count(value=>value=="SHIFT_DOWN")==1&&!events.Contains("SHIFT_UP")&&events.Count(value=>value=="RIGHT_DOWN")==1,
+            "Five unchanged-tier Vaal applications use one continuous Shift hold and one currency selection");
+        Check(!(bool)Call("CraftCancelCurrency"),"The finished Vaal pass explicitly cancels its currency selection before final copying");Release(true);
+        Call("CraftBeginRescan",true);
+        var finalQueue=(Queue<IntPtr>)Get("craftQueue");
+        Check(finalQueue.SequenceEqual(Enumerable.Range(1001,5).Select(address=>new IntPtr(address))),"The final rescan includes all five pending corruption results exactly once");
+        int finalLeftClicks=events.Count(value=>value=="LEFT_DOWN");
+        foreach(var stone in five)
+        {
+            Current(stone);Check(!Copy()&&Copy(),"Final corruption verification copies the observed map after ending its Vaal session");Release();
+            Call("CraftCompletePendingCorruption","Corrupted",null,14);
+        }
+        var receipts=(Dictionary<string,int>)Get("craftConfirmedCurrency");
+        Check((int)Get("craftDone")==5&&(int)Get("craftCorrupted")==5&&receipts["CurrencyCorrupt"]==5&&
+            five.All(stone=>(bool)stoneType.GetField("Completed").GetValue(stone)&&!(bool)stoneType.GetField("CorruptionPending").GetValue(stone))&&
+            events.Count(value=>value=="SHIFT_DOWN")==1&&events.Count(value=>value=="SHIFT_UP")==1&&events.Count(value=>value=="LEFT_DOWN")==finalLeftClicks,
+            "Only the final observed corruption texts complete the five maps, without any extra Vaal application or intermediate Shift release");
+        var incompatible=Stone(1100);Current(incompatible);
+        foreach(int tier in new[]{-1,13,15,16})
+            Check(!(bool)Call("CraftDeferCorruption",tier)&&ReferenceEquals(Get("craftCurrent"),incompatible)&&
+                !(bool)stoneType.GetField("CorruptionPending").GetValue(incompatible),"Invalid, T14 and T16 Vaal results remain on the immediate verification/routing path: "+tier);
+        Set("craftFromInventory",true);Check(!(bool)Call("CraftDeferCorruption",14),"Inventory-mode Vaal results retain their immediate verification path");Set("craftFromInventory",false);
+        stoneType.GetField("CorruptionPending").SetValue(incompatible,true);int doneBeforeFailure=(int)Get("craftDone");int inputBeforeFailure=events.Count;
+        foreach(var invalid in new[]{("Not corrupted",(string)null,14),("Corrupted","CurrencyCorrupt",14),("Corrupted",(string)null,13)})
+        {
+            bool rejected=false;
+            try{Call("CraftCompletePendingCorruption",invalid.Item1,invalid.Item2,invalid.Item3);}
+            catch(TargetInvocationException error)when(error.InnerException is InvalidOperationException){rejected=true;}
+            Check(rejected&&(int)Get("craftDone")==doneBeforeFailure&&(bool)stoneType.GetField("CorruptionPending").GetValue(incompatible)&&events.Count==inputBeforeFailure,
+                "Missing corruption, a remaining currency plan or changed tier cannot confirm completion or trigger a retry: "+invalid);
+        }
+        Call("CraftCompletePendingCorruption","Corrompue",null,14);int completedOnce=(int)Get("craftDone");
+        Call("CraftCompletePendingCorruption","Not corrupted","CurrencyCorrupt",-1);
+        Check((int)Get("craftDone")==completedOnce,"A previously confirmed pending corruption cannot increment completion twice");
+        var stableTime=DateTime.UtcNow;
+        bool Stable(int address,string identity,int milliseconds,bool held=false)=>(bool)Call("CraftVaalResultIsStable",new IntPtr(address),identity,stableTime.AddMilliseconds(milliseconds),held);
+        Check(!Stable(1200,"result A",0)&&!Stable(1200,"result A",99)&&Stable(1200,"result A",100),"A Vaal result needs one unchanged native identity for a full 100 ms before acknowledgement");
+        Check(!Stable(1200,"result B",110)&&!Stable(1200,"result B",209)&&Stable(1200,"result B",210),"A changed result identity restarts the Vaal stabilization interval");
+        Check(!Stable(1201,"result B",220)&&Stable(1201,"result B",320),"A replaced native result address restarts the Vaal stabilization interval");
+        Check(!Stable(1201,"result B",330,true)&&!Stable(1201,"result B",429,true)&&Stable(1201,"result B",430,true),"An ejected result becoming cursor-held must stabilize again before routing");
         Console.WriteLine("VALIDATION craft input: intercepted production event dispatch preserves Shift through selection/navigation/applications, rejects lost Shift, and releases modifiers; no Windows input executed.");
     }
 
