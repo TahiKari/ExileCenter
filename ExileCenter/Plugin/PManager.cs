@@ -180,6 +180,12 @@ namespace ExileCenter.Plugin
 
         private static (Assembly assembly, PluginAssemblyLoadContext alc)? ReadPluginFiles(DirectoryInfo pluginDirectory)
         {
+            // Updates can leave retired plugin DLLs in an existing installation.
+            if (string.Equals(pluginDirectory.Name, "CameraZoom", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
             try
             {
                 var dllFile = pluginDirectory.GetFiles(
@@ -190,6 +196,11 @@ namespace ExileCenter.Plugin
                     Console.WriteLine($"Couldn't find plugin dll with name {pluginDirectory.Name}" +
                                       $" in directory {pluginDirectory.FullName}." +
                                       " Please make sure DLL & the plugin got same name.");
+                    return null;
+                }
+
+                if (string.Equals(AssemblyName.GetAssemblyName(dllFile.FullName).Name, "CameraZoom", StringComparison.OrdinalIgnoreCase))
+                {
                     return null;
                 }
 

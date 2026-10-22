@@ -142,8 +142,7 @@ public sealed class CorpseCleanerCore : PCore<CorpseCleanerSettings>
                 float distance = Settings.CameraDistance * 100f;
                 if (ImGui.SliderFloat(PluginText.Label("distance", "Saved camera distance", "PermanentDistance"), ref distance, 50f, 300f, "%.0f %%"))
                 { Settings.CameraDistance = distance / 100f; changed = true; }
-                if (ImGui.Button(PluginText.Label("capture_camera", "Use the last distance measured by CameraZoom", "CaptureCamera"))) UseSavedCamera();
-                ImGui.TextWrapped(PluginText.T("camera_help", "This is the starting distance, applied when the character is positioned. Scripted cameras remain unchanged. To save a distance used with the mouse wheel, close ExileCenter normally first, then reopen it and use the measured distance."));
+                ImGui.TextWrapped(PluginText.T("camera_help", "Choose the starting distance with the slider. It is applied when the character is positioned. Scripted cameras remain unchanged."));
             }
             changed |= ImGui.Checkbox(PluginText.Label("map", "Show all map borders without revealing exploration", "PermanentMap"), ref borders);
             if (borders)
@@ -278,18 +277,4 @@ public sealed class CorpseCleanerCore : PCore<CorpseCleanerSettings>
             CorpseArchive.ApplyVisuals(directory, native, cache, options!, token, progress: text => Volatile.Write(ref progress, text), minimapOnly: minimapOnly), token);
     }
 
-    private void UseSavedCamera()
-    {
-        try
-        {
-            string path = Path.GetFullPath(Path.Combine(DllDirectory, "..", "CameraZoom", "config", "settings.txt"));
-            using var json = JsonDocument.Parse(File.ReadAllText(path));
-            if (!json.RootElement.TryGetProperty("LastDistance", out var value) || !value.TryGetSingle(out float distance) ||
-                !float.IsFinite(distance) || distance < 0.5f || distance > 3f)
-                throw new InvalidDataException(PluginText.T("camera_missing", "No measured distance between 50% and 300% is available. Choose the distance with the slider."));
-            Settings.CameraDistance = distance; SaveSettings();
-            status = PluginText.T("camera_saved", "Measured distance selected. Close the game, restore any previous patch, then apply the selected permanent options.");
-        }
-        catch (Exception ex) { status = ex.Message; }
-    }
 }

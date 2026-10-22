@@ -9150,9 +9150,6 @@
     "RitualWispAlert": {
       "Enable": true
     },
-    "CameraZoom": {
-      "Enable": true
-    },
     "KikiMeter": {
       "Enable": true
     },
@@ -10974,10 +10971,6 @@
       "Name": "Right",
       "Id": 3
     }
-  },
-  "Plugins/CameraZoom/config/settings.txt": {
-    "MinimumZoom": 0,
-    "MaximumZoom": 1.3
   },
   "Plugins/CorpseCleaner/config/settings.json": {
     "GameDirectory": "",

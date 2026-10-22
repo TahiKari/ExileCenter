@@ -10,6 +10,28 @@ static void Check(bool condition, string name) { if (!condition) throw new Excep
 static void Reject(Action action, string name) { try { action(); } catch (Exception) { Console.WriteLine("PASS " + name); return; } throw new Exception("Not rejected: " + name); }
 static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
 static byte[] Utf16(string text) => Encoding.Unicode.GetBytes(text);
+if (args.Length == 2 && args[0] == "--retired-camera")
+{
+    string fixture = Path.GetFullPath(Path.Combine("data", "retired-camera-" + Guid.NewGuid().ToString("N")));
+    var loader = typeof(ExileCenter.Core).Assembly.GetType("ExileCenter.Plugin.PManager")!
+        .GetMethod("ReadPluginFiles", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+    foreach (string name in new[] { "CameraZoom", "RenamedCamera" })
+    {
+        string directory = Path.Combine(fixture, name); Directory.CreateDirectory(Path.Combine(directory, "config"));
+        File.Copy(args[1], Path.Combine(directory, name + ".dll"));
+        string settings = Path.Combine(directory, "config", "settings.txt"); File.WriteAllText(settings, "{\"MaximumZoom\":1.7}");
+        string before = Hash(settings);
+        Check(loader.Invoke(null, new object[] { new DirectoryInfo(directory) }) == null, "retired CameraZoom rejected before assembly loading: " + name);
+        Check(Hash(settings) == before, "retired plugin settings preserved: " + name);
+    }
+    Check(!AppDomain.CurrentDomain.GetAssemblies().Any(assembly => assembly.GetName().Name == "CameraZoom"), "retired camera assembly was never loaded");
+    string retained = Path.Combine(fixture, "CorpseCleaner"); Directory.CreateDirectory(retained);
+    File.Copy(typeof(CorpseCleaner.CorpseCleanerCore).Assembly.Location, Path.Combine(retained, "CorpseCleaner.dll"));
+    var loaded = loader.Invoke(null, new object[] { new DirectoryInfo(retained) }) as System.Runtime.CompilerServices.ITuple;
+    Check(loaded != null, "resource-based CorpseCleaner still passes the production plugin loader");
+    ((System.Runtime.Loader.AssemblyLoadContext)loaded![1]!).Unload();
+    return;
+}
 if (args.Length == 3 && args[0] == "--read-minimap")
 {
     NativeOodle.Ensure("", "unused");
@@ -404,10 +426,8 @@ try
     plugin.Settings.GetType().GetMethod("Normalize", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(plugin.Settings, null);
     Check(plugin.Settings.ExploringColor.SequenceEqual(new[] { 0f, 0.5f, 1f, 0.5f }) && plugin.Settings.RevealThreshold == 1f && plugin.Settings.BorderGlow == 1f,
         "invalid persisted colors and out-of-range minimap values normalize before native patching");
-    string measuredCamera = Path.Combine(data, "CameraZoom", "config"); Directory.CreateDirectory(measuredCamera);
-    File.WriteAllText(Path.Combine(measuredCamera, "settings.txt"), "{\"LastDistance\":1.75}");
-    plugin.GetType().GetMethod("UseSavedCamera", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(plugin, null);
-    Check(plugin.Settings.CameraDistance == 1.75f && plugin.Settings.PermanentCamera, "production UI imports the last measured camera distance without a live game");
+    plugin.Settings.CameraDistance = 1.75f; plugin.SaveSettings(); plugin.OnEnable(false);
+    Check(plugin.Settings.CameraDistance == 1.75f && plugin.Settings.PermanentCamera, "manual permanent camera distance survives restart without CameraZoom");
     string migrationGame = Path.Combine(data, "minimap-settings-migration");
     CreateGame(migrationGame, payloads, false);
     CorpseArchive.Apply(migrationGame, source, cache, default, () => { });
