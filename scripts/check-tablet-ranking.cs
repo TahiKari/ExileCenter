@@ -2095,21 +2095,43 @@ internal static class TabletRankingCheck
             var localizedName=typeof(StashUtilityCore).GetMethod("ModDisplayName",flags);
             int catalogCases=0;
             foreach(var entry in ModDatabase.AllTabletMods)
+            foreach(string type in entry.TabletTypes)
             {
-                var meta=ModDatabase.TabletMeta.Modifiers.FirstOrDefault(m=>m.GameModIds.Contains(entry.Id));
-                if(meta==null)continue;
+                var meta=ModDatabase.TabletMeta.ForType(type).SingleOrDefault(m=>m.GameModIds.Contains(entry.Id));
+                Check(meta!=null&&meta.Rank?.Length==1&&"SABCDEF".Contains(meta.Rank),"Every catalog modifier has a reference rank for its tablet type: "+type+" / "+entry.Id);
                 string french=(string)localizedName.Invoke(plugin,new object[]{entry.Id,entry.Name});
                 string primary=french.Split('\n').FirstOrDefault(s=>s.StartsWith("La Carte contient ")||s.StartsWith("La Carte est habitée par "))??french;
                 if(french.Contains('\n'))Check(find.Invoke(plugin,new object[]{french,entry,meta})!=null,
                     "Compound label also matches when the game keeps all effects in one text block: "+entry.Id);
                 foreach(var template in new[]{entry.Name,primary})
-                foreach(float roll in new[]{entry.MinRoll,entry.MaxRoll})
+                foreach(float roll in new[]{entry.MinRoll,entry.MaxRoll}.Distinct())
                 {
                     string actual=System.Text.RegularExpressions.Regex.Replace(template,@"\([0-9]+[—–-][0-9]+\)",roll.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                    Check(find.Invoke(plugin,new object[]{actual,entry,meta})!=null,"Catalog tooltip matches at roll boundary: "+entry.Id+" / "+actual);catalogCases++;
+                    var variants=new List<string>{actual};
+                    if(template==entry.Name&&roll==1&&entry.MaxRoll>1)
+                        variants.Add(System.Text.RegularExpressions.Regex.Replace(actual,@"\b(Strongboxes|Bosses|Sentries|Monsters|Modifiers|Relics|Shrines|Essences|Spirits|times)\b",m=>m.Value switch
+                        {"Strongboxes"=>"Strongbox","Bosses"=>"Boss","Sentries"=>"Sentry",_=>m.Value[..^1]}));
+                    foreach(string variant in variants.Distinct())
+                    {
+                        Check(find.Invoke(plugin,new object[]{variant,entry,meta})!=null,"Catalog tooltip matches at roll boundary: "+type+" / "+entry.Id+" / "+variant);catalogCases++;
+                        var singleMods=new Mods(IntPtr.Zero);singleMods.ExplicitMods.Add((entry.Id,(roll,0f)));
+                        var singleObservation=observe.Invoke(null,new object[]{type,singleMods});
+                        labels.Clear();covers.Clear();panelField.SetValue(plugin,(new Vector2(8,16),new Vector2(826,328)));
+                        labels.Add((new Vector2(8,168),new Vector2(826,24),variant));
+                        ImGuiNET.ImGui.NewFrame();draw.Invoke(plugin,new[]{singleObservation,new TabletProfile(),singleMods});
+                        var rankVertices=ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer;
+                        uint rankColor=ExileCenter.Utils.ImGuiHelper.Color(((Vector4[])typeof(StashUtilityCore).GetField("TabletModRankColors",flags).GetValue(null))["SABCDEF".IndexOf(meta.Rank)]);
+                        Check(Enumerable.Range(0,rankVertices.Size).Any(i=>rankVertices[i].pos.X>780&&rankVertices[i].pos.Y>168&&rankVertices[i].pos.Y<192&&rankVertices[i].col==rankColor),
+                            "Catalog modifier draws its reference rank in the native tooltip: "+type+" / "+entry.Id+" / "+variant);
+                        ImGuiNET.ImGui.Render();
+                    }
                 }
             }
             foreach(var sample in new[]{
+                ("TowerExpeditionBuriedStrongboxes","Expeditions contain 1 buried Strongbox in Map"),
+                ("TowerExpeditionAdditionalSentinels","Expeditions contain 1 Additional Verisium Sentry in Map"),
+                ("TowerExpeditionFrozenBosses","Expeditions contain 1 Additional Boss encased in ice in Map"),
+                ("TowerMapBossAdditionalStrongbox","Map contains 1 additional Strongbox"),
                 ("TowerAdditionalStrongbox","La Carte contient un [Strongbox|Coffre-fort] supplémentaire"),
                 ("TowerAdditionalShrine","La Carte contient un Autel supplémentaire"),
                 ("TowerAdditionalEssence","La Carte contient une Essence supplémentaire"),
@@ -2131,7 +2153,40 @@ internal static class TabletRankingCheck
                     Check(find.Invoke(plugin,new object[]{"31% d'Augmentation de la Quantité de Pierres de téléportation trouvées dans la Carte",entry,meta})==null,
                         "Shared bonus cannot steal the encounter rank: "+entry.Id);
             }
-            Console.WriteLine("VALIDATION native tooltip catalog: "+catalogCases+" French/English roll-boundary cases plus singular encounter variants.");
+            var screenshotCases=new[]{
+                new[]{("TowerRareChestCount",3f,"S","La Carte contient 3 Coffres Rares supplémentaires"),
+                    ("TowerExpeditionBuriedStrongboxes",1f,"A","Expeditions contain 1 buried Strongbox in Map"),
+                    ("TowerExpeditionChanceForVerisiumRemnant",38f,"B","Expeditions have +38% Surpassing chance to contain an additional Verisium Remnant"),
+                    ("TowerRarePackIncrease",32f,"E","32% d'Augmentation du nombre de Monstres Rares dans la Carte")},
+                new[]{("TowerExpeditionBuriedStrongboxes",1f,"S","Expeditions contain 1 buried Strongbox in Map"),
+                    ("TowerExpeditionChanceForVerisiumRemnant",39f,"A","Expeditions have +39% Surpassing chance to contain an additional Verisium Remnant"),
+                    ("TowerRarePackIncrease",35f,"A","35% d'Augmentation du nombre de Monstres Rares dans la Carte"),
+                    ("TowerMonsterRarityIncrease",19f,"B","19% d'Augmentation de la Rareté des Monstres dans la Carte")}};
+            for(int capture=0;capture<screenshotCases.Length;capture++)
+            foreach(bool grouped in new[]{false,true})
+            {
+                var sample=screenshotCases[capture];var shotProfile=new TabletProfile{ModRanks=sample.ToDictionary(m=>m.Item1,m=>m.Item3)};
+                string savedShotProfile=JsonConvert.SerializeObject(shotProfile);var shotMods=new Mods(IntPtr.Zero);
+                foreach(var mod in sample)shotMods.ExplicitMods.Add((mod.Item1,(mod.Item2,0f)));
+                var shotObservation=observe.Invoke(null,new object[]{"Expedition Tablet",shotMods});
+                labels.Clear();covers.Clear();panelField.SetValue(plugin,(new Vector2(8,16),new Vector2(930,328)));
+                labels.Add((new Vector2(300,24),new Vector2(320,48),"Tablette d'Expédition"));
+                if(grouped)labels.Add((new Vector2(8,168),new Vector2(930,88),string.Join("\n",sample.Select(m=>m.Item4))));
+                else for(int i=0;i<4;i++)labels.Add((new Vector2(8,168+22*i),new Vector2(930,22),sample[i].Item4));
+                ImGuiNET.ImGui.NewFrame();
+                var background=ImGuiNET.ImGui.GetBackgroundDrawList();background.AddRectFilled(new Vector2(8,16),new Vector2(938,344),0xff151515);
+                background.AddText(new Vector2(300,24),0xffdddddd,capture==0?"LITURGIE DU PHENIX":"INCITATION EMPYREENNE");
+                for(int i=0;i<4;i++)background.AddText(new Vector2(18,168+22*i),0xffdd9999,sample[i].Item4);
+                draw.Invoke(plugin,new[]{shotObservation,shotProfile,shotMods});var vertices=background.VtxBuffer;
+                var gradeColors=(Vector4[])typeof(StashUtilityCore).GetField("TabletModRankColors",flags).GetValue(null);
+                for(int i=0;i<4;i++)Check(Enumerable.Range(0,vertices.Size).Any(v=>vertices[v].pos.X>880&&vertices[v].pos.X<938&&
+                    Math.Abs(vertices[v].pos.Y-(179+22*i))<10&&vertices[v].col==ExileCenter.Utils.ImGuiHelper.Color(gradeColors["SABCDEF".IndexOf(sample[i].Item3)])),
+                    "User screenshot displays the configured rank for every modifier: capture "+capture+", row "+i+", grouped "+grouped);
+                Check(JsonConvert.SerializeObject(shotProfile)==savedShotProfile,"User screenshot rendering preserves configured priorities");
+                ImGuiNET.ImGui.Render();
+                if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"native-tablet-expedition-"+capture+"-"+grouped+".png"),atlasBytes,atlasWidth,atlasHeight);
+            }
+            Console.WriteLine("VALIDATION native tooltip catalog: "+catalogCases+" French/English roll-boundary and singular cases across "+ModDatabase.TabletMeta.Types.Count+" tablet types.");
             labels.Clear();ImGuiNET.ImGui.NewFrame();draw.Invoke(plugin,new[]{observation,profile,mods});
             Check(ImGuiNET.ImGui.GetBackgroundDrawList().VtxBuffer.Size==0,"Closing the native tooltip clears its annotations");ImGuiNET.ImGui.EndFrame();
             Check(JsonConvert.SerializeObject(profile)==saved,"Rendering native annotations preserves the saved priorities");

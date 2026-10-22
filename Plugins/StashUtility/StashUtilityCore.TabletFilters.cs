@@ -634,7 +634,12 @@ namespace StashUtility
             // Rolls may be written as "1", "un/une" or "a/an". Keep the full word
             // sequence, but ignore articles and regular plural endings when matching.
             text = System.Text.RegularExpressions.Regex.Replace(text.ToLowerInvariant(), @"\b(un|une|a|an)\b", "");
-            text = System.Text.RegularExpressions.Regex.Replace(text, @"\p{L}{3,}", m => m.Value.TrimEnd('s'));
+            // Native count-dependent labels also use irregular English plurals.
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\p{L}{3,}", m => (m.Value switch
+            {
+                "strongboxes" => "strongbox", "bosses" => "boss", "sentries" => "sentry",
+                _ => m.Value,
+            }).TrimEnd('s'));
             return new string(text.Normalize(System.Text.NormalizationForm.FormD)
                 .Where(char.IsLetter).Select(char.ToLowerInvariant).ToArray());
         }
