@@ -1,6 +1,5 @@
 {
     "plugin.description":  "Déverrouille la limite de dézoom de la caméra, avec restauration du réglage d’origine.",
-    "help":  "Active la caméra étendue, choisis tes limites, puis utilise la molette dans le jeu. L’activation et les distances sont sauvegardées après une relance ou une mise à jour d’ExileCenter. Le zoom est réactivé à l’entrée en jeu après vérification de compatibilité. Désactive cette option pour rétablir les limites du jeu. La modification mémoire est retirée à la fermeture normale d’ExileCenter ; la dernière distance mesurée est enregistrée. Pour une distance active sans l’application, utilise le module Réglages visuels permanents, jeu fermé.",
     "enable":  "Activer les limites personnalisées de caméra",
     "detect":  "Vérifier la compatibilité du jeu",
     "no_game":  "Ouvre le jeu avant de vérifier la caméra.",
@@ -9,13 +8,19 @@
     "status.idle":  "Dézoom désactivé. Ouvre le jeu pour vérifier sa compatibilité.",
     "status.waiting":  "Limites personnalisées mémorisées. Activation en attente de l’entrée en jeu.",
     "status.ready":  "Caméra compatible détectée. Tu peux activer le dézoom étendu.",
-    "status.active":  "Limites personnalisées actives. Utilise la molette du jeu pour régler la distance entre les deux limites.",
     "status.restored":  "Limite de caméra d’origine restaurée. Utilise la molette pour rapprocher la caméra si nécessaire.",
     "status.failed":  "Activation ou vérification impossible. Décoche puis recoche l’activation pour réessayer.",
     "status.restore_failed":  "Restauration impossible. Réessaie de désactiver le dézoom ; un redémarrage du jeu rétablit la caméra d’origine.",
     "minimum":  "Distance minimale (zoom maximal)",
     "maximum":  "Distance maximale (dézoom maximal)",
-    "limits_help":  "100 % correspond à la limite de dézoom d\u0027origine. Plus la valeur est élevée, plus la caméra est éloignée. Les changements s\u0027appliquent lorsque les limites personnalisées sont activées. La limite minimale respecte le zoom le plus proche autorisé par le jeu.",
-    "reset":  "Rétablir les distances d\u0027origine",
-    "invalid_distance":  "Distance de caméra invalide. La caméra étendue a été arrêtée."
+    "invalid_distance":  "Distance de caméra invalide. La caméra étendue a été arrêtée.",
+    "help":  "Active les limites personnalisées puis utilise la molette du jeu. Pour conserver ces limites sans ExileCenter, installe une fois la caméra autonome, jeu fermé. Les changements enregistrés ici lui sont ensuite transmis automatiquement.",
+    "limits_help":  "100 % correspond à la limite de dézoom d’origine. La caméra autonome conserve les deux limites même sans ExileCenter. La molette reste utilisable entre ces limites.",
+    "reset":  "Rétablir les distances d’origine",
+    "status.active":  "Limites personnalisées actives. Utilise la molette du jeu entre les deux limites.",
+    "permanent_help":  "Installation unique, PoE fermé. Le composant démarre ensuite avec le jeu, sans ExileCenter. Tes modifications de limites sont transmises en moins d’une seconde. Désactiver les limites rétablit 0–100 %. Le retrait du composant nécessite de fermer le jeu.",
+    "directory":  "Dossier de PoE 2",
+    "install":  "Installer la caméra autonome (jeu fermé)",
+    "remove":  "Retirer la caméra autonome (jeu fermé)",
+    "status.permanent":  "Caméra autonome installée. Les limites sauvegardées sont utilisées au lancement de PoE, même sans ExileCenter."
 }

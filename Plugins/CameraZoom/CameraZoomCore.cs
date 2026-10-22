@@ -18,6 +18,7 @@ namespace CameraZoom
         public float MinimumZoom { get; set; } = 0f;
         public float MaximumZoom { get; set; } = 3f;
         public float? LastDistance { get; set; }
+        public string GameDirectory { get; set; } = "";
 
         internal void Normalize()
         {
@@ -40,6 +41,8 @@ namespace CameraZoom
         private bool active, exitSubscribed, limitingStopped;
         private string statusKey = "idle", detail = string.Empty;
         private DateTime nextCheck;
+        private DateTime nextPermanentCheck;
+        private bool permanentInstalled, permanentBlocked;
         private string SettingsPath => Path.Combine(DllDirectory, "config", "settings.txt");
 
         public override void OnEnable(bool isGameOpened)
@@ -51,9 +54,23 @@ namespace CameraZoom
             }
             catch (Exception ex) { Console.WriteLine($"[CameraZoom] Settings: {ex.Message}"); }
             Settings.Normalize();
+            if (string.IsNullOrWhiteSpace(Settings.GameDirectory))
+            {
+                try
+                {
+                    string path = Path.GetFullPath(Path.Combine(DllDirectory, "..", "CorpseCleaner", "config", "settings.json"));
+                    if (File.Exists(path))
+                    {
+                        using var json = JsonDocument.Parse(File.ReadAllText(path));
+                        if (json.RootElement.TryGetProperty("GameDirectory", out var directory)) Settings.GameDirectory = directory.GetString() ?? "";
+                    }
+                }
+                catch (Exception ex) { Console.WriteLine($"[CameraZoom] Directory: {ex.Message}"); }
+            }
             attemptedPid = 0;
             statusKey = Settings.Enabled ? "waiting" : "idle";
             detail = string.Empty;
+            RefreshPermanent();
             if (!exitSubscribed) { AppDomain.CurrentDomain.ProcessExit += OnExit; exitSubscribed = true; }
         }
 
@@ -74,9 +91,10 @@ namespace CameraZoom
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-                File.WriteAllText(SettingsPath, JsonSerializer.Serialize(Settings, new JsonSerializerOptions { WriteIndented = true }));
+                PermanentCamera.AtomicWrite(SettingsPath, JsonSerializer.SerializeToUtf8Bytes(Settings, new JsonSerializerOptions { WriteIndented = true }));
+                PermanentCamera.Sync(Settings.GameDirectory, Settings);
             }
-            catch (Exception ex) { Console.WriteLine($"[CameraZoom] Settings: {ex.Message}"); }
+            catch (Exception ex) { Fail(ex); }
         }
 
         public override void DrawSettings()
@@ -85,12 +103,13 @@ namespace CameraZoom
             this.DrawSettingsTabs("CameraZoomSettings",
                 ("general", "Settings", () =>
                 {
-                    ImGui.TextWrapped(PluginText.T("help", "Enable extended zoom, then use the game's mouse wheel. Disable it to restore the original limit."));
+                    Wrapped(PluginText.T("help", "Enable extended zoom, then use the game's mouse wheel. Install the autonomous component once, with the game closed, to keep your limits without ExileCenter."));
                     bool requested = Settings.Enabled || active;
                     if (ImGui.Checkbox(PluginText.Label("enable", "Enable extended camera zoom", "EnableCameraZoom"), ref requested))
                         SetEnabled(requested);
                     ImGui.TextWrapped(PluginText.T("status." + statusKey, statusKey));
-                    if (detail.Length > 0) ImGui.TextWrapped(detail);
+                    if (detail.Length > 0) Wrapped(detail);
+                    DrawPermanentSettings();
                 }),
                 ("limits", "Distances", () =>
                 {
@@ -117,7 +136,7 @@ namespace CameraZoom
                 }),
                 ("diagnostics", "Diagnostics", () =>
                 {
-                    ImGui.BeginDisabled(active);
+                    ImGui.BeginDisabled(active || permanentInstalled || permanentBlocked);
                     if (ImGui.Button(PluginText.Label("detect", "Check game compatibility", "DetectCameraZoom")))
                     {
                         lock (gate)
@@ -128,13 +147,19 @@ namespace CameraZoom
                     }
                     ImGui.EndDisabled();
                     ImGui.TextWrapped(PluginText.T("status." + statusKey, statusKey));
-                    if (detail.Length > 0) ImGui.TextWrapped(detail);
+                    if (detail.Length > 0) Wrapped(detail);
                 }));
             
         }
 
         public override void DrawUI()
         {
+            if (DateTime.UtcNow >= nextPermanentCheck)
+            {
+                nextPermanentCheck = DateTime.UtcNow.AddSeconds(2);
+                RefreshPermanent();
+            }
+            if (permanentInstalled || permanentBlocked) return;
             if (!Settings.Enabled && handle == IntPtr.Zero) return;
             lock (gate)
             {
@@ -178,6 +203,7 @@ namespace CameraZoom
                 Settings.Enabled = requested;
                 SaveSettings();
                 attemptedPid = 0;
+                if (permanentInstalled || permanentBlocked) return;
                 if (requested)
                 {
                     statusKey = "waiting"; detail = string.Empty;
@@ -190,6 +216,7 @@ namespace CameraZoom
 
         private void ResumeIfRequested(uint pid, bool inGame)
         {
+            if (permanentInstalled || permanentBlocked) return;
             if (!Settings.Enabled || active || pid == 0 || pid == attemptedPid || !inGame) return;
             // One attempt per game process. A failed compatibility check or safety
             // stop requires a new process or an explicit off/on request to retry.
@@ -364,6 +391,71 @@ namespace CameraZoom
         private void OnExit(object? sender, EventArgs args)
         {
             lock (gate) { if (Settings.LastDistance.HasValue) SaveSettings(); if (TryRestore()) Close(); }
+        }
+
+        private static void Wrapped(string value)
+        {
+            ImGui.PushTextWrapPos(0);
+            try { ImGui.TextUnformatted(value); }
+            finally { ImGui.PopTextWrapPos(); }
+        }
+
+        private void RefreshPermanent()
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(Settings.GameDirectory) && Core.Process.Pid != 0)
+                {
+                    using var process = Process.GetProcessById((int)Core.Process.Pid);
+                    string? executable = process.MainModule?.FileName;
+                    if (executable != null) { Settings.GameDirectory = Path.GetDirectoryName(executable)!; SaveSettings(); }
+                }
+                permanentInstalled = PermanentCamera.Installed(Settings.GameDirectory);
+                permanentBlocked = false;
+                if (!permanentInstalled) return;
+                // Installation/removal requires a closed game. Never run both patches.
+                statusKey = "permanent";
+                string status = Path.Combine(Settings.GameDirectory, "ExileCenter.Camera.status");
+                if (Core.Process.Pid != 0 && File.Exists(status))
+                {
+                    string nativeStatus = File.ReadAllText(status).Trim();
+                    if (nativeStatus != "active") { statusKey = "failed"; detail = "Caméra autonome : " + nativeStatus; }
+                }
+            }
+            catch (Exception ex) { permanentBlocked = true; Fail(ex); }
+        }
+
+        private void DrawPermanentSettings()
+        {
+            ImGui.Separator();
+            Wrapped(PluginText.T("permanent_help", "Install once with PoE closed. Saved limits then apply without ExileCenter and are synchronized whenever you change them here."));
+            string directory = Settings.GameDirectory;
+            ImGui.BeginDisabled(permanentInstalled || permanentBlocked);
+            if (ImGui.InputText(PluginText.Label("directory", "PoE 2 folder", "CameraGameDirectory"), ref directory, 1024))
+            { Settings.GameDirectory = directory; SaveSettings(); RefreshPermanent(); }
+            ImGui.EndDisabled();
+            if (ImGui.Button(PluginText.Label("install", "Install autonomous camera (game closed)", "InstallCamera")))
+            {
+                try
+                {
+                    PermanentCamera.Install(Settings.GameDirectory, DllDirectory, Settings);
+                    SaveSettings(); detail = ""; RefreshPermanent();
+                }
+                catch (Exception ex) { Fail(ex); }
+            }
+            if (permanentInstalled)
+            {
+                if (ImGui.Button(PluginText.Label("remove", "Remove autonomous camera (game closed)", "RemoveCamera")))
+                {
+                    try
+                    {
+                        PermanentCamera.Remove(Settings.GameDirectory);
+                        permanentInstalled = false; permanentBlocked = false;
+                        statusKey = Settings.Enabled ? "waiting" : "idle"; detail = "";
+                    }
+                    catch (Exception ex) { Fail(ex); }
+                }
+            }
         }
 
         [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);

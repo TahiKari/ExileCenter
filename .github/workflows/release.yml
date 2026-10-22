@@ -141,6 +141,23 @@ jobs:
             if (!(Test-Path "$runtime/Plugins/$assemblyName/$assemblyName.dll")) { throw "Plugin absent du paquet : $assemblyName" }
           }
 
+      - name: Vérifier l’installation et les réglages de caméra en isolation
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $checks = Join-Path $env:RUNNER_TEMP 'camera-managed-checks'
+          [void][IO.Directory]::CreateDirectory($checks)
+          Copy-Item scripts/check-camera.cs (Join-Path $checks 'Program.cs')
+          '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><PlatformTarget>x64</PlatformTarget><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup></Project>' | Set-Content (Join-Path $checks 'CameraChecks.csproj')
+          & dotnet build (Join-Path $checks 'CameraChecks.csproj') -c Release --nologo
+          if ($LASTEXITCODE) { throw 'Compilation des contrôles caméra impossible.' }
+          $runner = Join-Path $PWD 'scripts/run-check.ps1'
+          $runtime = Join-Path $PWD 'ExileCenter/bin/Release/net10.0-windows/win-x64'
+          Push-Location $checks
+          try {
+            & $runner (Join-Path $checks 'bin/Release/net10.0-windows/CameraChecks.dll') $runtime
+            if ($LASTEXITCODE) { throw 'Contrôles caméra échoués.' }
+          } finally { Pop-Location }
+
       - name: Préparer et vérifier le ZIP complet
         run: |
           $ErrorActionPreference = 'Stop'
@@ -168,6 +185,7 @@ jobs:
             foreach ($file in @('ExileCenter.ArchiveCodec.dll', 'ExileCenter.ArchiveCodec-sources.zip', 'ArchiveCodec-NOTICE.txt', 'ArchiveCodec-COPYING.txt')) {
               if (!$zip.GetEntry("Plugins/CorpseCleaner/$file")) { throw "Codec autonome incomplet : $file" }
             }
+            if (!$zip.GetEntry('Plugins/CameraZoom/ExileCenter.Camera.dll')) { throw 'Caméra autonome absente du ZIP.' }
             if ($zip.Entries.FullName -match '(?i)(^|/)oo2core[^/]*\.dll$') { throw 'Une bibliothèque Oodle propriétaire ne doit pas être distribuée.' }
             if ($zip.Entries.FullName -match '(?i)(^|/)(configs?|settings\.json)(/|$)|(?i)(dump|\.pdb$|\.log$)') { throw 'Données locales ou de diagnostic présentes dans le ZIP.' }
             if ($zip.Entries.FullName -match '(?i)GameHelper') { throw 'Ancien nom dans le paquet complet ExileCenter.' }

@@ -8,9 +8,15 @@
   <ItemGroup>
     <ProjectReference Include="..\..\ExileCenter\ExileCenter.csproj" Private="false" CopyLocalSatelliteAssemblies="false" />
     <CameraLocalization Include="Localization\*.json" />
+    <EmbeddedResource Include="Native/bin/ExileCenter.Camera.dll.sha256" LogicalName="CameraZoom.Native.sha256" />
+    <None Include="Native/bin/ExileCenter.Camera.dll" Link="ExileCenter.Camera.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <Target Name="RequireNativeCamera" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('Native/bin/ExileCenter.Camera.dll') Or !Exists('Native/bin/ExileCenter.Camera.dll.sha256')" Text="Compilez scripts/build-camera.ps1 ou récupérez l’artefact camera-native de la CI." />
+  </Target>
   <Target Name="CopyFiles" AfterTargets="Build">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\CameraZoom" />
+    <Copy SourceFiles="$(OutDir)ExileCenter.Camera.dll" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\CameraZoom" />
     <Copy SourceFiles="@(CameraLocalization)" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\CameraZoom\Localization" />
   </Target>
 </Project>

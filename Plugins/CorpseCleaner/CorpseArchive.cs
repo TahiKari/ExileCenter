@@ -28,6 +28,7 @@ internal static class CorpseArchive
         public string OriginalHash { get; set; } = "";
         public string PatchedHash { get; set; } = "";
         public int Files { get; set; }
+        public float? CameraDistance { get; set; }
         // Older manifests refer to bundles already indexed by the game; retain their path for restoration.
         public string BundleDirectory { get; set; } = "GameHelperCadavres";
     }
@@ -64,6 +65,8 @@ internal static class CorpseArchive
         }
         Check();
         string root = Path.GetFullPath(directory.Trim().Trim('"'));
+        if (options.CameraDistance.HasValue && File.Exists(Path.Combine(root, "ExileCenter.Camera.owner.json")))
+            throw new InvalidOperationException("La caméra autonome est installée. Modifie ses distances dans CameraZoom ; décoche la caméra de ce patch visuel pour éviter de cumuler les deux réglages.");
         string relative = ArchivePath(root), archive = Safe(root, relative);
         string storage = StoragePath(root);
         if (Directory.Exists(storage) && (File.GetAttributes(storage) & FileAttributes.ReparsePoint) != 0)
@@ -150,7 +153,7 @@ internal static class CorpseArchive
                         throw new InvalidDataException("Échec de vérification : " + change.Path);
                 }
             Flush(staged);
-            var state = new State { Id = id, Archive = relative, OriginalHash = originalHash, PatchedHash = Hash(staged, Check), Files = changes.Count, BundleDirectory = "ExileCenterCadavres" };
+            var state = new State { Id = id, Archive = relative, OriginalHash = originalHash, PatchedHash = Hash(staged, Check), Files = changes.Count, CameraDistance = options.CameraDistance, BundleDirectory = "ExileCenterCadavres" };
             Check();
             if (!ggpk)
             {

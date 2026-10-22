@@ -34,4 +34,10 @@ try {
     Config 1 0.25 2
     & ./Unrelated.exe 0 1 0
     if ($LASTEXITCODE) { throw 'Unrelated process was modified.' }
+    # Verify the actual version.dll proxy name and Windows import search, too.
+    Copy-Item -LiteralPath $dll -Destination (Join-Path $checks 'version.dll')
+    Copy-Item -LiteralPath (Join-Path $output 'build/Release/CameraChecks.exe') -Destination (Join-Path $checks 'PathOfExileSteam.exe') -Force
+    Config 1 0.25 2
+    & ./PathOfExileSteam.exe 0.25 2 1
+    if ($LASTEXITCODE) { throw "Windows proxy startup checks failed ($LASTEXITCODE)." }
 } finally { Pop-Location }
