@@ -71,8 +71,9 @@ if ($LocalUpdate) {
         if ($segments.Count -eq 1) {
             if ($relative -match '^GameHelper\.' -or ($file.Extension -ine '.dll' -and $relative -notin @('ExileCenter.exe','ExileCenter.deps.json','ExileCenter.runtimeconfig.json'))) { continue }
         } else {
+            $codecSources = $relative -ceq 'Plugins/CorpseCleaner/ExileCenter.ArchiveCodec-sources.zip'
             if ($segments[0] -notin @('Plugins','Localization','fonts') -or
-                $file.Extension -in @('.zip','.rar','.7z','.pdb','.log','.bak','.old','.exe') -or $file.Name -match '(?i)dump') { continue }
+                (!$codecSources -and $file.Extension -in @('.zip','.rar','.7z','.pdb','.log','.bak','.old','.exe')) -or $file.Name -match '(?i)dump') { continue }
         }
         $files[$relative] = $file.FullName
     }
