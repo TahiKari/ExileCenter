@@ -10,6 +10,9 @@ Consulter ce fichier avant chaque intervention dans ce dépôt. Répondre en fra
 - Ne jamais reconstruire ni remplacer `GameOffsets.dll` ; conserver le binaire validé à l'identique.
 - Ne pas arrêter ExileCenter (ni une ancienne instance GameHelper), déplacer la souris ni cliquer dans le jeu pendant que l'utilisateur joue. Conserver l'arrêt de sécurité lorsque la souris bouge.
 - Exécuter les fixtures .NET avec `scripts/run-check.ps1`, dans des dossiers de test isolés.
+- Prévention des blocages de shaders : avant toute correction ou publication liée aux réglages visuels permanents, vérifier le journal du dernier lancement de PoE et l'état exact du patch appliqué. Ne jamais conclure à une réparation durable sur un seul lancement réussi ; vérifier aussi un second lancement avec les caches reconstruits. Une compilation de test ne valide pas le rendu en jeu.
+- Ne pas effacer automatiquement les caches de shaders/pipelines ni changer le moteur graphique, le pilote ou les réglages personnels lors d'une mise à jour. Toute intervention de diagnostic sur les caches doit être ciblée, réversible, jeu fermé et conserver une sauvegarde. Distinguer une cause démontrée d'une hypothèse ; signaler toute validation en jeu manquante et ne jamais garantir l'absence de futurs défauts du jeu/pilote.
+- Afficher les notes de mise à jour, chemins et erreurs comme du texte littéral dans ImGui (`TextUnformatted` avec retour à la ligne si nécessaire) ; vérifier les pourcentages et accents dans la fenêtre de démarrage et dans les réglages.
 
 ## Publication après chaque mise à jour de l'application
 

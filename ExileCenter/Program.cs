@@ -300,10 +300,10 @@ namespace ExileCenter
                         {
                             if (this.installError != null)
                             {
-                                ImGui.TextWrapped(L.F("updates.error", "Update failed: {0}", this.installError));
+                                DrawWrappedText(L.F("updates.error", "Update failed: {0}", this.installError));
                                 ImGui.Separator();
                             }
-                            ImGui.TextWrapped(this.question);
+                            DrawWrappedText(this.question);
                         }
                         ImGui.EndChild();
                         ImGui.Spacing();
@@ -535,19 +535,19 @@ namespace ExileCenter
         internal static void DrawSettings()
         {
             Ui.ImGuiTheme.SectionHeader(L.T("updates.title", "Updates"), L.T("updates.description", "Updates from GitHub or your local folder. Your settings are preserved."));
-            ImGui.TextWrapped("https://github.com/" + Repository + "/releases");
-            if (Directory.Exists(UpdateDirectory)) ImGui.TextWrapped(UpdateDirectory);
+            DrawWrappedText("https://github.com/" + Repository + "/releases");
+            if (Directory.Exists(UpdateDirectory)) DrawWrappedText(UpdateDirectory);
             ImGui.TextDisabled(L.T("updates.poll", "Checked at startup; GitHub every 2 minutes, local updates every 5 seconds."));
             ImGui.Separator();
             if (prepareTask != null) DrawPreparationProgress();
             else if (offer != null)
             {
                 ImGui.TextColored(Ui.ImGuiTheme.Accent, UpdateTitle(offer));
-                ImGui.TextWrapped(L.NormalizeDisplayText(offer.Label, false));
+                DrawWrappedText(L.NormalizeDisplayText(offer.Label, false));
                 if (!string.IsNullOrWhiteSpace(offer.Changes))
                 {
                     ImGui.TextColored(Ui.ImGuiTheme.Accent, L.T("updates.changes", "What changes in this update"));
-                    ImGui.TextWrapped(L.NormalizeDisplayText(offer.Changes, false));
+                    DrawWrappedText(L.NormalizeDisplayText(offer.Changes, false));
                 }
                 if (ImGui.Button(L.T("updates.apply", "Update and restart")))
                 {
@@ -556,7 +556,7 @@ namespace ExileCenter
                     prepareTask = PrepareInstallerAsync(selected, InstallDirectory, UpdateDirectory, Environment.ProcessId);
                 }
             }
-            else ImGui.TextWrapped(L.T("updates.none", "No update available."));
+            else DrawWrappedText(L.T("updates.none", "No update available."));
             ImGui.BeginDisabled(prepareTask != null);
             if (ImGui.Button(L.T("updates.check", "Check now"))) { nextCheck = DateTime.MinValue; nextGitHubCheck = DateTime.MinValue; }
             ImGui.SameLine();
@@ -570,13 +570,21 @@ namespace ExileCenter
                 catch (Exception ex) { error = ex.Message; }
             }
             ImGui.EndDisabled();
-            ImGui.TextWrapped(L.T("updates.restart_hint", "GameHelper briefly closes to replace its files, then restarts. The game stays open."));
-            if (error != null) ImGui.TextWrapped(L.F("updates.error", "Update failed: {0}", error));
+            DrawWrappedText(L.T("updates.restart_hint", "GameHelper briefly closes to replace its files, then restarts. The game stays open."));
+            if (error != null) DrawWrappedText(L.F("updates.error", "Update failed: {0}", error));
+        }
+
+        private static void DrawWrappedText(string text)
+        {
+            // Release notes, paths and errors may contain '%' and must never be printf formats.
+            ImGui.PushTextWrapPos(0);
+            try { ImGui.TextUnformatted(text); }
+            finally { ImGui.PopTextWrapPos(); }
         }
 
         private static void DrawPreparationProgress()
         {
-            ImGui.TextWrapped(L.T("updates.preparing", "Downloading, checking and preparing the update…"));
+            DrawWrappedText(L.T("updates.preparing", "Downloading, checking and preparing the update…"));
             var total = Interlocked.Read(ref downloadTotal);
             var received = Interlocked.Read(ref downloadBytes);
             if (total > 0)

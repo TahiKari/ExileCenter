@@ -74,6 +74,7 @@ internal static partial class UpdateChecks
         { File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "restart-ok.txt"), "harmless fixture restarted"); return 0; }
         if (args.Contains("--wait-owner")) { await Task.Delay(2500); return 0; }
         if (args.Length == 2 && args[0] == "--camera-zoom") { CameraZoomSettingsCheck(args[1]); return 0; }
+        if (args.Length == 2 && args[0] == "--update-text") { UpdateTextCheck(args[1]); return 0; }
         if (args.Contains("--onedrive")) { await RunOneDriveChecks(); return 0; }
         if (args.Length == 3 && args[0] == "--release-numbering") { ReleaseNumberingCheck(args[1], args[2]); return 0; }
         if (args.Length == 2 && args[0] == "--transition-package") { TransitionPackageCheck(args[1]); return 0; }
@@ -81,6 +82,60 @@ internal static partial class UpdateChecks
         if (args.Length == 4 && args[0] == "--brand-migration") { await BrandMigration(args[1], args[2], args[3]); return 0; }
         if (args.Contains("--public-package")) await PublicPackageCheck(); else await RunChecks();
         return 0;
+    }
+    static void UpdateTextCheck(string runtime)
+    {
+        runtime = Path.GetFullPath(runtime);
+        System.Runtime.Loader.AssemblyLoadContext.Default.Resolving += (_, name) =>
+        {
+            string path = Path.Combine(runtime, name.Name + ".dll");
+            return File.Exists(path) ? Assembly.LoadFrom(path) : null;
+        };
+        var assembly = Assembly.LoadFrom(Path.Combine(runtime, "ExileCenter.dll"));
+        updates = assembly.GetType("ExileCenter.LocalUpdates", true)!;
+        packageType = updates.GetNestedType("Package", BindingFlags.NonPublic)!;
+        const string notes = "Caméra : de 50 % et 300 % à 100 %.\nLittéral : %s %n %08x %% ; accents : é è à ç.";
+        const string failure = "Erreur à 75 % : C:\\100%\\échec.zip";
+        var windowType = updates.GetNestedType("StartupUpdateWindow", BindingFlags.NonPublic)!;
+        var window = RuntimeHelpers.GetUninitializedObject(windowType);
+        windowType.GetField("question", PrivateInstance)!.SetValue(window, notes);
+        windowType.GetField("title", PrivateInstance)!.SetValue(window, "ExileCenter · Mise à jour");
+        windowType.GetField("installError", PrivateInstance)!.SetValue(window, failure);
+        var package = Package(Array.Empty<byte>());
+        packageType.GetProperty("Label")!.SetValue(package, "Mise à jour 100 %");
+        packageType.GetProperty("ReleaseTag")!.SetValue(package, "v1.14.1");
+        packageType.GetProperty("Changes")!.SetValue(package, notes);
+        updates.GetField("offer", PrivateStatic)!.SetValue(null, package);
+        updates.GetField("error", PrivateStatic)!.SetValue(null, failure);
+        var context = ImGui.CreateContext();
+        try
+        {
+            var io = ImGui.GetIO(); unsafe { io.NativePtr->IniFilename = null; }
+            io.DeltaTime = 1f / 60f;
+            io.Fonts.AddFontDefault(); io.Fonts.GetTexDataAsRGBA32(out IntPtr _, out int _, out int _, out int _);
+            foreach (var size in new[] { new Vector2(620, 360), new Vector2(760, 480) })
+            foreach (bool startup in new[] { true, false })
+            {
+                io.DisplaySize = size;
+                string log = Path.Combine(AppContext.BaseDirectory, "update-text-" + Guid.NewGuid().ToString("N") + ".txt");
+                ImGui.NewFrame(); ImGui.LogToFile(-1, log);
+                if (startup) windowType.GetMethod("Draw", PrivateInstance)!.Invoke(window, null);
+                else
+                {
+                    ImGui.SetNextWindowPos(Vector2.Zero); ImGui.SetNextWindowSize(size);
+                    ImGui.Begin("Update text fixture");
+                    updates.GetMethod("DrawSettings", PrivateStatic)!.Invoke(null, null);
+                    ImGui.End();
+                }
+                ImGui.LogFinish(); ImGui.Render();
+                string rendered = File.ReadAllText(log).Replace("\r\n", "\n");
+                Check(rendered.Contains(notes), $"{(startup ? "startup" : "settings")} {size}: percentages, format tokens and accents stay literal");
+                Check(rendered.Contains(failure), "error paths and percentages stay literal");
+                Check(ImGui.GetDrawData().TotalVtxCount > 0, "update window produces visible draw data");
+            }
+        }
+        finally { ImGui.DestroyContext(context); }
+        Console.WriteLine($"{passed} update text checks passed; no application or game window opened.");
     }
     static void ReleaseNumberingCheck(string runtime, string previousRuntime)
     {
