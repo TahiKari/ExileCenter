@@ -13,6 +13,10 @@ on:
         description: 'Préparer une Release en brouillon'
         default: true
         type: boolean
+      native_only:
+        description: 'Compiler uniquement le codec autonome pour validation'
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -22,9 +26,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  native:
+    if: github.repository == 'TahiKari/ExileCenter' && github.event.repository.private == false
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.native_only && github.ref || inputs.tag || github.ref }}
+          persist-credentials: false
+      - name: Compiler le codec libre et préparer ses sources
+        shell: pwsh
+        run: ./scripts/build-corpse-codec.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: corpse-codec
+          path: |
+            Plugins/CorpseCleaner/Native/bin/ExileCenter.ArchiveCodec.dll
+            Plugins/CorpseCleaner/Native/bin/ExileCenter.ArchiveCodec.dll.sha256
+            Plugins/CorpseCleaner/Native/bin/ExileCenter.ArchiveCodec-sources.zip
+          if-no-files-found: error
   release:
     # Evaluated before allocating a runner: only the public ExileCenter repository builds.
-    if: github.repository == 'TahiKari/ExileCenter' && github.event.repository.private == false
+    needs: native
+    if: github.repository == 'TahiKari/ExileCenter' && github.event.repository.private == false && !inputs.native_only
     runs-on: windows-2022
     timeout-minutes: 45
     permissions:
@@ -49,6 +74,11 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: corpse-codec
+          path: Plugins/CorpseCleaner/Native/bin
 
       - name: Compiler le cœur et les plugins sans reconstruire GameOffsets
         run: |

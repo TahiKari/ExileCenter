@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.20)
+project(ExileCenterArchiveCodec LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+set(OOZ_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/source/ooz" CACHE PATH "Pinned ooz source")
+add_library(ExileCenterArchiveCodec SHARED ArchiveCodec.cpp
+    "${OOZ_ROOT}/kraken.cpp" "${OOZ_ROOT}/bitknit.cpp" "${OOZ_ROOT}/lzna.cpp")
+target_include_directories(ExileCenterArchiveCodec PRIVATE "${OOZ_ROOT}" "${OOZ_ROOT}/simde")
+target_compile_definitions(ExileCenterArchiveCodec PRIVATE OOZ_BUILD_DLL=1 NOMINMAX)
+set_target_properties(ExileCenterArchiveCodec PROPERTIES OUTPUT_NAME "ExileCenter.ArchiveCodec")

@@ -1,0 +1,22 @@
+ExileCenter.ArchiveCodec.dll
+
+The ExileCenter adapter and stored-block writer are provided under GPL-3.0-or-later.
+The decoder is ooz, Copyright (C) 2016 Powzix, with changes by its contributors,
+under GPL-3.0-or-later. This is an independent implementation, not RAD/Epic's
+Oodle runtime. No proprietary oo2core binary is included or downloaded.
+
+Decoder source: https://github.com/zao/ooz
+Pinned commit: ff5aeb9e45e362e8d6bb1199aa82406285dd2a18 (v0.2.4)
+SIMDe source: https://github.com/simd-everywhere/simde
+Pinned commit: dd0b662fd8cf4b1617dbbb4d08aa053e512b08e4
+SIMDe copyright and MIT notices are included in the corresponding source archive.
+
+ExileCenter.ArchiveCodec-sources.zip accompanies the DLL and contains the exact
+decoder sources, SIMDe headers and notices, adapter, CMake build file and GPL text.
+Extract it and build with Visual Studio C++ x64 and CMake:
+  cmake -S . -B build -A x64
+  cmake --build build --config Release
+
+The writer stores modified chunks without compression. The game reads the same
+uncompressed bytes; the patched index and bundle may occupy more disk space.
+This component provides no warranty. See COPYING.txt for the full GPL terms.
