@@ -1,0 +1,19 @@
+LIBRARY ExileCenter.Camera
+EXPORTS
+ GetFileVersionInfoA=Proxy0
+ GetFileVersionInfoByHandle=Proxy1
+ GetFileVersionInfoExA=Proxy2
+ GetFileVersionInfoExW=Proxy3
+ GetFileVersionInfoSizeA=Proxy4
+ GetFileVersionInfoSizeExA=Proxy5
+ GetFileVersionInfoSizeExW=Proxy6
+ GetFileVersionInfoSizeW=Proxy7
+ GetFileVersionInfoW=Proxy8
+ VerFindFileA=Proxy9
+ VerFindFileW=Proxy10
+ VerInstallFileA=Proxy11
+ VerInstallFileW=Proxy12
+ VerLanguageNameA=Proxy13
+ VerLanguageNameW=Proxy14
+ VerQueryValueA=Proxy15
+ VerQueryValueW=Proxy16
