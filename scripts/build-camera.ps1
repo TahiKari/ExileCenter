@@ -24,7 +24,7 @@ try {
     }
     Config 1 0.25 2
     & ./PathOfExileSteam.exe 0.25 2 1
-    if ($LASTEXITCODE) { throw 'Camera bounds/update checks failed.' }
+    if ($LASTEXITCODE) { throw "Camera bounds/update checks failed ($LASTEXITCODE)." }
     Config 0 0.25 2
     & ./PathOfExileSteam.exe 0 1 1
     if ($LASTEXITCODE) { throw 'Camera disabled-start checks failed.' }

@@ -1,4 +1,4 @@
-LIBRARY ExileCenter.Camera
+LIBRARY "ExileCenter.Camera.dll"
 EXPORTS
  GetFileVersionInfoA=Proxy0
  GetFileVersionInfoByHandle=Proxy1
