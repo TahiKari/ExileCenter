@@ -56,10 +56,49 @@ Reject(() => CorpseScript.PatchMinimap(Encoding.UTF8.GetBytes("unknown shader"),
 
 string source = args[0], cache = Path.GetFullPath("native");
 NativeOodle.Ensure(source, cache);
-Check(NativeOodle.FindSource("missing/Exile.Forge.exe", cache) == Path.Combine(cache, Hash(source), "oo2core.dll"), "old executable setting migrates using only the plugin cache");
-Reject(() => NativeOodle.Ensure("missing/Exile.Forge.exe", cache), "executable sources rejected without opening them");
+NativeOodle.Ensure("missing/Exile.Forge.exe", cache);
+Check(!Directory.Exists(cache), "integrated codec needs no external library or native cache");
 NativeOodle.Ensure("", cache);
-Console.WriteLine("Native Oodle ready from an independent DLL.");
+Console.WriteLine("Integrated archive codec ready without Oodle or ExileForge.");
+if (args.Length == 3 && args[2] == "--stage-real-game")
+{
+    string game = Path.GetFullPath(args[1]), liveIndex = Path.Combine(game, "Bundles2", "_.index.bin");
+    using var state = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(game, ".ExileCenterCadavres", "state.json")));
+    string original = Path.Combine(game, ".ExileCenterCadavres", state.RootElement.GetProperty("Id").GetString()!, "original.bin");
+    string originalHash = state.RootElement.GetProperty("OriginalHash").GetString()!, liveHash = state.RootElement.GetProperty("PatchedHash").GetString()!;
+    Check(Hash(original) == originalHash && Hash(liveIndex) == liveHash, "real archives match their manifest before isolated staging");
+    string stagedGame = Path.GetFullPath(Path.Combine("data", Guid.NewGuid().ToString("N"), "real-game"));
+    Directory.CreateDirectory(Path.Combine(stagedGame, "Bundles2"));
+    File.Copy(original, Path.Combine(stagedGame, "Bundles2", "_.index.bin"));
+    using var saved = new FileStream(original, FileMode.Open, FileAccess.Read, FileShare.Read);
+    using var originalIndex = new ArchiveIndex(saved, false, false, new ReadFactory(Path.Combine(game, "Bundles2")));
+    originalIndex.ParsePaths();
+    foreach (var bundle in originalIndex.Files.Values.Where(f => f.Path != null && f.Path.StartsWith("metadata/monsters/", StringComparison.OrdinalIgnoreCase) && f.Path.EndsWith(".ot", StringComparison.OrdinalIgnoreCase)).Select(f => f.BundleRecord.Path).Distinct())
+    {
+        string destination = CorpseArchive.Safe(Path.Combine(stagedGame, "Bundles2"), bundle);
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        File.Copy(CorpseArchive.Safe(Path.Combine(game, "Bundles2"), bundle), destination);
+    }
+    Console.WriteLine(CorpseArchive.Apply(stagedGame, "", "unused-native-cache", default, () => { }));
+    using var prepared = new ArchiveIndex(Path.Combine(stagedGame, "Bundles2", "_.index.bin"), false);
+    prepared.ParsePaths();
+    int changed = 0;
+    Check(prepared.Files.Count == originalIndex.Files.Count, "all real resource records preserved");
+    foreach (var pair in prepared.Files)
+    {
+        if (!originalIndex.Files.TryGetValue(pair.Key, out var previous)) throw new Exception("Unexpected resource added");
+        var asset = pair.Value;
+        if (asset.BundleRecord.Path == previous.BundleRecord.Path && asset.Offset == previous.Offset && asset.Size == previous.Size && asset.BundleRecord.UncompressedSize == previous.BundleRecord.UncompressedSize) continue;
+        if (asset.Path == null || !asset.Path.StartsWith("metadata/monsters/", StringComparison.OrdinalIgnoreCase) || !asset.Path.EndsWith(".ot", StringComparison.OrdinalIgnoreCase)) throw new Exception("Unexpected changed resource " + asset.Path);
+        byte[]? expected = CorpseScript.Patch(previous.Read().ToArray(), asset.Path.Equals(Base, StringComparison.OrdinalIgnoreCase));
+        if (expected == null || !asset.Read().Span.SequenceEqual(expected)) throw new Exception("Unexpected script bytes " + asset.Path);
+        changed++;
+    }
+    Check(changed == state.RootElement.GetProperty("Files").GetInt32(), "only the same corpse scripts change with the independent codec");
+    Check(Hash(original) == originalHash && Hash(liveIndex) == liveHash, "real game and original backup remain unchanged");
+    File.WriteAllText("staged-game.json", System.Text.Json.JsonSerializer.Serialize(new { Directory = stagedGame, Changed = changed, Records = prepared.Files.Count, LiveIndexUnchanged = true }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    return;
+}
 string? legacyPackage = args.Length == 3 && args[1] == "--legacy-package" ? args[2] : null;
 if (args.Length > 1 && legacyPackage == null)
 {
@@ -211,10 +250,8 @@ try
     string uiRoot = Path.Combine(data, "plugin"); Directory.CreateDirectory(Path.Combine(uiRoot, "Localization"));
     foreach (string language in new[] { "fr-FR", "en-US" }) File.Copy(Path.Combine("../../Plugins/CorpseCleaner/Localization", language + ".json"), Path.Combine(uiRoot, "Localization", language + ".json"));
     var plugin = new CorpseCleaner.CorpseCleanerCore(); plugin.SetPluginDllLocation(uiRoot); plugin.OnEnable(false);
-    string pluginCache = Path.Combine(uiRoot, "config", "native", Hash(source)); Directory.CreateDirectory(pluginCache);
-    File.Copy(source, Path.Combine(pluginCache, "oo2core.dll"));
     plugin.Settings.OodleSource = "missing/Exile.Forge.exe"; plugin.SaveSettings(); plugin.OnEnable(false);
-    Check(plugin.Settings.OodleSource == Path.Combine(pluginCache, "oo2core.dll"), "production UI migrates an old setting without Exile Forge");
+    Check(plugin.Settings.OodleSource == "missing/Exile.Forge.exe" && !Directory.Exists(Path.Combine(uiRoot, "config", "native")), "legacy setting preserved without reading or copying an external library");
     plugin.Settings.GameDirectory = Path.Combine(data, "steam");
     plugin.Settings.PermanentCamera = true; plugin.Settings.MapBorders = true;
     string measuredCamera = Path.Combine(data, "CameraZoom", "config"); Directory.CreateDirectory(measuredCamera);

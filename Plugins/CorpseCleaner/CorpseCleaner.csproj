@@ -12,10 +12,18 @@
     <PackageReference Include="LibGGPK3.LibBundledGGPK3" Version="2.7.5" />
     <CorpseLocalization Include="Localization\*.json" />
     <None Include="LICENSE" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Native/bin/ExileCenter.ArchiveCodec.dll.sha256" LogicalName="CorpseCleaner.ArchiveCodec.sha256" />
+    <None Include="Native/bin/ExileCenter.ArchiveCodec.dll;Native/bin/ExileCenter.ArchiveCodec-sources.zip" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Native/NOTICE.txt" Link="ArchiveCodec-NOTICE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Native/COPYING.txt" Link="ArchiveCodec-COPYING.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <Target Name="RequireArchiveCodec" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('Native/bin/ExileCenter.ArchiveCodec.dll') Or !Exists('Native/bin/ExileCenter.ArchiveCodec.dll.sha256') Or !Exists('Native/bin/ExileCenter.ArchiveCodec-sources.zip')" Text="Compilez le codec intégré avec scripts/build-corpse-codec.ps1 ou récupérez l'artefact corpse-codec de la CI avant de compiler CorpseCleaner." />
+  </Target>
   <Target Name="CopyFiles" AfterTargets="Build">
     <ItemGroup>
       <CorpseFiles Include="$(TargetPath);$(OutDir)$(AssemblyName).deps.json;$(OutDir)LibBundle3.dll;$(OutDir)LibGGPK3.dll;$(OutDir)LibBundledGGPK3.dll;$(OutDir)SystemExtensions.dll;$(OutDir)LICENSE" />
+      <CorpseFiles Include="$(OutDir)ExileCenter.ArchiveCodec.dll;$(OutDir)ExileCenter.ArchiveCodec-sources.zip;$(OutDir)ArchiveCodec-NOTICE.txt;$(OutDir)ArchiveCodec-COPYING.txt" />
     </ItemGroup>
     <Copy SourceFiles="@(CorpseFiles)" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\CorpseCleaner" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(CorpseLocalization)" DestinationFolder="..\..\ExileCenter\$(OutDir)Plugins\CorpseCleaner\Localization" SkipUnchangedFiles="true" />

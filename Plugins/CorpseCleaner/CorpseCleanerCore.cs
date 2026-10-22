@@ -48,12 +48,6 @@ public sealed class CorpseCleanerCore : PCore<CorpseCleanerSettings>
         try { if (File.Exists(SettingsPath)) Settings = JsonSerializer.Deserialize<CorpseCleanerSettings>(File.ReadAllText(SettingsPath)) ?? new(); }
         catch (Exception ex) { status = ex.Message; }
         Settings.Normalize();
-        try
-        {
-            string native = NativeOodle.FindSource(Settings.OodleSource, Path.Combine(DllDirectory, "config", "native"));
-            if (native != Settings.OodleSource) { Settings.OodleSource = native; SaveSettings(); }
-        }
-        catch (Exception ex) { status = ex.Message; }
         nextCheck = DateTime.MinValue;
     }
 
@@ -99,7 +93,7 @@ public sealed class CorpseCleanerCore : PCore<CorpseCleanerSettings>
         DrawUI(); // Settings remain usable and jobs finish while the game is closed.
         ImGui.TextWrapped(PluginText.T("help", "Hide monster corpses using a reversible game-file patch. Supports Steam/Epic bundles and the standalone Content.ggpk. Changes take effect after restarting the game."));
         ImGui.TextWrapped(PluginText.T("scope", "Permanent file patches stay active with ExileCenter closed, until restoration or a game update. To change an applied patch, restore it first, then apply the selected options with the game closed."));
-        string directory = Settings.GameDirectory, native = Settings.OodleSource;
+        string directory = Settings.GameDirectory;
         ImGui.BeginDisabled(operation != null);
         bool changed = false;
         if (ImGui.CollapsingHeader(PluginText.Label("permanent", "Permanent options", "PermanentVisuals"), ImGuiTreeNodeFlags.DefaultOpen))
@@ -129,9 +123,8 @@ public sealed class CorpseCleanerCore : PCore<CorpseCleanerSettings>
             Settings.HideCorpses = corpses; Settings.PermanentCamera = camera; Settings.MapBorders = borders;
         }
         changed |= ImGui.InputText(PluginText.Label("directory", "PoE 2 folder", "GameDirectory"), ref directory, 1024);
-        changed |= ImGui.InputText(PluginText.Label("native", "Oodle library (oo2core.dll)", "OodleSource"), ref native, 1024);
-        if (changed) { Settings.GameDirectory = directory; Settings.OodleSource = native; SaveSettings(); }
-        ImGui.TextWrapped(PluginText.T("native_help", "Select a compatible oo2core.dll. The plugin reuses its own verified cached library when available. No third-party executable is read or launched."));
+        if (changed) { Settings.GameDirectory = directory; SaveSettings(); }
+        DrawWrappedText(PluginText.T("native_help", "The archive codec is included in ExileCenter. No external DLL or ExileForge is required. Modified archives may use more disk space."));
         if (gameRunning) ImGui.TextWrapped(PluginText.T("close_game", "PoE is open. Close the game to apply or restore this patch. There is no instant in-game toggle."));
         ImGui.TextWrapped(PluginText.T("backup", "The original archive is kept in .ExileCenterCadavres inside the game folder. Standalone installations need enough free space for a full copy of Content.ggpk. Restoration is refused if a game update or another tool has changed the patched archive."));
         ImGui.BeginDisabled(gameRunning || directory.Length == 0);
@@ -141,10 +134,17 @@ public sealed class CorpseCleanerCore : PCore<CorpseCleanerSettings>
         ImGui.EndDisabled(); ImGui.EndDisabled();
         if (operation != null)
         {
-            ImGui.TextWrapped(Volatile.Read(ref progress));
+            DrawWrappedText(Volatile.Read(ref progress));
             if (ImGui.Button(PluginText.Label("cancel", "Cancel preparation", "Cancel"))) cancellation?.Cancel();
         }
-        if (status.Length > 0) ImGui.TextWrapped(status);
+        if (status.Length > 0) DrawWrappedText(status);
+    }
+
+    private static void DrawWrappedText(string text)
+    {
+        ImGui.PushTextWrapPos(0);
+        try { ImGui.TextUnformatted(text); }
+        finally { ImGui.PopTextWrapPos(); }
     }
 
     private void Start(bool restore)

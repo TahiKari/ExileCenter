@@ -151,6 +151,10 @@ jobs:
             foreach ($path in @(git ls-files -- 'Plugins/*/Localization/*.json')) {
               if (!$zip.GetEntry($path)) { throw "Traduction absente du ZIP : $path" }
             }
+            foreach ($file in @('ExileCenter.ArchiveCodec.dll', 'ExileCenter.ArchiveCodec-sources.zip', 'ArchiveCodec-NOTICE.txt', 'ArchiveCodec-COPYING.txt')) {
+              if (!$zip.GetEntry("Plugins/CorpseCleaner/$file")) { throw "Codec autonome incomplet : $file" }
+            }
+            if ($zip.Entries.FullName -match '(?i)(^|/)oo2core[^/]*\.dll$') { throw 'Une bibliothèque Oodle propriétaire ne doit pas être distribuée.' }
             if ($zip.Entries.FullName -match '(?i)(^|/)(configs?|settings\.json)(/|$)|(?i)(dump|\.pdb$|\.log$)') { throw 'Données locales ou de diagnostic présentes dans le ZIP.' }
             if ($zip.Entries.FullName -match '(?i)GameHelper') { throw 'Ancien nom dans le paquet complet ExileCenter.' }
           } finally { $zip.Dispose() }
