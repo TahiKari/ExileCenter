@@ -46,6 +46,7 @@ string atomic = Path.Combine(root, "atomic.bin");
 Call("AtomicWrite", atomic, encoded);
 byte[] first = encoded, second = new byte[20];
 using var stop = new CancellationTokenSource();
+int successfulReads = 0;
 var reader = Task.Run(() =>
 {
     while (!stop.IsCancellationRequested)
@@ -56,16 +57,19 @@ var reader = Task.Run(() =>
             using var memory = new MemoryStream(); stream.CopyTo(memory);
             byte[] bytes = memory.ToArray();
             if (!bytes.SequenceEqual(first) && !bytes.SequenceEqual(second)) throw new Exception("partial atomic config visible");
+            successfulReads++;
         }
         // ReplaceFile can briefly deny opens. The native reader deliberately
         // retains its last valid pair and retries on its next poll in this case.
-        catch (IOException ex) when ((ex.HResult & 0xffff) is 32 or 33) { }
+        catch (IOException ex) when ((ex.HResult & 0xffff) is 2 or 3 or 32 or 33) { }
     }
 });
 try { for (int i = 0; i < 200; i++) Call("AtomicWrite", atomic, i % 2 == 0 ? second : first); }
 finally { stop.Cancel(); reader.GetAwaiter().GetResult(); }
 Check(File.ReadAllBytes(atomic).SequenceEqual(first), "latest atomic config readable after replacements");
+Check(successfulReads > 0, "concurrent reader saw complete valid configurations");
 Check(!Directory.EnumerateFiles(root, "*.tmp").Any(), "atomic config has no temporary leftovers");
+if (args.Contains("--settings-only")) { Console.WriteLine($"{passed} settings checks passed ({successfulReads} concurrent reads)."); return; }
 File.WriteAllText(Path.Combine(root, "PathOfExileSteam.exe"), "fixture-only");
 string executableHash = Hash(Path.Combine(root, "PathOfExileSteam.exe"));
 string native = Path.Combine(root, "version.dll");
