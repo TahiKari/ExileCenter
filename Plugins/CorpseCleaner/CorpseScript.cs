@@ -11,6 +11,11 @@ internal sealed record PermanentVisualOptions
     public bool MapBorders { get; init; }
     public float[] BorderColor { get; init; } = [0.5f, 0.5f, 1f, 0.5f];
     public float[] FogColor { get; init; } = [0f, 0f, 0f, 0f];
+    public float[] ExploredColor { get; init; } = [0f, 0f, 0f, 0.3f];
+    public float[] ExploringColor { get; init; } = [0f, 0.5f, 1f, 0.5f];
+    public float BorderGlow { get; init; } = 1f;
+    public float ExploringGlow { get; init; } = 1f;
+    public float RevealThreshold { get; init; } = 0.18f;
 
     internal void Validate()
     {
@@ -18,9 +23,13 @@ internal sealed record PermanentVisualOptions
             throw new InvalidDataException("Choisissez au moins un réglage permanent.");
         if (CameraDistance is float distance && (!float.IsFinite(distance) || distance < 0.5f || distance > 3f))
             throw new InvalidDataException("La distance permanente doit être comprise entre 50 % et 300 %.");
-        foreach (var color in new[] { BorderColor, FogColor })
+        foreach (var color in new[] { BorderColor, FogColor, ExploredColor, ExploringColor })
             if (color == null || color.Length != 4 || color.Any(v => !float.IsFinite(v) || v < 0f || v > 1f))
                 throw new InvalidDataException("Couleur ou opacité invalide.");
+        if (!float.IsFinite(BorderGlow) || BorderGlow < 1f || BorderGlow > 20f ||
+            !float.IsFinite(ExploringGlow) || ExploringGlow < 1f || ExploringGlow > 20f ||
+            !float.IsFinite(RevealThreshold) || RevealThreshold < 0f || RevealThreshold > 1f)
+            throw new InvalidDataException("Lueur ou seuil de visibilité invalide.");
     }
 }
 
@@ -115,33 +124,57 @@ internal static class CorpseScript
     internal static byte[] PatchMinimap(byte[] original, PermanentVisualOptions options)
     {
         options.Validate();
-        if (original.Length == 0 || original.Length > 512 * 1024) throw new InvalidDataException("Format du shader de carte non pris en charge.");
-        string text = new UTF8Encoding(false, true).GetString(original);
-        if (text.Contains("ExileCenter persistent minimap", StringComparison.Ordinal))
-            throw new InvalidDataException("La carte est déjà personnalisée. Restaurez-la avant de changer ses réglages.");
-        string Number(float value) => value.ToString("0.0#####", CultureInfo.InvariantCulture) + "f";
-        string Color(float[] color) => "float4(" + string.Join(", ", color.Select(Number)) + ")";
-        string ReplaceOnce(string input, string before, string after)
+        string text = ReadMinimap(original);
+        string ReplaceOnce(string input, string pattern, string replacement)
         {
-            int at = input.IndexOf(before, StringComparison.Ordinal);
-            if (at < 0 || input.IndexOf(before, at + before.Length, StringComparison.Ordinal) >= 0)
+            var matches = Regex.Matches(input, pattern, RegexOptions.CultureInvariant | RegexOptions.Multiline);
+            if (matches.Count != 1)
                 throw new InvalidDataException("Shader de carte incompatible : aucun fichier du jeu n'a été remplacé.");
-            return input.Remove(at, before.Length).Insert(at, after);
+            var match = matches[0];
+            return input.Remove(match.Index, match.Length).Insert(match.Index, replacement);
         }
         text = ReplaceOnce(text,
-            "float4 walkability_map_color = lerp(walkable_color, float4(0.5f, 0.5f, 1.0f, 0.5f), walkable_to_edge_ratio);",
-            "float4 walkability_map_color = lerp(walkable_color, " + Color(options.BorderColor) + ", walkable_to_edge_ratio);");
+            @"^[\t ]*float4 walkable_color = float4\([^\r\n)]*\);",
+            "\tfloat4 walkable_color = " + MinimapColor(options.ExploredColor, 1f) + ";");
         text = ReplaceOnce(text,
-            "float4(0.0f, 0.5f, 1.0f, 0.5f), pow(saturate(unexplored_edge), 25.0f)",
-            Color(options.BorderColor) + ", pow(saturate(unexplored_edge), 25.0f)");
-        const string anchor = "float max_walkable_fade = lerp(1.0f, 0.3f, walkability_opacity);";
-        string rendering = "// ExileCenter persistent minimap: exploration visibility is unchanged.\r\n\t" +
-            "walkability_map_color.a = max(walkability_map_color.a, " + Number(options.BorderColor[3]) + " * walkable_to_edge_ratio * (1.0f - edge_to_unwalkable_ratio));\r\n\t";
-        if (options.FogColor[3] > 0f)
-            rendering += "float4 ec_fog = " + Color(options.FogColor) + ";\r\n\tec_fog.a *= (1.0f - visibility) * (1.0f - edge_to_unwalkable_ratio);\r\n\twalkability_map_color = Uberblend(ec_fog, walkability_map_color);\r\n\t";
-        text = ReplaceOnce(text, anchor, rendering + anchor);
-        return Encoding.UTF8.GetBytes(text);
+            @"^[\t ]*float4 walkability_map_color = lerp\(walkable_color, float4\([^\r\n)]*\), walkable_to_edge_ratio\);",
+            "\tfloat4 walkability_map_color = lerp(walkable_color, " + MinimapColor(options.BorderColor, options.BorderGlow) + ", walkable_to_edge_ratio);");
+        text = ReplaceOnce(text,
+            @"^[\t ]*walkability_map_color = lerp\(walkability_map_color \* float4\(1\.0f, 1\.0f, 1\.0f, visibility\), float4\([^\r\n)]*\), pow\(saturate\(unexplored_edge\), 25\.0f\)\);",
+            "\twalkability_map_color = lerp(walkability_map_color * float4(1.0f, 1.0f, 1.0f, visibility), " +
+            MinimapColor(options.ExploringColor, options.ExploringGlow) + ", pow(saturate(unexplored_edge), 25.0f));");
+        return Encoding.UTF8.GetBytes(text + "\r\n// ExileCenter persistent minimap: native colors.\r\n");
     }
+
+    internal static byte[] PatchMinimapVisibility(byte[] original, PermanentVisualOptions options)
+    {
+        options.Validate();
+        string text = ReadMinimap(original);
+        const string anchor = "res_color = float4(1.0f, 0.0f, 0.0f, 1.0f);";
+        int at = text.IndexOf(anchor, StringComparison.Ordinal);
+        if (at < 0 || text.IndexOf(anchor, at + anchor.Length, StringComparison.Ordinal) >= 0 ||
+            Regex.IsMatch(text, @"res_color\s*=\s*max\s*\(\s*res_color"))
+            throw new InvalidDataException("Shader de visibilité incompatible ou déjà personnalisé : modification annulée.");
+        // Same placement as Exile Forge: outside the single-statement conditional,
+        // before the game's existing walkable-reveal branch. No CPU exploration flags are written.
+        return Encoding.UTF8.GetBytes(text.Insert(at + anchor.Length,
+            "\r\n\tres_color = max(res_color, " + MinimapNumber(options.RevealThreshold) + "); // ExileCenter persistent minimap\r\n"));
+    }
+
+    private static string ReadMinimap(byte[] original)
+    {
+        if (original.Length == 0 || original.Length > 512 * 1024)
+            throw new InvalidDataException("Format du shader de carte non pris en charge.");
+        string text = new UTF8Encoding(false, true).GetString(original);
+        if (text.Contains("ExileCenter persistent minimap", StringComparison.Ordinal))
+            throw new InvalidDataException("La carte est déjà personnalisée. Restaurez son patch avant de changer ses réglages.");
+        return text;
+    }
+
+    private static string MinimapNumber(float value) => value.ToString("0.0#####", CultureInfo.InvariantCulture) + "f";
+
+    private static string MinimapColor(float[] color, float glow) =>
+        "float4(" + string.Join(", ", color.Select((v, i) => MinimapNumber(i < 3 ? v * glow : v))) + ")";
 
     // Ignore quoted strings and comments when identifying script delimiters.
     internal static string Mask(string text)

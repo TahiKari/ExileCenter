@@ -10,6 +10,21 @@ static void Check(bool condition, string name) { if (!condition) throw new Excep
 static void Reject(Action action, string name) { try { action(); } catch (Exception) { Console.WriteLine("PASS " + name); return; } throw new Exception("Not rejected: " + name); }
 static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
 static byte[] Utf16(string text) => Encoding.Unicode.GetBytes(text);
+if (args.Length == 3 && args[0] == "--read-minimap")
+{
+    NativeOodle.Ensure("", "unused");
+    string indexPath = Path.Combine(args[1], "Bundles2", "_.index.bin"), before = Hash(indexPath);
+    using var input = new FileStream(indexPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+    using var index = new ArchiveIndex(input, true, false, new ReadFactory(Path.Combine(args[1], "Bundles2")));
+    Directory.CreateDirectory(args[2]);
+    foreach (string name in new[] { "minimap_blending_pixel.hlsl", "minimap_visibility_pixel.hlsl" })
+    {
+        Check(index.TryGetFile("shaders/" + name, out var asset), "real minimap resource exists: " + name);
+        File.WriteAllBytes(Path.Combine(args[2], name), asset!.Read().ToArray());
+    }
+    Check(Hash(indexPath) == before, "read-only minimap extraction preserves the game index");
+    return;
+}
 const string Base = "metadata/monsters/monster.ot";
 const string Child = "metadata/monsters/test/test.ot";
 const string Other = "metadata/items/test.ot";
@@ -18,6 +33,7 @@ const string Blending = "shaders/minimap_blending_pixel.hlsl";
 const string Visibility = "shaders/minimap_visibility_pixel.hlsl";
 const string CameraScript = "version 3\r\nStats { life = 100 }\r\nPositioned { team = 1 on_initial_position_set = { KeepPosition(); } }\r\nActor { on_start = { KeepCamera(); } }";
 const string MapShader = "float4 walkable_color = float4(1.0f, 1.0f, 1.0f, 0.01f);\nfloat4 walkability_map_color = lerp(walkable_color, float4(0.5f, 0.5f, 1.0f, 0.5f), walkable_to_edge_ratio);\nwalkability_map_color = lerp(walkability_map_color * float4(1.0f, 1.0f, 1.0f, visibility), float4(0.0f, 0.5f, 1.0f, 0.5f), pow(saturate(unexplored_edge), 25.0f));\nfloat max_walkable_fade = lerp(1.0f, 0.3f, walkability_opacity);";
+const string VisibilityShader = "float4 res_color = float4(max(ratio, prev_ratio), 0.0f, 0.0f, 1.0f);\nif (visibility_fully_revealed > 0.5f)\n\tres_color = float4(1.0f, 0.0f, 0.0f, 1.0f);\nif (visibility_walkable_revealed > 0.5f) { KeepWalkableReveal(); }\nreturn res_color;";
 const string Script = "version 2\r\nextends \"Metadata/Parent\"\r\nLife\r\n{\r\n\tbase_maximum_life = 1000\r\n\ton_death = { KeepDeath(); If( true, () { KeepNested(); } ); }\r\n\ton_spawned_alive = { DisableRendering(); }\r\n\ton_revive = { KeepRevive(); DisableRendering(); }\r\n}\r\nActor\r\n{\r\n\ton_death = { KeepActor(); }\r\n}\r\nStats { armour = 500 }\r\n";
 var patched = Encoding.Unicode.GetString(CorpseScript.Patch(Utf16(Script), true)!);
 Check(patched.Contains("base_maximum_life = 1000") && patched.Contains("armour = 500"), "health and stats unchanged");
@@ -48,18 +64,81 @@ Reject(() => CorpseScript.PatchCamera(Utf16(cameraText), 2f), "previous permanen
 Reject(() => CorpseScript.PatchCamera(Utf16(CameraScript), float.NaN), "invalid permanent distance rejected");
 Reject(() => CorpseScript.PatchCamera(Utf16("Positioned {} Positioned {}"), 2f), "ambiguous camera component rejected");
 Reject(() => new PermanentVisualOptions { HideCorpses = false }.Validate(), "empty permanent selection rejected");
-var visuals = new PermanentVisualOptions { CameraDistance = 1.75f, MapBorders = true, BorderColor = [1f, 0.25f, 0f, 0.8f], FogColor = [0.1f, 0.2f, 0.3f, 0.4f] };
+var visuals = new PermanentVisualOptions { CameraDistance = 1.75f, MapBorders = true, BorderColor = [1f, 0.25f, 0f, 0.8f],
+    ExploredColor = [0.1f, 0.2f, 0.3f, 0.4f], ExploringColor = [1f, 0f, 0f, 0.5f], BorderGlow = 2f, ExploringGlow = 3f };
 string mapText = Encoding.UTF8.GetString(CorpseScript.PatchMinimap(Encoding.UTF8.GetBytes(MapShader), visuals));
-Check(mapText.Contains("float4(1.0f, 0.25f, 0.0f, 0.8f)") && mapText.Contains("ec_fog.a *= (1.0f - visibility)"), "map border color and fog tint use separate opacity and original visibility");
+Check(mapText.Contains("float4(2.0f, 0.5f, 0.0f, 0.8f)") && mapText.Contains("float4(3.0f, 0.0f, 0.0f, 0.5f)") &&
+    mapText.Contains("float4 walkable_color = float4(0.1f, 0.2f, 0.3f, 0.4f)"), "three native layers have independent RGBA; glow multiplies RGB but preserves alpha");
 Check(!mapText.Contains("visibility = 1") && !mapText.Contains("visibility_fully_revealed"), "persistent borders never change exploration state");
+string visibilityText = Encoding.UTF8.GetString(CorpseScript.PatchMinimapVisibility(Encoding.UTF8.GetBytes(VisibilityShader), visuals));
+Check(visibilityText.Contains("res_color = max(res_color, 0.18f)") && visibilityText.Contains("KeepWalkableReveal()") && visibilityText.Contains("max(ratio, prev_ratio)"), "native reveal threshold preserves the game's exploration calculations and walkable branch");
+Reject(() => CorpseScript.PatchMinimapVisibility(Encoding.UTF8.GetBytes(visibilityText), visuals), "double visibility patch rejected");
+Reject(() => CorpseScript.PatchMinimap(Encoding.UTF8.GetBytes(mapText), visuals), "double blending patch rejected");
+Reject(() => CorpseScript.PatchMinimapVisibility(Encoding.UTF8.GetBytes("unknown shader"), visuals), "incompatible visibility shader rejected");
+Reject(() => (visuals with { RevealThreshold = float.NaN }).Validate(), "non-finite reveal threshold rejected");
+Reject(() => (visuals with { BorderGlow = 21f }).Validate(), "out-of-range glow rejected");
 Reject(() => CorpseScript.PatchMinimap(Encoding.UTF8.GetBytes("unknown shader"), visuals), "incompatible shader refused before archive replacement");
 
-string source = args[0], cache = Path.GetFullPath("native");
+string source = args[0], cache = Path.GetFullPath(Path.Combine("data", "unused-native-" + Guid.NewGuid().ToString("N")));
 NativeOodle.Ensure(source, cache);
 NativeOodle.Ensure("missing/Exile.Forge.exe", cache);
 Check(!Directory.Exists(cache), "integrated codec needs no external library or native cache");
 NativeOodle.Ensure("", cache);
 Console.WriteLine("Integrated archive codec ready without Oodle or ExileForge.");
+if (args.Length == 3 && args[2] == "--apply-native-minimap")
+{
+    CorpseArchive.EnsureClosed();
+    string game = Path.GetFullPath(args[1]), liveIndex = Path.Combine(game, "Bundles2", "_.index.bin");
+    string corpseState = Path.Combine(game, ".ExileCenterCadavres", "state.json"), corpseHash = Hash(corpseState);
+    using var corpseManifest = System.Text.Json.JsonDocument.Parse(File.ReadAllText(corpseState));
+    Check(Hash(liveIndex) == corpseManifest.RootElement.GetProperty("PatchedHash").GetString(), "live index matches the validated corpse-only patch");
+    var selected = System.Text.Json.JsonSerializer.Deserialize<PermanentVisualOptions>(File.ReadAllText(source))!;
+    selected.Validate();
+    string savedIndex = Path.GetFullPath("before-minimap-" + Guid.NewGuid().ToString("N") + ".index.bin");
+    File.Copy(liveIndex, savedIndex);
+    string executable = Path.Combine(game, "PathOfExileSteam.exe"), executableHash = Hash(executable);
+    Console.WriteLine(CorpseArchive.ApplyVisuals(game, "", "unused", selected, default, minimapOnly: true));
+    try
+    {
+        using var beforeStream = File.OpenRead(savedIndex);
+        using var beforeIndex = new ArchiveIndex(beforeStream, true, false, new ReadFactory(Path.Combine(game, "Bundles2")));
+        using var afterStream = new FileStream(liveIndex, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var afterIndex = new ArchiveIndex(afterStream, true, false, new ReadFactory(Path.Combine(game, "Bundles2")));
+        _ = beforeIndex.ParsePaths(); _ = afterIndex.ParsePaths();
+        Check(beforeIndex.Files.Count == afterIndex.Files.Count, "live resource record count preserved");
+        var changed = new List<string>();
+        foreach (var pair in afterIndex.Files)
+        {
+            CheckRecord(pair.Key, pair.Value);
+        }
+        void CheckRecord(ulong key, LibBundle3.Records.FileRecord asset)
+        {
+            if (!beforeIndex.Files.TryGetValue(key, out var previous)) throw new Exception("Unexpected new resource");
+            if (asset.BundleRecord.Path == previous.BundleRecord.Path && asset.Offset == previous.Offset && asset.Size == previous.Size &&
+                asset.BundleRecord.UncompressedSize == previous.BundleRecord.UncompressedSize) return;
+            string path = asset.Path ?? "";
+            byte[] expected = path.Equals(Blending, StringComparison.OrdinalIgnoreCase) ? CorpseScript.PatchMinimap(previous.Read().ToArray(), selected) :
+                path.Equals(Visibility, StringComparison.OrdinalIgnoreCase) ? CorpseScript.PatchMinimapVisibility(previous.Read().ToArray(), selected) :
+                throw new Exception("Unexpected modified game resource: " + path);
+            if (!asset.Read().Span.SequenceEqual(expected)) throw new Exception("Unexpected patched shader bytes");
+            changed.Add(path);
+        }
+        Check(changed.Count == 2, "exactly the two native minimap shaders changed in the live index");
+        Check(Hash(corpseState) == corpseHash && Hash(executable) == executableHash, "corpse backup manifest and game executable remain byte-identical");
+        Check(!File.Exists(Path.Combine(game, "version.dll")), "no game-loaded camera proxy DLL");
+        File.WriteAllText("minimap-live-receipt.json", System.Text.Json.JsonSerializer.Serialize(new {
+            GameDirectory = game, Changed = changed, Records = afterIndex.Files.Count, CorpseManifestHash = corpseHash,
+            OriginalIndexHash = Hash(savedIndex), PatchedIndexHash = Hash(liveIndex), ExecutableHash = executableHash,
+            Options = selected, Backup = Path.Combine(game, ".ExileCenterMinimap", "state.json")
+        }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    }
+    catch
+    {
+        CorpseArchive.Restore(game, default, minimapOnly: true);
+        throw;
+    }
+    return;
+}
 if (args.Length == 3 && args[2] == "--stage-real-game")
 {
     string game = Path.GetFullPath(args[1]), liveIndex = Path.Combine(game, "Bundles2", "_.index.bin");
@@ -118,7 +197,22 @@ if (args.Length > 1 && legacyPackage == null)
         ShaderCompiler.Compile(originalBlend);
         ShaderCompiler.Compile(CorpseScript.PatchMinimap(originalBlend, visuals));
         ShaderCompiler.Compile(CorpseScript.PatchMinimap(originalBlend, new PermanentVisualOptions { MapBorders = true }));
-        Check(true, "original and customized real map shaders compile with and without fog tint");
+        index.TryGetFile(Visibility, out var visibility);
+        byte[] originalVisibility = visibility!.Read().ToArray();
+        var installedScript = typeof(CorpseCleanerCore).Assembly.GetType("CorpseCleaner.CorpseScript", true)!;
+        var installedOptionsType = installedScript.Assembly.GetType("CorpseCleaner.PermanentVisualOptions", true)!;
+        var installedOptions = System.Text.Json.JsonSerializer.Deserialize(System.Text.Json.JsonSerializer.Serialize(visuals), installedOptionsType);
+        byte[] InstalledPatch(string method, byte[] bytes) => (byte[])installedScript.GetMethod(method,
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.Invoke(null, new[] { (object)bytes, installedOptions })!;
+        byte[] installedBlend = InstalledPatch("PatchMinimap", originalBlend), installedVisibility = InstalledPatch("PatchMinimapVisibility", originalVisibility);
+        Check(installedBlend.AsSpan().SequenceEqual(CorpseScript.PatchMinimap(originalBlend, visuals)) &&
+            installedVisibility.AsSpan().SequenceEqual(CorpseScript.PatchMinimapVisibility(originalVisibility, visuals)), "the production plugin emits the verified native shader bytes");
+        ShaderCompiler.Compile(installedBlend); ShaderCompiler.Compile(installedVisibility, "RenderVisibility");
+        ShaderCompiler.Compile(originalVisibility, "RenderVisibility");
+        foreach (float threshold in new[] { 0f, 0.18f, 1f })
+            ShaderCompiler.Compile(CorpseScript.PatchMinimapVisibility(originalVisibility, visuals with { RevealThreshold = threshold }), "RenderVisibility");
+        ShaderCompiler.Compile(CorpseScript.PatchMinimap(originalBlend, visuals with { BorderGlow = 20f, ExploringGlow = 20f, ExploredColor = [0, 0, 0, 0] }));
+        Check(true, "both original and customized real minimap shaders compile, including threshold and glow limits");
         Check(Hash(indexPath) == before, "real game index unchanged after camera and shader verification");
         return;
     }
@@ -164,7 +258,7 @@ if (args.Length > 1 && legacyPackage == null)
 
 string data = Path.GetFullPath(Path.Combine("data", Guid.NewGuid().ToString("N")));
 Directory.CreateDirectory(data);
-var payloads = new Dictionary<string, byte[]> { [Base] = Utf16(Script), [Child] = Utf16(Script), [Other] = Utf16("Life { base_maximum_life = 50 }"), [Character] = Utf16(CameraScript), [Blending] = Encoding.UTF8.GetBytes(MapShader), [Visibility] = Encoding.UTF8.GetBytes("original exploration visibility") };
+var payloads = new Dictionary<string, byte[]> { [Base] = Utf16(Script), [Child] = Utf16(Script), [Other] = Utf16("Life { base_maximum_life = 50 }"), [Character] = Utf16(CameraScript), [Blending] = Encoding.UTF8.GetBytes(MapShader), [Visibility] = Encoding.UTF8.GetBytes(VisibilityShader) };
 foreach (bool ggpk in new[] { false, true })
 {
     string game = Path.Combine(data, ggpk ? "official" : "steam");
@@ -205,7 +299,7 @@ foreach (bool ggpk in new[] { false, true })
         var active = session?.Index ?? index!;
         Check(active.TryGetFile(Character, out var character) && Encoding.Unicode.GetString(character.Read().Span).Contains("1.75"), "camera persists in the closed archive without the plugin " + ggpk);
         Check(active.TryGetFile(Blending, out var blending) && Encoding.UTF8.GetString(blending.Read().Span).Contains("ExileCenter persistent minimap"), "borders and colors persist in the closed archive without the overlay " + ggpk);
-        Check(active.TryGetFile(Visibility, out var visibility) && visibility.Read().Span.SequenceEqual(payloads[Visibility]), "fog and exploration visibility asset stays byte-identical " + ggpk);
+        Check(active.TryGetFile(Visibility, out var visibility) && Encoding.UTF8.GetString(visibility.Read().Span).Contains("res_color = max(res_color, 0.18f)"), "native visibility shader receives the selected threshold " + ggpk);
         Check(active.TryGetFile(Base, out var monster) && Encoding.Unicode.GetString(monster.Read().Span).Contains(CorpseScript.Marker), "confirmed corpse behavior included with persistent camera and map " + ggpk);
     }
     CorpseArchive.Restore(game, default, () => { });
@@ -219,6 +313,47 @@ foreach (bool ggpk in new[] { false, true })
     }
     CorpseArchive.Restore(game, default, () => { });
     Check(Hash(archive) == original, "map-only restoration is exact " + ggpk);
+}
+foreach (bool ggpk in new[] { false, true })
+{
+    string game = Path.Combine(data, ggpk ? "minimap-over-corpses-official" : "minimap-over-corpses-steam");
+    CreateGame(game, payloads, ggpk);
+    string archive = Path.Combine(game, ggpk ? "Content.ggpk" : "Bundles2/_.index.bin"), original = Hash(archive);
+    CorpseArchive.Apply(game, source, cache, default, () => { });
+    string corpseIndex = Hash(archive), corpseState = Path.Combine(game, ".ExileCenterCadavres", "state.json"), corpseStateHash = Hash(corpseState);
+    var minimap = visuals with { HideCorpses = false, CameraDistance = null };
+    Reject(() => CorpseArchive.ApplyVisuals(game, source, cache, minimap, default, () => { }, text =>
+        { if (text.StartsWith("Vérification")) throw new IOException("fixture interruption"); }, minimapOnly: true), "minimap pre-commit failure leaves the active corpse patch intact " + ggpk);
+    Check(Hash(archive) == corpseIndex && Hash(corpseState) == corpseStateHash, "failed minimap preparation preserves the corpse index and backup manifest " + ggpk);
+    CorpseArchive.ApplyVisuals(game, source, cache, minimap, default, () => { }, minimapOnly: true);
+    using (var session = ggpk ? new BundledSession(archive) : null)
+    {
+        using var index = ggpk ? null : new ArchiveIndex(archive, false);
+        var active = session?.Index ?? index!;
+        Check(active.Files.Count == payloads.Count, "minimap adds no unrelated resource records " + ggpk);
+        Check(active.TryGetFile(Base, out var monster) && monster.Read().Span.SequenceEqual(CorpseScript.Patch(payloads[Base], true)), "minimap leaves the validated corpse script byte-identical " + ggpk);
+        Check(active.TryGetFile(Character, out var character) && character.Read().Span.SequenceEqual(payloads[Character]), "minimap leaves the camera script byte-identical " + ggpk);
+        Check(active.TryGetFile(Blending, out var blending) && blending.Read().Span.SequenceEqual(CorpseScript.PatchMinimap(payloads[Blending], minimap)), "minimap writes the exact selected native colors " + ggpk);
+        Check(active.TryGetFile(Visibility, out var visibility) && visibility.Read().Span.SequenceEqual(CorpseScript.PatchMinimapVisibility(payloads[Visibility], minimap)), "minimap writes the exact selected native visibility threshold " + ggpk);
+    }
+    Check(Hash(corpseState) == corpseStateHash, "separate minimap backup never rewrites the corpse manifest " + ggpk);
+    var recorded = CorpseArchive.ReadMinimapOptions(game)!;
+    Check(recorded.ExploredColor.SequenceEqual(minimap.ExploredColor) && recorded.ExploringGlow == minimap.ExploringGlow && recorded.RevealThreshold == minimap.RevealThreshold, "applied minimap colors, glow and threshold are recorded for upgrade and diagnosis " + ggpk);
+    Reject(() => CorpseArchive.Restore(game, default, () => { }), "corpse restoration is blocked until the overlaid minimap patch is restored " + ggpk);
+    Reject(() => CorpseArchive.ApplyVisuals(game, source, cache, minimap, default, () => { }, minimapOnly: true), "minimap reapplication requires explicit targeted restoration " + ggpk);
+    CorpseArchive.Restore(game, default, () => { }, minimapOnly: true);
+    Check(Hash(archive) == corpseIndex && Hash(corpseState) == corpseStateHash, "minimap-only restoration returns exactly to the active corpse patch " + ggpk);
+    CorpseArchive.ApplyVisuals(game, source, cache, minimap with { RevealThreshold = 1f, ExploringGlow = 1f }, default, () => { }, minimapOnly: true);
+    Check(CorpseArchive.ReadMinimapOptions(game)!.RevealThreshold == 1f, "new settings can be applied after minimap-only restoration " + ggpk);
+    CorpseArchive.Restore(game, default, () => { }, minimapOnly: true);
+    CorpseArchive.Restore(game, default, () => { });
+    Check(Hash(archive) == original, "both nested patches restore the original archive exactly " + ggpk);
+    string incompatible = game + "-incompatible";
+    var missingShader = new Dictionary<string, byte[]>(payloads); missingShader.Remove(Visibility);
+    CreateGame(incompatible, missingShader, ggpk);
+    string incompatibleArchive = Path.Combine(incompatible, ggpk ? "Content.ggpk" : "Bundles2/_.index.bin"), incompatibleHash = Hash(incompatibleArchive);
+    Reject(() => CorpseArchive.ApplyVisuals(incompatible, source, cache, minimap, default, () => { }, minimapOnly: true), "missing second shader rejects the whole minimap patch " + ggpk);
+    Check(Hash(incompatibleArchive) == incompatibleHash, "neither shader is committed when the pair is incomplete " + ggpk);
 }
 if (legacyPackage != null)
 {
@@ -254,10 +389,38 @@ try
     Check(plugin.Settings.OodleSource == "missing/Exile.Forge.exe" && !Directory.Exists(Path.Combine(uiRoot, "config", "native")), "legacy setting preserved without reading or copying an external library");
     plugin.Settings.GameDirectory = Path.Combine(data, "steam");
     plugin.Settings.PermanentCamera = true; plugin.Settings.MapBorders = true;
+    plugin.Settings.ExploredColor = [0.2f, 0.3f, 0.4f, 0.5f]; plugin.Settings.ExploringColor = [1f, 0f, 0f, 0.75f];
+    plugin.Settings.BorderGlow = 2.5f; plugin.Settings.ExploringGlow = 4f; plugin.Settings.RevealThreshold = 0.27f;
+    plugin.SaveSettings(); plugin.OnEnable(false);
+    Check(plugin.Settings.ExploredColor.SequenceEqual(new[] { 0.2f, 0.3f, 0.4f, 0.5f }) && plugin.Settings.ExploringColor[3] == 0.75f &&
+        plugin.Settings.BorderGlow == 2.5f && plugin.Settings.RevealThreshold == 0.27f, "minimap RGBA, glow and visibility settings survive save and restart");
+    string preservedDirectory = plugin.Settings.GameDirectory;
+    plugin.Settings.GetType().GetMethod("ResetMinimapColors", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(plugin.Settings, null);
+    Check(plugin.Settings.BorderColor.SequenceEqual(new[] { 1f, 1f, 1f, 0.1f }) && plugin.Settings.BorderGlow == 12f && plugin.Settings.RevealThreshold == 0.18f &&
+        plugin.Settings.GameDirectory == preservedDirectory && plugin.Settings.PermanentCamera && plugin.Settings.HideCorpses, "minimap reset restores Exile Forge color defaults without changing other settings");
+    var mapHex = plugin.GetType().GetMethod("MapHex", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+    Check((string)mapHex.Invoke(null, new object[] { new System.Numerics.Vector4(0f, 127f / 255f, 1f, 127f / 255f) })! == "7F007FFF", "advanced picker hex uses the same AARRGGBB channel order as the supplied screenshots");
+    plugin.Settings.ExploringColor = [float.NaN, 0, 0, 0]; plugin.Settings.RevealThreshold = 4f; plugin.Settings.BorderGlow = -1f;
+    plugin.Settings.GetType().GetMethod("Normalize", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(plugin.Settings, null);
+    Check(plugin.Settings.ExploringColor.SequenceEqual(new[] { 0f, 0.5f, 1f, 0.5f }) && plugin.Settings.RevealThreshold == 1f && plugin.Settings.BorderGlow == 1f,
+        "invalid persisted colors and out-of-range minimap values normalize before native patching");
     string measuredCamera = Path.Combine(data, "CameraZoom", "config"); Directory.CreateDirectory(measuredCamera);
     File.WriteAllText(Path.Combine(measuredCamera, "settings.txt"), "{\"LastDistance\":1.75}");
     plugin.GetType().GetMethod("UseSavedCamera", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(plugin, null);
     Check(plugin.Settings.CameraDistance == 1.75f && plugin.Settings.PermanentCamera, "production UI imports the last measured camera distance without a live game");
+    string migrationGame = Path.Combine(data, "minimap-settings-migration");
+    CreateGame(migrationGame, payloads, false);
+    CorpseArchive.Apply(migrationGame, source, cache, default, () => { });
+    var migrationOptions = visuals with { HideCorpses = false, CameraDistance = null };
+    CorpseArchive.ApplyVisuals(migrationGame, source, cache, migrationOptions, default, () => { }, minimapOnly: true);
+    File.WriteAllText(Path.Combine(uiRoot, "config", "settings.json"), System.Text.Json.JsonSerializer.Serialize(new {
+        GameDirectory = migrationGame, HideCorpses = true, MapBorders = false, BorderColor = new[] { 0f, 0f, 0f, 0f }
+    }));
+    plugin.OnEnable(false);
+    Check(plugin.Settings.MapBorders && plugin.Settings.HideCorpses && plugin.Settings.ExploredColor.SequenceEqual(migrationOptions.ExploredColor) &&
+        plugin.Settings.ExploringGlow == migrationOptions.ExploringGlow, "first upgrade imports the prepared minimap settings without changing corpse preferences");
+    plugin.Settings.ExploredColor = [0.8f, 0.7f, 0.6f, 0.5f]; plugin.SaveSettings(); plugin.OnEnable(false);
+    Check(plugin.Settings.ExploredColor[0] == 0.8f, "subsequent restarts preserve edited minimap preferences instead of overwriting them with the applied patch");
     ExileCenter.Core.GHSettings.UiLanguage = ExileCenter.Localization.OverlayLanguage.French;
     for (int frame = 0; frame < 3; frame++)
     {
@@ -346,12 +509,12 @@ sealed class LegacyBackupContext(string directory) : System.Runtime.Loader.Assem
 
 static class ShaderCompiler
 {
-    internal static void Compile(byte[] bytes)
+    internal static void Compile(byte[] bytes, string entry = "BlendMinimap")
     {
-        string shader = "#define CBUFFER_BEGIN(name) cbuffer name {\n#define CBUFFER_END };\n#define TEXTURE2D_DECL(name) Texture2D name\n#define SAMPLE_TEX2D(tex,samp,uv) tex.Sample(samp,uv)\n#define PIXEL_RETURN_SEMANTIC SV_Target\nSamplerState SamplerLinearClampOffsetNoBias;\n" + Encoding.UTF8.GetString(bytes)
+        string shader = "#define CBUFFER_BEGIN(name) cbuffer name {\n#define CBUFFER_END };\n#define TEXTURE2D_DECL(name) Texture2D name\n#define SAMPLE_TEX2D(tex,samp,uv) tex.Sample(samp,uv)\n#define PIXEL_RETURN_SEMANTIC SV_Target\nSamplerState SamplerLinearClampOffsetNoBias;\nSamplerState SamplerLinearClamp;\n" + Encoding.UTF8.GetString(bytes)
             .Replace("#include \"Shaders/Include/OETF.hlsl\"", "float4 OutputSDR(float4 color, float scale) { return color; }");
         byte[] source = Encoding.UTF8.GetBytes(shader);
-        int result = D3DCompile(source, (nuint)source.Length, "minimap", IntPtr.Zero, IntPtr.Zero, "BlendMinimap", "ps_5_0", 0, 0, out var compiled, out var errors);
+        int result = D3DCompile(source, (nuint)source.Length, "minimap", IntPtr.Zero, IntPtr.Zero, entry, "ps_5_0", 0, 0, out var compiled, out var errors);
         try
         {
             if (result < 0) throw new InvalidDataException("HLSL compilation failed: " + (errors == null ? result.ToString("X8") : Marshal.PtrToStringAnsi(errors.GetBufferPointer(), checked((int)errors.GetBufferSize()))));

@@ -30,6 +30,7 @@ internal static class CorpseArchive
         public int Files { get; set; }
         // Older manifests refer to bundles already indexed by the game; retain their path for restoration.
         public string BundleDirectory { get; set; } = "GameHelperCadavres";
+        public PermanentVisualOptions? MinimapOptions { get; set; }
     }
 
     internal static bool GameRunning()
@@ -51,8 +52,11 @@ internal static class CorpseArchive
         Action? guard = null, Action<string>? progress = null)
         => ApplyVisuals(directory, nativePath, nativeCache, new PermanentVisualOptions(), token, guard, progress);
 
+    internal static PermanentVisualOptions? ReadMinimapOptions(string directory) =>
+        LoadState(Safe(Path.GetFullPath(directory), ".ExileCenterMinimap"))?.MinimapOptions;
+
     internal static string ApplyVisuals(string directory, string nativePath, string nativeCache, PermanentVisualOptions options,
-        CancellationToken token, Action? guard = null, Action<string>? progress = null)
+        CancellationToken token, Action? guard = null, Action<string>? progress = null, bool minimapOnly = false)
     {
         options.Validate();
         guard ??= EnsureClosed;
@@ -65,7 +69,11 @@ internal static class CorpseArchive
         Check();
         string root = Path.GetFullPath(directory.Trim().Trim('"'));
         string relative = ArchivePath(root), archive = Safe(root, relative);
-        string storage = StoragePath(root);
+        string storage = minimapOnly ? Safe(root, ".ExileCenterMinimap") : StoragePath(root);
+        if (minimapOnly && (options.HideCorpses || options.CameraDistance != null || !options.MapBorders))
+            throw new InvalidDataException("La sauvegarde minimap ne peut contenir que les deux shaders de carte.");
+        if (!minimapOnly && LoadState(Safe(root, ".ExileCenterMinimap")) != null)
+            throw new InvalidOperationException("Restaurez uniquement la minimap avant de modifier les autres patches.");
         if (Directory.Exists(storage) && (File.GetAttributes(storage) & FileAttributes.ReparsePoint) != 0)
             throw new IOException("Le dossier de sauvegarde ne doit pas être une jonction.");
         if (LoadState(storage) != null) throw new InvalidOperationException("Une sauvegarde de patch existe déjà. Restaurez-la avant de réappliquer le patch.");
@@ -73,7 +81,8 @@ internal static class CorpseArchive
         bool ggpk = relative == "Content.ggpk";
         string id = Guid.NewGuid().ToString("N"), job = Safe(storage, id);
         string staged = Safe(job, "prepared.bin"), backup = Safe(job, "original.bin");
-        string bundleRelative = "ExileCenterCadavres/" + id + ".bundle.bin";
+        string bundleDirectory = minimapOnly ? "ExileCenterMinimap" : "ExileCenterCadavres";
+        string bundleRelative = bundleDirectory + "/" + id + ".bundle.bin";
         string stageBundle = Safe(job, bundleRelative), installedBundle = Safe(root, "Bundles2/" + bundleRelative);
         var drive = new DriveInfo(Path.GetPathRoot(archive)!);
         if (drive.AvailableFreeSpace < new FileInfo(archive).Length + 256L * 1024 * 1024)
@@ -87,6 +96,8 @@ internal static class CorpseArchive
             // Keep the original locked against writers while preparing its replacement.
             using var original = new FileStream(archive, FileMode.Open, FileAccess.Read, FileShare.Read);
             string originalHash = CopyHash(original, staged, Check);
+            if (minimapOnly && LoadState(StoragePath(root)) is { } corpseState && originalHash != corpseState.PatchedHash)
+                throw new InvalidDataException("L'archive ne correspond plus au patch de cadavres enregistré. Minimap annulée pour préserver les changements existants.");
             var changes = new List<(string Path, byte[] Bytes)>();
             progress?.Invoke("Analyse des ressources sélectionnées…");
             using (var session = Open(staged, ggpk, Path.Combine(root, "Bundles2"), job, true))
@@ -123,7 +134,10 @@ internal static class CorpseArchive
                 if (options.CameraDistance is float distance)
                     AddResource("metadata/characters/character.ot", bytes => CorpseScript.PatchCamera(bytes, distance));
                 if (options.MapBorders)
+                {
                     AddResource("shaders/minimap_blending_pixel.hlsl", bytes => CorpseScript.PatchMinimap(bytes, options));
+                    AddResource("shaders/minimap_visibility_pixel.hlsl", bytes => CorpseScript.PatchMinimapVisibility(bytes, options));
+                }
                 if (changes.Sum(c => (long)c.Bytes.Length) > 128 * 1024 * 1024)
                     throw new InvalidDataException("Taille du patch inattendue : modification annulée.");
                 progress?.Invoke("Préparation de " + changes.Count + " fichiers, sans changement des points de vie…");
@@ -150,7 +164,8 @@ internal static class CorpseArchive
                         throw new InvalidDataException("Échec de vérification : " + change.Path);
                 }
             Flush(staged);
-            var state = new State { Id = id, Archive = relative, OriginalHash = originalHash, PatchedHash = Hash(staged, Check), Files = changes.Count, BundleDirectory = "ExileCenterCadavres" };
+            var state = new State { Id = id, Archive = relative, OriginalHash = originalHash, PatchedHash = Hash(staged, Check), Files = changes.Count, BundleDirectory = bundleDirectory,
+                MinimapOptions = minimapOnly ? options : null };
             Check();
             if (!ggpk)
             {
@@ -179,13 +194,18 @@ internal static class CorpseArchive
         }
     }
 
-    internal static string Restore(string directory, CancellationToken token, Action? guard = null)
+    internal static string Restore(string directory, CancellationToken token, Action? guard = null, bool minimapOnly = false)
     {
         guard ??= EnsureClosed;
         void Check() { token.ThrowIfCancellationRequested(); guard(); }
         Check();
-        string root = Path.GetFullPath(directory.Trim().Trim('"')), storage = StoragePath(root);
+        string root = Path.GetFullPath(directory.Trim().Trim('"'));
+        if (!minimapOnly && LoadState(Safe(root, ".ExileCenterMinimap")) != null)
+            throw new InvalidOperationException("Restaurez uniquement la minimap avant de restaurer les autres patches.");
+        string storage = minimapOnly ? Safe(root, ".ExileCenterMinimap") : StoragePath(root);
         State state = LoadState(storage) ?? throw new FileNotFoundException("Aucune sauvegarde CorpseCleaner dans ce dossier.");
+        if (minimapOnly != (state.BundleDirectory == "ExileCenterMinimap"))
+            throw new InvalidDataException("La sauvegarde ne correspond pas au type de patch demandé.");
         string archive = Safe(root, state.Archive), backup = Safe(storage, state.Id + "/original.bin");
         using var current = new FileStream(archive, FileMode.Open, FileAccess.Read, FileShare.Read);
         string currentHash = Hash(current, Check);
@@ -242,7 +262,7 @@ internal static class CorpseArchive
         var state = JsonSerializer.Deserialize<State>(File.ReadAllText(path));
         if (state == null || !System.Text.RegularExpressions.Regex.IsMatch(state.Id, "^[a-f0-9]{32}$") ||
             state.Archive is not ("Content.ggpk" or "Bundles2/_.index.bin") ||
-            state.BundleDirectory is not ("ExileCenterCadavres" or "GameHelperCadavres") ||
+            state.BundleDirectory is not ("ExileCenterCadavres" or "GameHelperCadavres" or "ExileCenterMinimap") ||
             state.OriginalHash.Length != 64 || state.PatchedHash.Length != 64)
             throw new InvalidDataException("Manifest de sauvegarde invalide.");
         return state;
@@ -337,7 +357,8 @@ internal static class CorpseArchive
         }
         public Stream CreateBundle(string path)
         {
-            if (!path.StartsWith("ExileCenterCadavres/", StringComparison.Ordinal)) throw new InvalidDataException("Création de bundle hors du patch refusée.");
+            if (!path.StartsWith("ExileCenterCadavres/", StringComparison.Ordinal) &&
+                !path.StartsWith("ExileCenterMinimap/", StringComparison.Ordinal)) throw new InvalidDataException("Création de bundle hors du patch refusée.");
             string destination = Safe(stage, path); Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             return new FileStream(destination, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
         }
