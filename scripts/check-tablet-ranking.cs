@@ -1245,6 +1245,77 @@ internal static class TabletRankingCheck
         checks++;
     }
 
+    private static void CheckRadarLiveColor(string root)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(root, "Plugins", "Radar", "Radar.dll"));
+        var type = assembly.GetType("Radar.Radar", true);
+        var radar = Activator.CreateInstance(type);
+        var settings = type.GetField("Settings").GetValue(radar);
+        var settingsType = settings.GetType();
+        var textureField = type.GetField("walkableMapTexture", flags);
+        var dimensionsField = type.GetField("walkableMapDimension", flags);
+        var draw = type.GetMethod("DrawLargeMap", flags);
+        var texture = new IntPtr(12345);
+        textureField.SetValue(radar, texture);
+        dimensionsField.SetValue(radar, new Vector2(100, 100));
+        assembly.GetType("Radar.Helper", true).GetProperty("DiagonalLength").SetValue(null, 1000d);
+        assembly.GetType("Radar.Helper", true).GetProperty("Scale").SetValue(null, 1f);
+        var previous = ImGuiNET.ImGui.GetCurrentContext();
+        var context = ImGuiNET.ImGui.CreateContext();
+        try
+        {
+            var io = ImGuiNET.ImGui.GetIO();
+            unsafe { io.NativePtr->IniFilename = null; }
+            io.DisplaySize = new Vector2(800, 600);
+            io.DeltaTime = 1f / 60;
+            io.Fonts.AddFontDefault();
+            io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels, out int width, out int height, out int bytes);
+            io.Fonts.SetTexID(new IntPtr(1));
+            var colors = new[] { new Vector4(1, 0, 0, 1), new Vector4(0, 1, 0, 1),
+                new Vector4(0, 0, 1, .25f), Vector4.Zero, new Vector4(.4f, .2f, .8f, .75f) };
+            foreach (var mode in new[] { 0, 1, 2 }) // Background, large-map window, mini-map window.
+            {
+                settingsType.GetField("DrawMapInCull").SetValue(settings, mode == 1);
+                foreach (bool enabled in new[] { true, false, true })
+                foreach (var color in colors)
+                {
+                    settingsType.GetField("DrawWalkableMap").SetValue(settings, enabled);
+                    settingsType.GetField("WalkableMapColor").SetValue(settings, color);
+                    ImGuiNET.ImGui.NewFrame();
+                    ImGuiNET.ImGui.SetNextWindowPos(Vector2.Zero);
+                    ImGuiNET.ImGui.SetNextWindowSize(io.DisplaySize);
+                    ImGuiNET.ImGui.Begin("Radar fixture", ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                    draw.Invoke(radar, new object[] { new Vector2(400, 300), Vector2.Zero, 0f, mode == 2 });
+                    ImGuiNET.ImGui.End();
+                    ImGuiNET.ImGui.Render();
+                    int vertices = 0;
+                    var data = ImGuiNET.ImGui.GetDrawData();
+                    for (int i = 0; i < data.CmdListsCount; i++)
+                    {
+                        var list = data.CmdLists[i];
+                        for (int j = 0; j < list.CmdBuffer.Size; j++)
+                        {
+                            var command = list.CmdBuffer[j];
+                            if (command.TextureId != texture) continue;
+                            for (uint k = 0; k < command.ElemCount; k++)
+                            {
+                                var vertex = list.VtxBuffer[(int)command.VtxOffset + list.IdxBuffer[(int)(command.IdxOffset + k)]];
+                                Check(vertex.col == ImGuiNET.ImGui.ColorConvertFloat4ToU32(color), "Radar uses the current RGBA on every draw, including after re-enabling");
+                                Check((vertex.uv.X == 0 || vertex.uv.X == 1) && (vertex.uv.Y == 0 || vertex.uv.Y == 1), "Radar keeps all four terrain texture corners");
+                                vertices++;
+                            }
+                        }
+                    }
+                    Check(vertices == (enabled && color.W > 0 ? 6 : 0), "Radar updates color, transparency and visibility without a restart in each draw list");
+                    Check((IntPtr)textureField.GetValue(radar) == texture && (Vector2)dimensionsField.GetValue(radar) == new Vector2(100, 100), "Changing Radar RGBA preserves the cached terrain texture and dimensions");
+                    Check((Vector4)settingsType.GetField("WalkableMapColor").GetValue(settings) == color, "Drawing Radar preserves the user's RGBA setting");
+                }
+            }
+        }
+        finally { ImGuiNET.ImGui.DestroyContext(context); ImGuiNET.ImGui.SetCurrentContext(previous); }
+    }
+
     public static int Main(string[] args)
     {
         try
@@ -1256,6 +1327,11 @@ internal static class TabletRankingCheck
                 if (!File.Exists(file)) file = Path.Combine(root, "Plugins", "StashUtility", name.Name + ".dll");
                 return File.Exists(file) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(file) : null;
             };
+            if (args.Length > 1 && args[1] == "--radar-only")
+            {
+                CheckRadarLiveColor(root);
+                Console.WriteLine(checks + " Radar live-color checks passed; no game process or OS input."); return 0;
+            }
             if (args.Length > 1 && args[1] == "--craft-only")
             {
                 CheckWaystoneCraft(root); CheckWaystoneNavigation(root);

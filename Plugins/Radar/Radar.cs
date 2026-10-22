@@ -199,13 +199,7 @@ namespace Radar
                         }
                     }
                     
-                    if (ImGui.ColorEdit4(this.PluginText.Label("settings.drawn_map_color", "Drawn Map Color", "RadarDrawnMapColor"), ref this.Settings.WalkableMapColor))
-                    {
-                        if (this.walkableMapTexture != IntPtr.Zero)
-                        {
-                            this.ReloadMapTexture();
-                        }
-                    }
+                    ImGui.ColorEdit4(this.PluginText.Label("settings.drawn_map_color", "Drawn Map Color", "RadarDrawnMapColor"), ref this.Settings.WalkableMapColor);
                 }),
                 ("routes", "Routes", () =>
                 {
@@ -633,13 +627,17 @@ namespace Radar
             p3 += mapCenter;
             p4 += mapCenter;
 
+            // Keep the terrain mask cached; apply the current RGBA at draw time.
+            var color = ImGui.ColorConvertFloat4ToU32(this.Settings.WalkableMapColor);
             if (forceWindowDrawList || this.Settings.DrawMapInCull)
             {
-                ImGui.GetWindowDrawList().AddImageQuad(this.walkableMapTexture, p1, p2, p3, p4);
+                ImGui.GetWindowDrawList().AddImageQuad(this.walkableMapTexture, p1, p2, p3, p4,
+                    Vector2.Zero, Vector2.UnitX, Vector2.One, Vector2.UnitY, color);
             }
             else
             {
-                ImGui.GetBackgroundDrawList().AddImageQuad(this.walkableMapTexture, p1, p2, p3, p4);
+                ImGui.GetBackgroundDrawList().AddImageQuad(this.walkableMapTexture, p1, p2, p3, p4,
+                    Vector2.Zero, Vector2.UnitX, Vector2.One, Vector2.UnitY, color);
             }
         }
 
@@ -2551,7 +2549,7 @@ namespace Radar
 
                     if (mapEdgeDetector.IsInsideMapBoundary(imageX, imageY))
                     {
-                        image[imageX, imageY] = new Rgba32(this.Settings.WalkableMapColor);
+                        image[imageX, imageY] = new Rgba32(255, 255, 255, 255);
                     }
                 }
             });
