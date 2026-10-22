@@ -50,14 +50,21 @@ var reader = Task.Run(() =>
 {
     while (!stop.IsCancellationRequested)
     {
-        using var stream = new FileStream(atomic, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        using var memory = new MemoryStream(); stream.CopyTo(memory);
-        byte[] bytes = memory.ToArray();
-        if (!bytes.SequenceEqual(first) && !bytes.SequenceEqual(second)) throw new Exception("partial atomic config visible");
+        try
+        {
+            using var stream = new FileStream(atomic, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var memory = new MemoryStream(); stream.CopyTo(memory);
+            byte[] bytes = memory.ToArray();
+            if (!bytes.SequenceEqual(first) && !bytes.SequenceEqual(second)) throw new Exception("partial atomic config visible");
+        }
+        // ReplaceFile can briefly deny opens. The native reader deliberately
+        // retains its last valid pair and retries on its next poll in this case.
+        catch (IOException ex) when ((ex.HResult & 0xffff) is 32 or 33) { }
     }
 });
 try { for (int i = 0; i < 200; i++) Call("AtomicWrite", atomic, i % 2 == 0 ? second : first); }
 finally { stop.Cancel(); reader.GetAwaiter().GetResult(); }
+Check(File.ReadAllBytes(atomic).SequenceEqual(first), "latest atomic config readable after replacements");
 Check(!Directory.EnumerateFiles(root, "*.tmp").Any(), "atomic config has no temporary leftovers");
 File.WriteAllText(Path.Combine(root, "PathOfExileSteam.exe"), "fixture-only");
 string executableHash = Hash(Path.Combine(root, "PathOfExileSteam.exe"));

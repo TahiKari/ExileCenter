@@ -219,6 +219,15 @@ foreach (bool ggpk in new[] { false, true })
     }
     CorpseArchive.Restore(game, default, () => { });
     Check(Hash(archive) == original, "map-only restoration is exact " + ggpk);
+    string cameraOwner = Path.Combine(game, "ExileCenter.Camera.owner.json");
+    File.WriteAllText(cameraOwner, "{}");
+    Reject(() => CorpseArchive.ApplyVisuals(game, source, cache, visuals, default, () => { }), "asset camera refuses autonomous camera conflict " + ggpk);
+    Check(Hash(archive) == original, "camera conflict leaves archive byte-identical " + ggpk);
+    CorpseArchive.Apply(game, source, cache, default, () => { });
+    using (var state = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(game, ".ExileCenterCadavres", "state.json"))))
+        Check(state.RootElement.GetProperty("CameraDistance").ValueKind == System.Text.Json.JsonValueKind.Null, "corpse-only patch records absent asset camera " + ggpk);
+    CorpseArchive.Restore(game, default, () => { });
+    Check(Hash(archive) == original && File.Exists(cameraOwner), "corpse restoration preserves autonomous camera " + ggpk);
 }
 if (legacyPackage != null)
 {
