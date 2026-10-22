@@ -23,6 +23,10 @@ Check(patched.Contains("EnableRendering();  KeepRevive(); DisableRendering();"),
 Check(CorpseScript.Patch(Utf16(patched), true) == null, "patch idempotence");
 Reject(() => CorpseScript.Patch(Utf16("Life {"), true), "malformed script rejected");
 Reject(() => CorpseScript.Patch(Utf16("Life {} Life {}"), true), "duplicate Life blocks rejected");
+Check(CorpseScript.Patch(Utf16("Life { corpse_usable = false prevent_corpse_sinking = true } Actor {} Life { corpse_usable = false }"), false) == null, "official repeated child Life blocks without events stay byte-identical");
+var repeated = Encoding.Unicode.GetString(CorpseScript.Patch(Utf16("Life { on_death = { FirstDeath(); } } Actor {} Life { on_death = { SecondDeath(); } }"), false)!);
+Check(repeated.Contains("FirstDeath();") && repeated.Contains("SecondDeath();") && System.Text.RegularExpressions.Regex.Matches(repeated, "this.gh_corpse_hidden = true").Count == 2, "events in both child Life blocks preserved and patched");
+Reject(() => CorpseScript.Patch(Utf16("Life { on_death = {} on_death = {} }"), false), "ambiguous duplicate event within one block still rejected");
 Reject(() => CorpseScript.Patch(Utf16("Life { on_death={this.ef_corpse_dead=true;} }"), true), "existing Exile Forge corpse patch rejected");
 Check(CorpseScript.Patch(Utf16("Actor {} // Life {\r\n"), false) == null, "comments are ignored");
 Check(CorpseScript.Patch(Utf16("Life { label=\"}\\\"{\" /* } */ }"), true) != null, "quoted and commented braces handled");
@@ -34,7 +38,10 @@ Reject(() => CorpseArchive.Restore("missing", default, () => throw new InvalidOp
 
 string source = args[0], cache = Path.GetFullPath("native");
 NativeOodle.Ensure(source, cache);
-Console.WriteLine("Native Oodle ready; Exile Forge was not executed.");
+Check(NativeOodle.FindSource("missing/Exile.Forge.exe", cache) == Path.Combine(cache, Hash(source), "oo2core.dll"), "old executable setting migrates using only the plugin cache");
+Reject(() => NativeOodle.Ensure("missing/Exile.Forge.exe", cache), "executable sources rejected without opening them");
+NativeOodle.Ensure("", cache);
+Console.WriteLine("Native Oodle ready from an independent DLL.");
 string? legacyPackage = args.Length == 3 && args[1] == "--legacy-package" ? args[2] : null;
 if (args.Length > 1 && legacyPackage == null)
 {
@@ -43,6 +50,24 @@ if (args.Length > 1 && legacyPackage == null)
     string before = Hash(indexPath);
     using var input = new FileStream(indexPath, FileMode.Open, FileAccess.Read, FileShare.Read);
     using var index = new ArchiveIndex(input, true, false, new ReadFactory(Path.Combine(game, "Bundles2")));
+    if (args.Length > 2 && args[2] == "--scan-monsters")
+    {
+        index.ParsePaths();
+        int scanned = 0, modified = 0;
+        foreach (var group in index.Files.Values.Where(f => f.Path != null && f.Path.StartsWith("metadata/monsters/", StringComparison.OrdinalIgnoreCase) && f.Path.EndsWith(".ot", StringComparison.OrdinalIgnoreCase)).GroupBy(f => f.BundleRecord))
+        {
+            using var bundle = new ReadFactory(Path.Combine(game, "Bundles2")).GetBundle(group.Key);
+            foreach (var asset in group)
+            {
+                try { if (CorpseScript.Patch(asset.Read(bundle).ToArray(), asset.Path.Equals(Base, StringComparison.OrdinalIgnoreCase)) != null) modified++; }
+                catch (Exception ex) { throw new InvalidDataException(asset.Path + ": " + ex.Message, ex); }
+                scanned++;
+            }
+        }
+        Check(scanned > 0 && modified > 0, $"read-only preparation of {scanned} real monster scripts ({modified} changes)");
+        Check(Hash(indexPath) == before, "real game index unchanged after full monster preparation");
+        return;
+    }
     if (args.Length > 2 && args[2] == "--portals")
     {
         index.ParsePaths();
@@ -126,6 +151,10 @@ try
     string uiRoot = Path.Combine(data, "plugin"); Directory.CreateDirectory(Path.Combine(uiRoot, "Localization"));
     foreach (string language in new[] { "fr-FR", "en-US" }) File.Copy(Path.Combine("../../Plugins/CorpseCleaner/Localization", language + ".json"), Path.Combine(uiRoot, "Localization", language + ".json"));
     var plugin = new CorpseCleaner.CorpseCleanerCore(); plugin.SetPluginDllLocation(uiRoot); plugin.OnEnable(false);
+    string pluginCache = Path.Combine(uiRoot, "config", "native", Hash(source)); Directory.CreateDirectory(pluginCache);
+    File.Copy(source, Path.Combine(pluginCache, "oo2core.dll"));
+    plugin.Settings.OodleSource = "missing/Exile.Forge.exe"; plugin.SaveSettings(); plugin.OnEnable(false);
+    Check(plugin.Settings.OodleSource == Path.Combine(pluginCache, "oo2core.dll"), "production UI migrates an old setting without Exile Forge");
     plugin.Settings.GameDirectory = Path.Combine(data, "steam");
     ExileCenter.Core.GHSettings.UiLanguage = ExileCenter.Localization.OverlayLanguage.French;
     for (int frame = 0; frame < 3; frame++)

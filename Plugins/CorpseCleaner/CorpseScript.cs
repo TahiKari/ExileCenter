@@ -27,7 +27,7 @@ internal static class CorpseScript
             throw new InvalidDataException("Un patch de cadavres Exile Forge est déjà présent. Restaurez cette option dans Exile Forge avant d'utiliser CorpseCleaner.");
         string mask = Mask(text);
         var blocks = Life.Matches(mask).Where(m => Depth(mask, m.Index) == 0).ToArray();
-        if (blocks.Length > 1) throw new InvalidDataException("Plusieurs blocs Life : modification annulée.");
+        if (root && blocks.Length > 1) throw new InvalidDataException("Plusieurs blocs Life dans le script de base : modification annulée.");
         if (root && blocks.Length == 0) throw new InvalidDataException("Le bloc Life du script de base est absent.");
         // Preserve existing enable calls for living/uninitialized entities, while
         // preventing later animation/state callbacks from re-enabling a corpse.
@@ -41,22 +41,26 @@ internal static class CorpseScript
         {
             return enabling.Length == 0 ? null : Utf16.GetBytes(text);
         }
-        int open = blocks[0].Index + blocks[0].Length - 1, close = Closing(mask, open);
         var edits = new List<(int Position, string Text)>();
-        foreach (var item in Events)
+        // Official child scripts may repeat the component; preserve every block and its events.
+        foreach (var block in blocks)
         {
-            var pattern = new Regex(@"\b" + item.Name + @"\s*=\s*\{", RegexOptions.CultureInvariant);
-            var matches = pattern.Matches(mask, open + 1).Where(m => m.Index < close && Depth(mask, m.Index) == 1).ToArray();
-            if (matches.Length > 1) throw new InvalidDataException("Événement Life dupliqué : modification annulée.");
-            if (matches.Length == 1)
+            int open = block.Index + block.Length - 1, close = Closing(mask, open);
+            foreach (var item in Events)
             {
-                int end = Closing(mask, matches[0].Index + matches[0].Length - 1);
-                if (end > close) throw new InvalidDataException("Événement Life mal formé.");
-                int begin = matches[0].Index + matches[0].Length;
-                edits.Add((item.Name == "on_spawned_dead" ? end : begin, " " + item.Script + " "));
+                var pattern = new Regex(@"\b" + item.Name + @"\s*=\s*\{", RegexOptions.CultureInvariant);
+                var matches = pattern.Matches(mask, open + 1).Where(m => m.Index < close && Depth(mask, m.Index) == 1).ToArray();
+                if (matches.Length > 1) throw new InvalidDataException("Événement Life dupliqué : modification annulée.");
+                if (matches.Length == 1)
+                {
+                    int end = Closing(mask, matches[0].Index + matches[0].Length - 1);
+                    if (end > close) throw new InvalidDataException("Événement Life mal formé.");
+                    int begin = matches[0].Index + matches[0].Length;
+                    edits.Add((item.Name == "on_spawned_dead" ? end : begin, " " + item.Script + " "));
+                }
+                else if (root)
+                    edits.Add((close, "\r\n\t" + item.Name + " = { " + item.Script + " }\r\n"));
             }
-            else if (root)
-                edits.Add((close, "\r\n\t" + item.Name + " = { " + item.Script + " }\r\n"));
         }
         if (edits.Count == 0) return enabling.Length == 0 ? null : Utf16.GetBytes(text);
         foreach (var edit in edits.OrderByDescending(e => e.Position)) text = text.Insert(edit.Position, edit.Text);

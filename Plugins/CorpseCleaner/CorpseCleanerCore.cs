@@ -25,11 +25,12 @@ public sealed class CorpseCleanerCore : PCore<CorpseCleanerSettings>
     {
         try { if (File.Exists(SettingsPath)) Settings = JsonSerializer.Deserialize<CorpseCleanerSettings>(File.ReadAllText(SettingsPath)) ?? new(); }
         catch (Exception ex) { status = ex.Message; }
-        if (Settings.OodleSource.Length == 0)
+        try
         {
-            string known = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "assistant_downloader", "Exile forge", "Exile.Forge.exe");
-            if (File.Exists(known)) Settings.OodleSource = known;
+            string native = NativeOodle.FindSource(Settings.OodleSource, Path.Combine(DllDirectory, "config", "native"));
+            if (native != Settings.OodleSource) { Settings.OodleSource = native; SaveSettings(); }
         }
+        catch (Exception ex) { status = ex.Message; }
         nextCheck = DateTime.MinValue;
     }
 
@@ -77,9 +78,9 @@ public sealed class CorpseCleanerCore : PCore<CorpseCleanerSettings>
         string directory = Settings.GameDirectory, native = Settings.OodleSource;
         ImGui.BeginDisabled(operation != null);
         bool changed = ImGui.InputText(PluginText.Label("directory", "PoE 2 folder", "GameDirectory"), ref directory, 1024);
-        changed |= ImGui.InputText(PluginText.Label("native", "oo2core.dll or Exile Forge executable", "OodleSource"), ref native, 1024);
+        changed |= ImGui.InputText(PluginText.Label("native", "Oodle library (oo2core.dll)", "OodleSource"), ref native, 1024);
         if (changed) { Settings.GameDirectory = directory; Settings.OodleSource = native; SaveSettings(); }
-        ImGui.TextWrapped(PluginText.T("native_help", "The Oodle library is supplied by your own installation. Selecting Exile Forge extracts only oo2core.dll; its executable is never launched."));
+        ImGui.TextWrapped(PluginText.T("native_help", "Select a compatible oo2core.dll. The plugin reuses its own verified cached library when available. No third-party executable is read or launched."));
         if (gameRunning) ImGui.TextWrapped(PluginText.T("close_game", "PoE is open. Close the game to apply or restore this patch. There is no instant in-game toggle."));
         ImGui.TextWrapped(PluginText.T("backup", "The original archive is kept in .ExileCenterCadavres inside the game folder. Standalone installations need enough free space for a full copy of Content.ggpk. Restoration is refused if a game update or another tool has changed the patched archive."));
         ImGui.BeginDisabled(gameRunning || directory.Length == 0);
