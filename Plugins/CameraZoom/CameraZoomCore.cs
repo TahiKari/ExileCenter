@@ -17,11 +17,13 @@ namespace CameraZoom
         public bool Enabled { get; set; }
         public float MinimumZoom { get; set; } = 0f;
         public float MaximumZoom { get; set; } = 3f;
+        public float? LastDistance { get; set; }
 
         internal void Normalize()
         {
             MinimumZoom = Math.Clamp(float.IsFinite(MinimumZoom) ? MinimumZoom : 0f, 0f, 9.99f);
             MaximumZoom = Math.Clamp(float.IsFinite(MaximumZoom) ? MaximumZoom : 3f, MinimumZoom + 0.01f, 10f);
+            if (LastDistance is float distance && (!float.IsFinite(distance) || distance < 0f || distance > 10f)) LastDistance = null;
         }
     }
 
@@ -59,6 +61,7 @@ namespace CameraZoom
         {
             lock (gate)
             {
+                if (Settings.LastDistance.HasValue) SaveSettings();
                 if (!TryRestore()) return; // Keep the exit recovery handler if restoration failed.
                 Close();
                 if (exitSubscribed) { AppDomain.CurrentDomain.ProcessExit -= OnExit; exitSubscribed = false; }
@@ -205,10 +208,11 @@ namespace CameraZoom
                 throw new InvalidOperationException(PluginText.T("invalid_distance", "Invalid camera distance. Extended zoom has been stopped."));
             Settings.Normalize();
             float limited = Math.Clamp(current, Settings.MinimumZoom, Settings.MaximumZoom);
-            if (limited == current) return;
+            if (limited == current) { Settings.LastDistance = current; return; }
             if (BitConverter.ToInt64(Read(state + 0x368, 8), 0) != camera.ToInt64()) return;
             if (!WriteProcessMemory(handle, camera + 0x528, BitConverter.GetBytes(limited), 4, out nuint written) || written != 4)
                 throw new Win32Exception(Marshal.GetLastWin32Error());
+            Settings.LastDistance = limited;
         }
 
         private void Detect()
@@ -359,7 +363,7 @@ namespace CameraZoom
 
         private void OnExit(object? sender, EventArgs args)
         {
-            lock (gate) { if (TryRestore()) Close(); }
+            lock (gate) { if (Settings.LastDistance.HasValue) SaveSettings(); if (TryRestore()) Close(); }
         }
 
         [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);

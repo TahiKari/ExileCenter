@@ -154,11 +154,16 @@ internal static partial class UpdateChecks
         type.GetMethod("DrawUI")!.Invoke(first, null);
         Check(Attempt(first) == 0 && (IntPtr)type.GetField("handle", PrivateInstance)!.GetValue(first)! == IntPtr.Zero,
             "enabled zoom waits for the game without opening or modifying a process");
+        Settings(first).GetType().GetProperty("LastDistance")!.SetValue(Settings(first), 1.25f);
+        type.GetMethod("OnExit", PrivateInstance)!.Invoke(first, new object?[] { null, EventArgs.Empty });
+        using (var measured = JsonDocument.Parse(File.ReadAllText(path)))
+            Check(measured.RootElement.GetProperty("LastDistance").GetSingle() == 1.25f, "normal exit saves the last measured camera distance without a game process");
         type.GetMethod("OnDisable")!.Invoke(first, null);
         var restarted = Create();
         try
         {
             Check(Enabled(restarted), "restart or update restores the enabled preference");
+            Check((float?)Settings(restarted).GetType().GetProperty("LastDistance")!.GetValue(Settings(restarted)) == 1.25f, "last measured distance survives a restart for permanent export");
             var resume = type.GetMethod("ResumeIfRequested", PrivateInstance)!;
             resume.Invoke(restarted, new object[] { 77u, false });
             Check(Attempt(restarted) == 0, "automatic activation waits until the character is in game");

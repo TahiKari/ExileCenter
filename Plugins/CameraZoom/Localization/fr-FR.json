@@ -1,6 +1,6 @@
 {
     "plugin.description":  "Déverrouille la limite de dézoom de la caméra, avec restauration du réglage d’origine.",
-    "help":  "Active la caméra étendue, choisis tes limites, puis utilise la molette dans le jeu. L’activation et les distances sont sauvegardées après une relance ou une mise à jour d’ExileCenter. Le zoom est réactivé à l’entrée en jeu après vérification de compatibilité. Désactive cette option pour rétablir les limites du jeu. La modification est aussi retirée à la fermeture normale d’ExileCenter.",
+    "help":  "Active la caméra étendue, choisis tes limites, puis utilise la molette dans le jeu. L’activation et les distances sont sauvegardées après une relance ou une mise à jour d’ExileCenter. Le zoom est réactivé à l’entrée en jeu après vérification de compatibilité. Désactive cette option pour rétablir les limites du jeu. La modification mémoire est retirée à la fermeture normale d’ExileCenter ; la dernière distance mesurée est enregistrée. Pour une distance active sans l’application, utilise le module Réglages visuels permanents, jeu fermé.",
     "enable":  "Activer les limites personnalisées de caméra",
     "detect":  "Vérifier la compatibilité du jeu",
     "no_game":  "Ouvre le jeu avant de vérifier la caméra.",

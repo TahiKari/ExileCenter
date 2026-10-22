@@ -1,6 +1,6 @@
 {
     "plugin.description":  "Unlocks the camera zoom-out limit and restores the original setting when disabled.",
-    "help":  "Enable extended camera zoom, choose your limits, then use the game’s mouse wheel. Activation and distances are saved across ExileCenter restarts and updates. Zoom resumes on entering the game after checking compatibility. Disable this option to restore the game limits. The modification is also removed when ExileCenter exits normally.",
+    "help":  "Enable extended camera zoom, choose your limits, then use the game’s mouse wheel. Activation and distances are saved across ExileCenter restarts and updates. Zoom resumes on entering the game after checking compatibility. Disable this option to restore the game limits. The memory patch is removed on normal exit; the last measured distance is saved. For a distance active without the app, use Permanent visual settings with the game closed.",
     "enable":  "Enable custom camera limits",
     "detect":  "Check game compatibility",
     "no_game":  "Open the game before checking the camera.",

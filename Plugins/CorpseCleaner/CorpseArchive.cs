@@ -49,7 +49,12 @@ internal static class CorpseArchive
 
     internal static string Apply(string directory, string nativePath, string nativeCache, CancellationToken token,
         Action? guard = null, Action<string>? progress = null)
+        => ApplyVisuals(directory, nativePath, nativeCache, new PermanentVisualOptions(), token, guard, progress);
+
+    internal static string ApplyVisuals(string directory, string nativePath, string nativeCache, PermanentVisualOptions options,
+        CancellationToken token, Action? guard = null, Action<string>? progress = null)
     {
+        options.Validate();
         guard ??= EnsureClosed;
         DateTime nextGuard = DateTime.MinValue;
         void Check()
@@ -83,16 +88,17 @@ internal static class CorpseArchive
             using var original = new FileStream(archive, FileMode.Open, FileAccess.Read, FileShare.Read);
             string originalHash = CopyHash(original, staged, Check);
             var changes = new List<(string Path, byte[] Bytes)>();
-            progress?.Invoke("Analyse des scripts de monstres…");
+            progress?.Invoke("Analyse des ressources sélectionnées…");
             using (var session = Open(staged, ggpk, Path.Combine(root, "Bundles2"), job, true))
             {
                 var index = session.Index;
                 _ = index.ParsePaths(); // Some game versions contain unresolvable unrelated paths.
-                if (!index.TryGetFile(BaseScript, out var baseline)) throw new InvalidDataException("Script de base des monstres introuvable : cette version n'est pas prise en charge.");
-                var candidates = index.Files.Values.Where(f => f.Path != null &&
+                index.TryGetFile(BaseScript, out var baseline);
+                if (options.HideCorpses && baseline == null) throw new InvalidDataException("Script de base des monstres introuvable : cette version n'est pas prise en charge.");
+                var candidates = index.Files.Values.Where(f => options.HideCorpses && f.Path != null &&
                     f.Path.StartsWith("metadata/monsters/", StringComparison.OrdinalIgnoreCase) &&
                     f.Path.EndsWith(".ot", StringComparison.OrdinalIgnoreCase)).ToList();
-                if (!candidates.Contains(baseline)) candidates.Add(baseline);
+                if (options.HideCorpses && baseline != null && !candidates.Contains(baseline)) candidates.Add(baseline);
                 foreach (var group in candidates.GroupBy(f => f.BundleRecord))
                 {
                     Check();
@@ -105,11 +111,22 @@ internal static class CorpseArchive
                         if (patch != null) changes.Add((asset.Path, patch));
                     }
                 }
-                if (!changes.Any(c => c.Path.Equals(BaseScript, StringComparison.OrdinalIgnoreCase)))
+                if (options.HideCorpses && !changes.Any(c => c.Path.Equals(BaseScript, StringComparison.OrdinalIgnoreCase)))
                     throw new InvalidDataException("Le script de base n'a pas pu être modifié. Aucun fichier du jeu n'a été remplacé.");
+                void AddResource(string path, Func<byte[], byte[]> patch)
+                {
+                    Check();
+                    if (!index.TryGetFile(path, out var asset) || asset.Size > 512 * 1024)
+                        throw new InvalidDataException("Ressource absente ou incompatible : " + path);
+                    changes.Add((path, patch(asset.Read().ToArray())));
+                }
+                if (options.CameraDistance is float distance)
+                    AddResource("metadata/characters/character.ot", bytes => CorpseScript.PatchCamera(bytes, distance));
+                if (options.MapBorders)
+                    AddResource("shaders/minimap_blending_pixel.hlsl", bytes => CorpseScript.PatchMinimap(bytes, options));
                 if (changes.Sum(c => (long)c.Bytes.Length) > 128 * 1024 * 1024)
                     throw new InvalidDataException("Taille du patch inattendue : modification annulée.");
-                progress?.Invoke("Préparation de " + changes.Count + " scripts, sans changement des points de vie…");
+                progress?.Invoke("Préparation de " + changes.Count + " fichiers, sans changement des points de vie…");
                 using var data = new MemoryStream();
                 using (var output = index.NewBundle(bundleRelative[..^11]))
                 {
@@ -148,7 +165,7 @@ internal static class CorpseArchive
             File.Replace(staged, archive, backup); // The game archive is changed only by this atomic operation.
             committed = true;
             File.Move(pending, stateFile);
-            return $"Cadavres masqués au prochain lancement : {changes.Count} scripts. Sauvegarde conservée dans {storage}.";
+            return $"Réglages permanents appliqués : {changes.Count} fichiers. Ils restent actifs sans ExileCenter jusqu'à restauration ou mise à jour du jeu. Sauvegarde conservée dans {storage}.";
         }
         finally
         {

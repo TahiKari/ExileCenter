@@ -13,6 +13,11 @@ static byte[] Utf16(string text) => Encoding.Unicode.GetBytes(text);
 const string Base = "metadata/monsters/monster.ot";
 const string Child = "metadata/monsters/test/test.ot";
 const string Other = "metadata/items/test.ot";
+const string Character = "metadata/characters/character.ot";
+const string Blending = "shaders/minimap_blending_pixel.hlsl";
+const string Visibility = "shaders/minimap_visibility_pixel.hlsl";
+const string CameraScript = "version 3\r\nStats { life = 100 }\r\nPositioned { team = 1 on_initial_position_set = { KeepPosition(); } }\r\nActor { on_start = { KeepCamera(); } }";
+const string MapShader = "float4 walkable_color = float4(1.0f, 1.0f, 1.0f, 0.01f);\nfloat4 walkability_map_color = lerp(walkable_color, float4(0.5f, 0.5f, 1.0f, 0.5f), walkable_to_edge_ratio);\nwalkability_map_color = lerp(walkability_map_color * float4(1.0f, 1.0f, 1.0f, visibility), float4(0.0f, 0.5f, 1.0f, 0.5f), pow(saturate(unexplored_edge), 25.0f));\nfloat max_walkable_fade = lerp(1.0f, 0.3f, walkability_opacity);";
 const string Script = "version 2\r\nextends \"Metadata/Parent\"\r\nLife\r\n{\r\n\tbase_maximum_life = 1000\r\n\ton_death = { KeepDeath(); If( true, () { KeepNested(); } ); }\r\n\ton_spawned_alive = { DisableRendering(); }\r\n\ton_revive = { KeepRevive(); DisableRendering(); }\r\n}\r\nActor\r\n{\r\n\ton_death = { KeepActor(); }\r\n}\r\nStats { armour = 500 }\r\n";
 var patched = Encoding.Unicode.GetString(CorpseScript.Patch(Utf16(Script), true)!);
 Check(patched.Contains("base_maximum_life = 1000") && patched.Contains("armour = 500"), "health and stats unchanged");
@@ -35,6 +40,19 @@ Check(animation.Contains("EnableRendering(); IfExists(") && animation.Contains("
 Reject(() => CorpseArchive.Safe(Path.GetFullPath("data"), "../outside"), "path traversal rejected");
 Reject(() => CorpseArchive.Apply("missing", "missing", "native", default, () => throw new InvalidOperationException("game open")), "apply refused while game is open before any file access");
 Reject(() => CorpseArchive.Restore("missing", default, () => throw new InvalidOperationException("game open")), "restore refused while game is open before any file access");
+var cameraText = Encoding.Unicode.GetString(CorpseScript.PatchCamera(Utf16(CameraScript), 1.75f));
+Check(cameraText.Contains("KeepPosition();") && cameraText.Contains("life = 100") && cameraText.Contains("KeepCamera();"), "persistent camera preserves stats and existing callbacks");
+Check(cameraText.Contains("CreateCameraZoomNode( 5000.0, 5000.0, 1.75 )") && !cameraText.Contains("1,75"), "persistent camera writes a culture-independent distance");
+Check(Encoding.Unicode.GetString(CorpseScript.PatchCamera(Utf16("Positioned { team = 1 }"), 2f)).Contains("on_initial_position_set"), "missing camera callback added without replacing the component");
+Reject(() => CorpseScript.PatchCamera(Utf16(cameraText), 2f), "previous permanent camera requires restoration");
+Reject(() => CorpseScript.PatchCamera(Utf16(CameraScript), float.NaN), "invalid permanent distance rejected");
+Reject(() => CorpseScript.PatchCamera(Utf16("Positioned {} Positioned {}"), 2f), "ambiguous camera component rejected");
+Reject(() => new PermanentVisualOptions { HideCorpses = false }.Validate(), "empty permanent selection rejected");
+var visuals = new PermanentVisualOptions { CameraDistance = 1.75f, MapBorders = true, BorderColor = [1f, 0.25f, 0f, 0.8f], FogColor = [0.1f, 0.2f, 0.3f, 0.4f] };
+string mapText = Encoding.UTF8.GetString(CorpseScript.PatchMinimap(Encoding.UTF8.GetBytes(MapShader), visuals));
+Check(mapText.Contains("float4(1.0f, 0.25f, 0.0f, 0.8f)") && mapText.Contains("ec_fog.a *= (1.0f - visibility)"), "map border color and fog tint use separate opacity and original visibility");
+Check(!mapText.Contains("visibility = 1") && !mapText.Contains("visibility_fully_revealed"), "persistent borders never change exploration state");
+Reject(() => CorpseScript.PatchMinimap(Encoding.UTF8.GetBytes("unknown shader"), visuals), "incompatible shader refused before archive replacement");
 
 string source = args[0], cache = Path.GetFullPath("native");
 NativeOodle.Ensure(source, cache);
@@ -50,6 +68,21 @@ if (args.Length > 1 && legacyPackage == null)
     string before = Hash(indexPath);
     using var input = new FileStream(indexPath, FileMode.Open, FileAccess.Read, FileShare.Read);
     using var index = new ArchiveIndex(input, true, false, new ReadFactory(Path.Combine(game, "Bundles2")));
+    if (args.Length > 2 && args[2] == "--visual-assets")
+    {
+        Check(index.TryGetFile(Character, out var camera), "real character camera asset exists");
+        string originalCamera = Encoding.Unicode.GetString(camera!.Read().Span);
+        string preparedCamera = Encoding.Unicode.GetString(CorpseScript.PatchCamera(camera.Read().ToArray(), 2f));
+        Check(preparedCamera.Contains("CreateCameraZoomNode") && preparedCamera.Contains("team = 1"), "real character script supports permanent camera insertion");
+        Check(index.TryGetFile(Blending, out var blending) && index.TryGetFile(Visibility, out _), "real minimap shader assets exist");
+        byte[] originalBlend = blending!.Read().ToArray();
+        ShaderCompiler.Compile(originalBlend);
+        ShaderCompiler.Compile(CorpseScript.PatchMinimap(originalBlend, visuals));
+        ShaderCompiler.Compile(CorpseScript.PatchMinimap(originalBlend, new PermanentVisualOptions { MapBorders = true }));
+        Check(true, "original and customized real map shaders compile with and without fog tint");
+        Check(Hash(indexPath) == before, "real game index unchanged after camera and shader verification");
+        return;
+    }
     if (args.Length > 2 && args[2] == "--scan-monsters")
     {
         index.ParsePaths();
@@ -92,7 +125,7 @@ if (args.Length > 1 && legacyPackage == null)
 
 string data = Path.GetFullPath(Path.Combine("data", Guid.NewGuid().ToString("N")));
 Directory.CreateDirectory(data);
-var payloads = new Dictionary<string, byte[]> { [Base] = Utf16(Script), [Child] = Utf16(Script), [Other] = Utf16("Life { base_maximum_life = 50 }") };
+var payloads = new Dictionary<string, byte[]> { [Base] = Utf16(Script), [Child] = Utf16(Script), [Other] = Utf16("Life { base_maximum_life = 50 }"), [Character] = Utf16(CameraScript), [Blending] = Encoding.UTF8.GetBytes(MapShader), [Visibility] = Encoding.UTF8.GetBytes("original exploration visibility") };
 foreach (bool ggpk in new[] { false, true })
 {
     string game = Path.Combine(data, ggpk ? "official" : "steam");
@@ -121,6 +154,33 @@ foreach (bool ggpk in new[] { false, true })
     Reject(() => CorpseArchive.Restore(game, default, () => { }), "game update or external modification blocks restore " + ggpk);
     Check(Hash(archive) == updated, "external change preserved " + ggpk);
 }
+foreach (bool ggpk in new[] { false, true })
+{
+    string game = Path.Combine(data, ggpk ? "visual-official" : "visual-steam");
+    CreateGame(game, payloads, ggpk);
+    string archive = Path.Combine(game, ggpk ? "Content.ggpk" : "Bundles2/_.index.bin"), original = Hash(archive);
+    CorpseArchive.ApplyVisuals(game, source, cache, visuals, default, () => { });
+    using (var session = ggpk ? new BundledSession(archive) : null)
+    {
+        using var index = ggpk ? null : new ArchiveIndex(archive, false);
+        var active = session?.Index ?? index!;
+        Check(active.TryGetFile(Character, out var character) && Encoding.Unicode.GetString(character.Read().Span).Contains("1.75"), "camera persists in the closed archive without the plugin " + ggpk);
+        Check(active.TryGetFile(Blending, out var blending) && Encoding.UTF8.GetString(blending.Read().Span).Contains("ExileCenter persistent minimap"), "borders and colors persist in the closed archive without the overlay " + ggpk);
+        Check(active.TryGetFile(Visibility, out var visibility) && visibility.Read().Span.SequenceEqual(payloads[Visibility]), "fog and exploration visibility asset stays byte-identical " + ggpk);
+        Check(active.TryGetFile(Base, out var monster) && Encoding.Unicode.GetString(monster.Read().Span).Contains(CorpseScript.Marker), "confirmed corpse behavior included with persistent camera and map " + ggpk);
+    }
+    CorpseArchive.Restore(game, default, () => { });
+    Check(Hash(archive) == original, "combined visual patch restores the archive byte for byte " + ggpk);
+    CorpseArchive.ApplyVisuals(game, source, cache, visuals with { HideCorpses = false, CameraDistance = null }, default, () => { });
+    using (var session = ggpk ? new BundledSession(archive) : null)
+    {
+        using var index = ggpk ? null : new ArchiveIndex(archive, false);
+        var active = session?.Index ?? index!;
+        Check(active.TryGetFile(Base, out var monster) && monster.Read().Span.SequenceEqual(payloads[Base]) && active.TryGetFile(Character, out var character) && character.Read().Span.SequenceEqual(payloads[Character]), "map-only patch preserves camera and corpse scripts " + ggpk);
+    }
+    CorpseArchive.Restore(game, default, () => { });
+    Check(Hash(archive) == original, "map-only restoration is exact " + ggpk);
+}
 if (legacyPackage != null)
 {
     string pluginDirectory = Path.Combine(legacyPackage, "Plugins", "CorpseCleaner");
@@ -132,7 +192,7 @@ if (legacyPackage != null)
         string game = Path.Combine(data, ggpk ? "legacy-official" : "legacy-steam"); CreateGame(game, payloads, ggpk);
         string archive = Path.Combine(game, ggpk ? "Content.ggpk" : "Bundles2/_.index.bin"), original = Hash(archive);
         oldArchive.GetMethod("Apply", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.Invoke(null, new object?[] { game, source, Path.Combine(data, "legacy-native"), CancellationToken.None, new Action(() => { }), null });
-        Check(Directory.Exists(Path.Combine(game, ".GameHelperCadavres")), "historical plugin creates its actual legacy backup " + ggpk);
+        Check(Directory.Exists(Path.Combine(game, ".GameHelperCadavres")) || Directory.Exists(Path.Combine(game, ".ExileCenterCadavres")), "reference package creates its own backup " + ggpk);
         Reject(() => CorpseArchive.Apply(game, source, cache, default, () => { }), "new plugin refuses to overwrite a historical active patch " + ggpk);
         CorpseArchive.Restore(game, default, () => { });
         Check(Hash(archive) == original, "new plugin restores the historical archive byte for byte " + ggpk);
@@ -156,6 +216,11 @@ try
     plugin.Settings.OodleSource = "missing/Exile.Forge.exe"; plugin.SaveSettings(); plugin.OnEnable(false);
     Check(plugin.Settings.OodleSource == Path.Combine(pluginCache, "oo2core.dll"), "production UI migrates an old setting without Exile Forge");
     plugin.Settings.GameDirectory = Path.Combine(data, "steam");
+    plugin.Settings.PermanentCamera = true; plugin.Settings.MapBorders = true;
+    string measuredCamera = Path.Combine(data, "CameraZoom", "config"); Directory.CreateDirectory(measuredCamera);
+    File.WriteAllText(Path.Combine(measuredCamera, "settings.txt"), "{\"LastDistance\":1.75}");
+    plugin.GetType().GetMethod("UseSavedCamera", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(plugin, null);
+    Check(plugin.Settings.CameraDistance == 1.75f && plugin.Settings.PermanentCamera, "production UI imports the last measured camera distance without a live game");
     ExileCenter.Core.GHSettings.UiLanguage = ExileCenter.Localization.OverlayLanguage.French;
     for (int frame = 0; frame < 3; frame++)
     {
@@ -165,6 +230,7 @@ try
     Check(ImGuiNET.ImGui.GetDrawData().TotalVtxCount > 0, "production plugin settings render in an isolated ImGui context");
     plugin.OnDisable();
 }
+
 finally { ImGuiNET.ImGui.DestroyContext(context); }
 Console.WriteLine("ALL CORPSE CLEANER CHECKS PASSED");
 
@@ -238,5 +304,30 @@ sealed class LegacyBackupContext(string directory) : System.Runtime.Loader.Assem
         string file = Path.Combine(directory, "Plugins", "CorpseCleaner", name.Name + ".dll");
         if (!File.Exists(file)) file = Path.Combine(directory, name.Name + ".dll");
         return File.Exists(file) ? LoadFromAssemblyPath(file) : null;
+    }
+}
+
+static class ShaderCompiler
+{
+    internal static void Compile(byte[] bytes)
+    {
+        string shader = "#define CBUFFER_BEGIN(name) cbuffer name {\n#define CBUFFER_END };\n#define TEXTURE2D_DECL(name) Texture2D name\n#define SAMPLE_TEX2D(tex,samp,uv) tex.Sample(samp,uv)\n#define PIXEL_RETURN_SEMANTIC SV_Target\nSamplerState SamplerLinearClampOffsetNoBias;\n" + Encoding.UTF8.GetString(bytes)
+            .Replace("#include \"Shaders/Include/OETF.hlsl\"", "float4 OutputSDR(float4 color, float scale) { return color; }");
+        byte[] source = Encoding.UTF8.GetBytes(shader);
+        int result = D3DCompile(source, (nuint)source.Length, "minimap", IntPtr.Zero, IntPtr.Zero, "BlendMinimap", "ps_5_0", 0, 0, out var compiled, out var errors);
+        try
+        {
+            if (result < 0) throw new InvalidDataException("HLSL compilation failed: " + (errors == null ? result.ToString("X8") : Marshal.PtrToStringAnsi(errors.GetBufferPointer(), checked((int)errors.GetBufferSize()))));
+        }
+        finally { if (compiled != null) Marshal.ReleaseComObject(compiled); if (errors != null) Marshal.ReleaseComObject(errors); }
+    }
+
+    [DllImport("d3dcompiler_47.dll", CharSet = CharSet.Ansi, ExactSpelling = true)]
+    private static extern int D3DCompile(byte[] source, nuint size, string name, IntPtr defines, IntPtr include, string entry, string target, uint flags1, uint flags2, out ID3DBlob? compiled, out ID3DBlob? errors);
+    [ComImport, Guid("8BA5FB08-5195-40e2-AC58-0D989C3A0102"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface ID3DBlob
+    {
+        [PreserveSig] IntPtr GetBufferPointer();
+        [PreserveSig] nuint GetBufferSize();
     }
 }
