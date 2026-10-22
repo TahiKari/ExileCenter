@@ -56,7 +56,6 @@ Chaque plugin dispose de ses réglages. Les outils utilisant des raccourcis ou d
 | **LootValue / StashValueByZx0** | Estimation de la valeur des objets ou du contenu du coffre selon les données de prix disponibles |
 | **PickupHelper / StashUtility** | Assistance au ramassage et au rangement, avec réglages et protections d'objets |
 | **AutoPot / AutoHotKeyTrigger** | Déclenchements configurables de flacons ou de raccourcis |
-| **CameraZoom** | Réglage de caméra proposé par le plugin |
 | **CorpseCleaner** | Masquage réversible des cadavres par modification des fichiers du jeu, à effectuer jeu fermé |
 
 L'interface comprend des thèmes sombres distincts par plugin, plusieurs langues et des fenêtres indépendantes pour le suivi du butin et le kikimeter. Les fonctions dépendent des données accessibles et de la version du jeu ; un changement de PoE 2 peut nécessiter une adaptation.
