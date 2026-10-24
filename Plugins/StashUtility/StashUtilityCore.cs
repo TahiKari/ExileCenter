@@ -30,6 +30,7 @@ namespace StashUtility
         private Vector2? lockedStashToolbarLocation;
         private Vector2 lockedStashToolbarOffset;
         private System.Drawing.Rectangle lockedStashToolbarWindow;
+        private Vector4 lockedStashToolbarViewport;
         private readonly List<IntPtr> tooltipContainers = new();
         private IntPtr tooltipUiRoot;
         private double nextTooltipContainerScan;
@@ -5801,14 +5802,18 @@ namespace StashUtility
             }
         }
 
-        private Vector2 PreserveLockedStashToolbarLocation(Vector2 proposed, bool locked, Vector2 offset, System.Drawing.Rectangle window)
+        private Vector2 PreserveLockedStashToolbarLocation(Vector2 proposed, bool locked, Vector2 offset, System.Drawing.Rectangle window, Vector4 viewport)
         {
             if (!locked) { lockedStashToolbarLocation = null; return proposed; }
-            if (!lockedStashToolbarLocation.HasValue || lockedStashToolbarOffset != offset || lockedStashToolbarWindow != window)
+            // The overlay viewport can settle after the game window is already known.
+            // Never retain a position calculated against the temporary desktop bounds.
+            if (!lockedStashToolbarLocation.HasValue || lockedStashToolbarOffset != offset || lockedStashToolbarWindow != window ||
+                lockedStashToolbarViewport != viewport)
             {
                 lockedStashToolbarLocation = proposed;
                 lockedStashToolbarOffset = offset;
                 lockedStashToolbarWindow = window;
+                lockedStashToolbarViewport = viewport;
             }
             return lockedStashToolbarLocation.Value;
         }
@@ -5865,7 +5870,8 @@ namespace StashUtility
             var anchor = StashToolbarAnchor(viewport.Pos, viewport.Size, position, size, windowSize, merchant);
             var offset = toolbarOffset;
             if (!float.IsFinite(offset.X) || !float.IsFinite(offset.Y)) offset = Vector2.Zero;
-            var location = merchant ? anchor + offset : PreserveLockedStashToolbarLocation(anchor + offset, toolbarLocked, offset, Core.Process.WindowArea);
+            var location = merchant ? anchor + offset : PreserveLockedStashToolbarLocation(anchor + offset, toolbarLocked, offset, Core.Process.WindowArea,
+                new Vector4(viewport.Pos.X, viewport.Pos.Y, viewport.Size.X, viewport.Size.Y));
             location = Vector2.Clamp(location, viewport.Pos, viewport.Pos + Vector2.Max(Vector2.Zero, viewport.Size - windowSize));
             ImGui.SetNextWindowPos(location, ImGuiCond.Always);
             ImGui.SetNextWindowSize(windowSize, ImGuiCond.Always);

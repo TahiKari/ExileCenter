@@ -1,1 +1,11 @@
 ﻿
+ExileCenter 1.17.3
+
+- Correction du repositionnement de la barre du coffre (icônes et Auto-craft TP) au démarrage : une taille provisoire de l'overlay ne reste plus mémorisée comme position verrouillée.
+- Conservation des décalages personnalisés, du verrouillage et des réglages existants. Aucun changement de disposition des boutons ni du fonctionnement de l'auto-craft.
+- GameOffsets.dll conservée à l'identique, sans recompilation.
+
+Validation : compilation ciblée et 1 136 contrôles isolés réussis, dont la restauration après changement de taille initiale de l'overlay et la sauvegarde/relecture de la position. Aucune entrée envoyée au jeu. Le rendu et le redémarrage en jeu restent à vérifier par l'utilisateur.
+
+Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
+Les mises à jour conservent les réglages personnels.

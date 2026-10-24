@@ -22,6 +22,48 @@ internal static class TabletRankingCheck
     private static SixLabors.ImageSharp.PixelFormats.Rgba32[] framePreviewPixels;
     private static int framePreviewWidth, framePreviewHeight;
 
+    private static void CheckStashToolbarPosition(string root)
+    {
+        const BindingFlags flags=BindingFlags.Instance|BindingFlags.Static|BindingFlags.NonPublic;
+        var locationMethod=typeof(StashUtilityCore).GetMethod("PreserveLockedStashToolbarLocation",flags);
+        var anchorMethod=typeof(StashUtilityCore).GetMethod("StashToolbarAnchor",flags);
+        var window=new System.Drawing.Rectangle(0,0,1920,1080);
+        var plugin=new StashUtilityCore{DllDirectory=Path.Combine(root,"toolbar-settings")};
+        plugin.Settings.StashToolbarOffset=new Vector2(379,-93.57001f);
+        plugin.Settings.StashToolbarLocked=true;
+        var toolbarSize=new Vector2(232,36);
+        Vector2 Position(StashUtilityCore instance,Vector2 viewportPosition,Vector2 viewportSize)
+        {
+            var anchor=(Vector2)anchorMethod.Invoke(null,new object[]{viewportPosition,viewportSize,Vector2.Zero,Vector2.Zero,toolbarSize,false});
+            var args=new List<object>{anchor+instance.Settings.StashToolbarOffset,instance.Settings.StashToolbarLocked,instance.Settings.StashToolbarOffset,window};
+            // Also run this regression against the previous released signature.
+            if(locationMethod.GetParameters().Length>4)args.Add(new Vector4(viewportPosition.X,viewportPosition.Y,viewportSize.X,viewportSize.Y));
+            return (Vector2)locationMethod.Invoke(instance,args.ToArray());
+        }
+        var settingsJson=JsonConvert.SerializeObject(plugin.Settings);
+        Position(plugin,Vector2.Zero,new Vector2(2560,1440));
+        var restored=Position(plugin,Vector2.Zero,new Vector2(1920,1079));
+        Check(Vector2.Distance(restored,new Vector2(395,802))<.01f,
+            "A locked toolbar restores the saved user position after the startup viewport changes from desktop to game size");
+        var shifted=Position(plugin,new Vector2(100,50),new Vector2(1920,1079));
+        Check(Vector2.Distance(shifted,restored+new Vector2(100,50))<.01f,
+            "Changing only the overlay viewport origin does not retain a stale locked position");
+        Check(JsonConvert.SerializeObject(plugin.Settings)==settingsJson,
+            "Startup viewport changes never rewrite the saved offset, lock or other settings");
+        plugin.SaveSettings();
+        var settingsPath=Path.Combine(plugin.DllDirectory,"config","settings.txt");
+        var saved=File.ReadAllText(settingsPath);
+        foreach(bool locked in new[]{false,true})
+        {
+            var reloaded=new StashUtilityCore{Settings=JsonConvert.DeserializeObject<StashUtilitySettings>(saved)};
+            reloaded.Settings.StashToolbarLocked=locked;
+            Check(Vector2.Distance(Position(reloaded,Vector2.Zero,new Vector2(1920,1079)),restored)<.01f,
+                "A fresh instance restores the on-disk toolbar position with locked="+locked);
+        }
+        Check(File.ReadAllText(settingsPath)==saved,"Restoring a toolbar never modifies the saved settings file");
+        Console.WriteLine(checks+" stash toolbar persistence checks passed; isolated settings, no game process or OS input.");
+    }
+
     private static void CheckWaystoneNavigation(string root)
     {
         const BindingFlags flags=BindingFlags.Static|BindingFlags.Instance|BindingFlags.NonPublic|BindingFlags.Public;
@@ -446,7 +488,7 @@ internal static class TabletRankingCheck
             }
             var window=new System.Drawing.Rectangle(0,0,1297,908);var offset=new Vector2(405,-86);
             var start=new Vector2(790,236);var currency=new Vector2(300,750);
-            Vector2 Toolbar(Vector2 proposed,bool locked,Vector2 savedOffset,System.Drawing.Rectangle area)=>(Vector2)Call("PreserveLockedStashToolbarLocation",proposed,locked,savedOffset,area);
+            Vector2 Toolbar(Vector2 proposed,bool locked,Vector2 savedOffset,System.Drawing.Rectangle area)=>(Vector2)Call("PreserveLockedStashToolbarLocation",proposed,locked,savedOffset,area,new Vector4(0,0,area.Width,area.Height));
             Check(Toolbar(start,true,offset,window)==start,"Locked stash toolbar records its displayed position");
             Check(Toolbar(currency,true,offset,window)==start,"Changing from waystones to currency preserves all four locked toolbar controls at the same position");
             Check(Toolbar(Vector2.Zero,true,offset,window)==start,"A temporarily unreadable grid cannot move the locked toolbar off its saved position");
@@ -464,7 +506,7 @@ internal static class TabletRankingCheck
                 var anchor=(Vector2)Call("StashToolbarAnchor",Vector2.Zero,viewportSize,grid.Item1,grid.Item2,toolbarSize,false);
                 var reloaded=new StashUtilityCore{Settings=JsonConvert.DeserializeObject<StashUtilitySettings>(savedLayoutJson)};
                 var firstPosition=(Vector2)typeof(StashUtilityCore).GetMethod("PreserveLockedStashToolbarLocation",flags).Invoke(reloaded,
-                    new object[]{anchor+reloaded.Settings.StashToolbarOffset,true,userOffset,new System.Drawing.Rectangle(0,0,1920,1080)});
+                    new object[]{anchor+reloaded.Settings.StashToolbarOffset,true,userOffset,new System.Drawing.Rectangle(0,0,1920,1080),new Vector4(0,0,viewportSize.X,viewportSize.Y)});
                 Check(Vector2.Distance(firstPosition,new Vector2(429,800))<.01f,
                     "A fresh plugin restores the user's saved position when first opened on maps, currency, normal or unreadable grids: "+grid);
                 Check(JsonConvert.SerializeObject(reloaded.Settings)==savedLayoutJson,"Restoring toolbar placement never rewrites the user's offsets, lock or other settings");
@@ -1327,6 +1369,11 @@ internal static class TabletRankingCheck
                 if (!File.Exists(file)) file = Path.Combine(root, "Plugins", "StashUtility", name.Name + ".dll");
                 return File.Exists(file) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(file) : null;
             };
+            if (args.Length > 1 && args[1] == "--toolbar-only")
+            {
+                CheckStashToolbarPosition(root);
+                return 0;
+            }
             if (args.Length > 1 && args[1] == "--radar-only")
             {
                 CheckRadarLiveColor(root);
