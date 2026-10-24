@@ -3,8 +3,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Reflection;
 using System.Runtime.Loader;
+using ExileCenter.Localization;
+using ImGuiNET;
 using KikiMeter;
 using ExileCenter.RemoteEnums;
 using Newtonsoft.Json;
@@ -37,9 +40,79 @@ internal static class KikiMonsterChecks
                 string path=Path.Combine(root,name.Name+".dll");
                 return File.Exists(path)?AssemblyLoadContext.Default.LoadFromAssemblyPath(path):null;
             };
+            if(args.Length>1&&args[1]=="--window-only")
+            {
+                CheckWindow(root);Console.WriteLine(checks+" Kikimeter window checks passed; no game process or OS input.");return 0;
+            }
             Run(); Console.WriteLine(checks+" Kikimeter monster-counter checks passed.");return 0;
         }
         catch(Exception error){Console.Error.WriteLine(error);return 1;}
+    }
+
+    private static unsafe void CheckWindow(string root)
+    {
+        var context=ImGui.CreateContext();
+        var theme=typeof(ExileCenter.Ui.ImGuiTheme);
+        var textureField=theme.GetField("frameTexture",Flags)!;
+        var previousTexture=textureField.GetValue(null);
+        var previousLanguage=ExileCenter.Core.GHSettings.UiLanguage;
+        try
+        {
+            var io=ImGui.GetIO();io.NativePtr->IniFilename=null;
+            io.DisplaySize=new Vector2(1920,1080);io.DeltaTime=1f/60;
+            io.Fonts.AddFontDefault();
+            io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels,out int width,out int height,out int bytes);
+            io.Fonts.SetTexID(new IntPtr(2));io.FontGlobalScale=1.25f;
+            textureField.SetValue(null,new IntPtr(1));
+            var text=new PluginLocalization(Path.Combine(root,"Plugins","KikiMeter"));
+            var rendererType=typeof(KikiMeter.KikiMeter).Assembly.GetType("KikiMeter.render.DamageMeterRenderer")!;
+            foreach(var language in new[]{OverlayLanguage.French,OverlayLanguage.English})
+            foreach(bool detached in new[]{false,true})
+            foreach(bool locked in new[]{false,true})
+            foreach(bool notice in new[]{false,true})
+            foreach(var size in new[]{new Vector2(320,220),new Vector2(426,381),new Vector2(460,420)})
+            {
+                ExileCenter.Core.GHSettings.UiLanguage=language;
+                var renderer=Activator.CreateInstance(rendererType,true)!;
+                var tracker=Tracker();tracker.GetType().GetProperty("SkillChangeDetected",Flags)!.SetValue(tracker,notice);
+                var settings=new KikiMeterSettings{DamageMeterPosition=new Vector2(1144,41),DamageMeterSize=size,DamageMeterLocked=locked};
+                string saved=JsonConvert.SerializeObject(settings);
+                string title=detached?"##AuraTrackerDesktop":text.Title("meter.title","Damage meter (estimated)","AuraTrackerDamageMeter");
+                for(int frame=0;frame<40;frame++)
+                {
+                    ImGui.NewFrame();
+                    bool save=(bool)Call(renderer,"RenderDamageMeter",tracker,settings,text,detached?size:io.DisplaySize,detached);
+                    ImGui.Begin(title);
+                    var draw=ImGui.GetWindowDrawList();
+                    Vector2 artworkSize=Vector2.Zero;
+                    for(int command=0;command<draw.CmdBuffer.Size;command++)
+                    {
+                        var cmd=draw.CmdBuffer[command];
+                        if(cmd.GetTexID()!=new IntPtr(1)||cmd.ElemCount<3)continue;
+                        var minimum=new Vector2(float.MaxValue);var maximum=new Vector2(float.MinValue);
+                        for(int vertex=0;vertex<3;vertex++)
+                        {
+                            var position=draw.VtxBuffer[(int)cmd.VtxOffset+draw.IdxBuffer[(int)cmd.IdxOffset+vertex]].pos;
+                            minimum=Vector2.Min(minimum,position);maximum=Vector2.Max(maximum,position);
+                        }
+                        artworkSize=maximum-minimum;break;
+                    }
+                    var positionNow=ImGui.GetWindowPos();var sizeNow=ImGui.GetWindowSize();
+                    ImGui.End();ImGui.Render();
+                    if(frame<8)continue;
+                    string scenario=$"{language}, detached={detached}, locked={locked}, notice={notice}, size={size}, frame={frame}";
+                    Check(Vector2.Distance(artworkSize,size)<.1f,"The decorated frame keeps the chosen size without scrollbar oscillation: "+scenario+", artwork="+artworkSize);
+                    Check(sizeNow==size&&positionNow==(detached?Vector2.Zero:settings.DamageMeterPosition),"The window keeps its user-selected dimensions and position: "+scenario);
+                    Check(!save&&JsonConvert.SerializeObject(settings)==saved,"Rendering never rewrites the user's placement or settings: "+scenario);
+                }
+            }
+        }
+        finally
+        {
+            textureField.SetValue(null,previousTexture);
+            ExileCenter.Core.GHSettings.UiLanguage=previousLanguage;
+            ImGui.DestroyContext(context);
+        }
     }
 
     private static void Run()

@@ -23,7 +23,10 @@ internal sealed class DamageMeterRenderer
     public bool RenderDamageMeter(DamageTracker meter, KikiMeterSettings settings, PluginLocalization text, Vector2 overlaySize, bool detached = false)
     {
         bool save = false;
-        var flags = ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBringToFrontOnFocus;
+        // MeterBody owns scrolling; outer scrollbars feed back into the frame's
+        // padding and make its visible width and height alternate every frame.
+        var flags = ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBringToFrontOnFocus |
+            ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse;
         if (detached)
         {
             ImGui.SetNextWindowPos(Vector2.Zero);
