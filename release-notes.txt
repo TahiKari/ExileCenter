@@ -1,14 +1,13 @@
 ﻿
-ExileCenter 1.17.5
+ExileCenter 1.17.6
 
-- Optimisation de deux calculs locaux utilisés pour vérifier l'inventaire et le contenu des maps : moins de recherches répétées et de tris intermédiaires, avec les mêmes résultats.
-- Les délais, les commandes envoyées au jeu, les confirmations et l'arrêt au mouvement de la souris sont inchangés. Aucun mécanisme de simulation d'un comportement humain n'est ajouté.
-- Réglages, position de la barre du coffre et verrouillage conservés.
+- Atlas alternatif : remplacement des longues colonnes de noms intermédiaires par un résumé compact des destinations partageant un départ.
+- Au survol, l'infobulle présente les destinations les plus proches et leur distance. Le nombre de destinations supplémentaires reste indiqué ; chaque carte conserve son nom à son emplacement sur l'Atlas.
+- Les résumés qui chevaucheraient un nom de carte ou un autre résumé sont omis au lieu de former de nouvelles piles.
+- Routes calculées, catégories, couleurs, limites de sauts et réglages personnalisés conservés. Aucun changement à la barre du coffre, au Kikimeter ni à l'auto-craft.
 - GameOffsets.dll conservée à l'identique, sans recompilation.
 
-Validation : compilation ciblée et 11 790 contrôles isolés réussis, dont 10 660 vérifications d'équivalence des comparaisons. Aucune entrée envoyée au jeu.
-
-Mesures locales pour 5 000 comparaisons : inventaire de 60 objets, médiane de 69 à 18 ms ; contenu de 96 maps, de 172 à 66 ms. Allocations par comparaison : de 6 440 à 3 296 octets pour l'inventaire et de 25 872 à 3 128 octets pour les maps. Ces mesures concernent uniquement les calculs locaux ; le gain sur la durée totale en jeu n'est pas mesuré.
+Validation : compilation ciblée et 2 471 contrôles d'affichage hors jeu sur 18 configurations de langue, résolution et taille de texte. Aperçus avec et sans survol vérifiés. Aucune entrée envoyée au jeu. La confirmation visuelle dans l'Atlas réel reste à effectuer par l'utilisateur.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

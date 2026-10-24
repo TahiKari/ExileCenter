@@ -22,6 +22,90 @@ internal static class TabletRankingCheck
     private static SixLabors.ImageSharp.PixelFormats.Rgba32[] framePreviewPixels;
     private static int framePreviewWidth, framePreviewHeight;
 
+    private static unsafe void CheckAtlasRouteSummaries(string root,string preview)
+    {
+        const BindingFlags flags=BindingFlags.Instance|BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic;
+        var assembly=AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(root,"Plugins","Atlas2","Atlas2.dll"));
+        var type=assembly.GetType("Atlas2.Atlas2");var plugin=Activator.CreateInstance(type);
+        type.GetField("DllDirectory",flags).SetValue(plugin,Path.Combine(root,"Plugins","Atlas2"));
+        var settings=type.GetField("Settings",flags).GetValue(plugin);string saved=JsonConvert.SerializeObject(settings);
+        var drawSummary=type.GetMethod("DrawRouteSummary",flags);var place=type.GetMethod("PlaceRouteSummary",flags);
+        var previous=ImGuiNET.ImGui.GetCurrentContext();var context=ImGuiNET.ImGui.CreateContext();
+        var previousLanguage=ExileCenter.Core.GHSettings.UiLanguage;
+        try
+        {
+            var io=ImGuiNET.ImGui.GetIO();io.NativePtr->IniFilename=null;io.DeltaTime=1f/60;
+            io.Fonts.AddFontFromFileTTF(Path.Combine(root,"fonts","DejaVuSans.ttf"),16);
+            io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels,out int atlasWidth,out int atlasHeight,out int bytes);
+            var atlas=new byte[atlasWidth*atlasHeight*bytes];Marshal.Copy(pixels,atlas,0,atlas.Length);io.Fonts.SetTexID(new IntPtr(1));
+            foreach(var language in new[]{ExileCenter.Localization.OverlayLanguage.French,ExileCenter.Localization.OverlayLanguage.English})
+            foreach(var viewportSize in new[]{new Vector2(1920,1080),new Vector2(1280,720),new Vector2(800,600)})
+            foreach(float scale in new[]{.5f,1f,1.5f})
+            {
+                ExileCenter.Core.GHSettings.UiLanguage=language;io.DisplaySize=viewportSize;io.FontGlobalScale=scale;
+                System.Drawing.RectangleF? firstBadge=null;
+                for(int frame=0;frame<4;frame++)
+                {
+                    io.AddMousePosEvent(frame is 1 or 2&&firstBadge.HasValue?firstBadge.Value.X+2:-1000,
+                        frame is 1 or 2&&firstBadge.HasValue?firstBadge.Value.Y+2:-1000);
+                    ImGuiNET.ImGui.NewFrame();var draw=ImGuiNET.ImGui.GetBackgroundDrawList();
+                    draw.AddText(new Vector2(24,20),0xffffffff,"Atlas alternatif - aperçu hors jeu : routes et noms des cartes conservés");
+                    var viewport=new System.Drawing.RectangleF(0,0,viewportSize.X,viewportSize.Y);
+                    var occupied=new List<System.Drawing.RectangleF>();
+                    foreach(var node in new[]{(new Vector2(.25f,.35f),"The Stone Citadel"),(new Vector2(.5f,.5f),"Steaming Springs"),
+                        (new Vector2(.75f,.7f),"The Jade Isles"),(new Vector2(.35f,.8f),"Burial Bog")})
+                    {
+                        var center=node.Item1*viewportSize;var size=ImGuiNET.ImGui.CalcTextSize(node.Item2)+new Vector2(12,6);
+                        var area=new System.Drawing.RectangleF(center.X-size.X/2,center.Y-size.Y/2,size.X,size.Y);occupied.Add(area);
+                        draw.AddCircle(center,12,0xff00ffff);draw.AddRectFilled(new Vector2(area.Left,area.Top),new Vector2(area.Right,area.Bottom),0xff282828);
+                        draw.AddText(new Vector2(area.Left+6,area.Top+3),0xffffffff,node.Item2);
+                    }
+                    int drawn=0;
+                    for(int group=0;group<24;group++)
+                    {
+                        var labels=Enumerable.Range(0,160).Select(index=>($"{(index%2==0?"Steaming Springs":"Burial Bog")} ({160-index})",
+                            index%2==0?0xff00ffffu:0xff40ff40u,160-index)).ToList();
+                        var original=labels.ToArray();
+                        var midpoint=viewportSize*new Vector2(.5f,.5f)+new Vector2((group%3-1)*18,(group/3)*10);
+                        var result=(System.Drawing.RectangleF?)drawSummary.Invoke(plugin,new object[]{draw,midpoint,labels,scale,viewport,occupied});
+                        Check(labels.SequenceEqual(original),"Condensing route annotations preserves every destination, hop count and color");
+                        if(!result.HasValue)continue;
+                        drawn++;firstBadge??=result;
+                        Check(result.Value.Height<=ImGuiNET.ImGui.GetTextLineHeight()+2*scale+.1f,"160 route destinations occupy only one line on the Atlas");
+                        Check(viewport.Contains(result.Value),"A route summary stays fully inside the viewport");
+                        Check(occupied.Take(occupied.Count-1).All(area=>!area.IntersectsWith(result.Value)),"Route summaries never overlap another summary or an existing map-name rectangle");
+                    }
+                    Check(drawn>0,"Dense routes still expose readable summaries");
+                    Check(JsonConvert.SerializeObject(settings)==saved,"Drawing route summaries never rewrites categories, colors, hop limits, offsets or other settings");
+                    ImGuiNET.ImGui.Render();
+                    // A newly opened ImGui tooltip gets one frame to determine its size.
+                    if(frame==2)Check(ImGuiNET.ImGui.GetDrawData().CmdListsCount>1,"Hovering a route summary renders its destination details in a tooltip");
+                    if(preview!=null&&language==ExileCenter.Localization.OverlayLanguage.French&&viewportSize==new Vector2(1280,720)&&scale==1&&frame==3)
+                        SaveUiPreview(preview,atlas,atlasWidth,atlasHeight);
+                    if(preview!=null&&language==ExileCenter.Localization.OverlayLanguage.French&&viewportSize==new Vector2(1280,720)&&scale==1&&frame==2)
+                        SaveUiPreview(Path.Combine(Path.GetDirectoryName(preview),Path.GetFileNameWithoutExtension(preview)+"-hover.png"),atlas,atlasWidth,atlasHeight);
+                }
+            }
+            var blocked=new System.Drawing.RectangleF(0,0,800,600);
+            Check(place.Invoke(null,new object[]{new Vector2(400,300),new Vector2(100,20),1f,blocked,new List<System.Drawing.RectangleF>{blocked}})==null,
+                "When no space is available, only the redundant route summary is suppressed");
+            Check(place.Invoke(null,new object[]{new Vector2(-10,300),new Vector2(100,20),1f,blocked,new List<System.Drawing.RectangleF>()})==null,
+                "Off-screen routes cannot pin unrelated summaries to the edge of the screen");
+            ImGuiNET.ImGui.NewFrame();
+            var single=new List<(string,uint,int)>{("Map 100% é (4)",0xff123456,4)};
+            var singleDraw=ImGuiNET.ImGui.GetBackgroundDrawList();
+            var singleBounds=(System.Drawing.RectangleF?)drawSummary.Invoke(plugin,new object[]{singleDraw,new Vector2(400,300),single,1f,blocked,new List<System.Drawing.RectangleF>()});
+            Check(singleBounds.HasValue&&Math.Abs(singleBounds.Value.Width-ImGuiNET.ImGui.CalcTextSize(single[0].Item1).X-8)<.1f,
+                "A single destination keeps its literal name and hop count, including percent signs and accents");
+            Check(Enumerable.Range(0,singleDraw.VtxBuffer.Size).Any(index=>singleDraw.VtxBuffer[index].col==single[0].Item2),"Route summaries preserve the nearest destination's configured text color");
+            Check(drawSummary.Invoke(plugin,new object[]{singleDraw,new Vector2(400,300),new List<(string,uint,int)>(),1f,blocked,new List<System.Drawing.RectangleF>()})==null,
+                "An empty route group draws no annotation");
+            ImGuiNET.ImGui.Render();
+            Console.WriteLine(checks+" Atlas route-summary checks passed across 18 language/size/scale configurations; no game process or OS input.");
+        }
+        finally{ExileCenter.Core.GHSettings.UiLanguage=previousLanguage;ImGuiNET.ImGui.DestroyContext(context);ImGuiNET.ImGui.SetCurrentContext(previous);}
+    }
+
     private static void CheckStashToolbarPosition(string root)
     {
         const BindingFlags flags=BindingFlags.Instance|BindingFlags.Static|BindingFlags.NonPublic;
@@ -1420,6 +1504,11 @@ internal static class TabletRankingCheck
             if (args.Length > 1 && args[1] == "--toolbar-only")
             {
                 CheckStashToolbarPosition(root);
+                return 0;
+            }
+            if (args.Length > 1 && args[1] == "--atlas-labels-only")
+            {
+                CheckAtlasRouteSummaries(root,args.Length>2?args[2]:null);
                 return 0;
             }
             if (args.Length > 1 && args[1] == "--radar-only")

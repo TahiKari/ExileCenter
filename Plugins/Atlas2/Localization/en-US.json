@@ -1,5 +1,8 @@
 {
   "atlas.settings": "Settings",
+  "atlas.route_destinations": "{0} destinations",
+  "atlas.route_more": "{0} more destinations",
+  "atlas.route_summary_help": "Nearest destinations first; each map keeps its name at its location on the Atlas.",
   "atlas.input": "Input",
   "atlas.controller_mode": "Controller Mode",
   "atlas.controller_mode_hint": "GameHelper auto-detects controller mode, so you normally don't need this. Tick it only to FORCE the controller Atlas layout if auto-detect ever fails. Either way the plugin falls back to the other layout when the selected one isn't found. In controller mode the overlay also stays visible while the inventory is open.",

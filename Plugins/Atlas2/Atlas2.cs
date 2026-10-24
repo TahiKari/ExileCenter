@@ -507,10 +507,10 @@
                     }
                 }
 
-                // Destination labels grouped by their actual first edge. Drawing is deferred until
-                // every route is known so each stack can be centered around that edge's midpoint.
+                // Collect routes for compact summaries per entry; destination names stay on their own nodes.
                 var routeLabels = new Dictionary<(StdTuple2D<int> Start, StdTuple2D<int> FirstHop),
-                    List<(string Text, uint Color)>>();
+                    List<(string Text, uint Color, int Hops)>>();
+                var routeLabelAreas = new List<RectangleF>();
 
                 foreach (var nd in nodeCache)
                 {
@@ -583,18 +583,16 @@
                                 drawList.AddCircle(entryC, sr, DotOutlineColor, 0, MathF.Max(1f, sr * 0.35f));
                             }
 
-                            // Destination and path length at the midpoint of the first edge. Routes
-                            // sharing an entry stack on consecutive rows instead of drawing on top
-                            // of one another.
+                            // Keep every route, but defer its intermediate annotation to one summary.
                             if (path.Count >= 2)
                             {
                                 var edge = (path[0], path[1]);
                                 if (!routeLabels.TryGetValue(edge, out var labels))
                                 {
-                                    labels = new List<(string Text, uint Color)>();
+                                    labels = new List<(string Text, uint Color, int Hops)>();
                                     routeLabels[edge] = labels;
                                 }
-                                labels.Add(($"{mapName} ({hops})", routeColor));
+                                labels.Add(($"{mapName} ({hops})", routeColor, hops));
                             }
                         }
                         }
@@ -648,6 +646,7 @@
 
                     drawList.AddRectFilled(bgPos, bgPos + bgSize, ImGuiHelper.Color(backgroundColor), rounding);
                     drawList.AddText(drawPosition, ImGuiHelper.Color(fontColor), mapName);
+                    routeLabelAreas.Add(new RectangleF(bgPos.X, bgPos.Y, bgSize.X, bgSize.Y));
 
                     if (Settings.ShowNodeIndex)
                     {
@@ -698,26 +697,16 @@
                 }
 
                 drawList.ChannelsSetCurrent(ChannelLabels);
-                foreach (var group in routeLabels)
+                foreach (var entry in routeLabels.GroupBy(group => group.Key.Start))
                 {
+                    var group = entry.OrderBy(route => route.Value.Min(label => label.Hops))
+                        .ThenBy(route => route.Key.FirstHop.X).ThenBy(route => route.Key.FirstHop.Y).First();
                     if (!shiftedCenters.TryGetValue(group.Key.Start, out var startCenter)
                         || !shiftedCenters.TryGetValue(group.Key.FirstHop, out var firstHopCenter))
                         continue;
 
                     var midpoint = (startCenter + firstHopCenter) * 0.5f;
-                    float lineHeight = ImGui.GetTextLineHeight() + (4f * uiScale);
-                    float firstRowY = midpoint.Y - ((group.Value.Count - 1) * lineHeight * 0.5f);
-                    for (int row = 0; row < group.Value.Count; row++)
-                    {
-                        var label = group.Value[row];
-                        var labelSize = ImGui.CalcTextSize(label.Text);
-                        var labelPos = new Vector2(midpoint.X - (labelSize.X * 0.5f),
-                            firstRowY + (row * lineHeight) - (labelSize.Y * 0.5f));
-                        var labelPad = new Vector2(4f, 1f) * uiScale;
-                        drawList.AddRectFilled(labelPos - labelPad, labelPos + labelSize + labelPad,
-                            ImGuiHelper.Color(new Vector4(0f, 0f, 0f, 1f)), 3f * uiScale);
-                        drawList.AddText(labelPos, label.Color, label.Text);
-                    }
+                    DrawRouteSummary(drawList, midpoint, entry.SelectMany(route => route.Value).ToList(), uiScale, screenBounds, routeLabelAreas);
                 }
 
                 if (Settings.ShowShipsInFog)
@@ -748,6 +737,56 @@
                 if (ritualLineMode && Settings.ShowRitualPlanner)
                     DrawPlannerWindow();
             }
+        }
+
+        private static RectangleF? PlaceRouteSummary(Vector2 midpoint, Vector2 size, float uiScale,
+            RectangleF viewport, List<RectangleF> occupied)
+        {
+            if (!viewport.Contains(midpoint.X, midpoint.Y)) return null;
+            float gap = MathF.Max(3f, 4f * uiScale);
+            // Suppress only the redundant summary when no nearby space is free.
+            // The route and each destination's own name remain unchanged.
+            var topLeft = midpoint - size * 0.5f;
+            var bounds = new RectangleF(topLeft.X, topLeft.Y, size.X, size.Y);
+            var separated = bounds;
+            separated.Inflate(gap * 0.5f, gap * 0.5f);
+            if (!viewport.Contains(bounds) || occupied.Any(area => area.IntersectsWith(separated))) return null;
+            occupied.Add(bounds);
+            return bounds;
+        }
+
+        private RectangleF? DrawRouteSummary(ImDrawListPtr drawList, Vector2 midpoint,
+            List<(string Text, uint Color, int Hops)> labels, float uiScale, RectangleF viewport, List<RectangleF> occupied)
+        {
+            if (labels.Count == 0) return null;
+            var ordered = labels.OrderBy(label => label.Hops).ThenBy(label => label.Text, StringComparer.Ordinal).ToList();
+            string summary = labels.Count == 1 ? ordered[0].Text :
+                PluginText.F("atlas.route_destinations", "{0} destinations", labels.Count);
+            var padding = new Vector2(4f, 1f) * uiScale;
+            var bounds = PlaceRouteSummary(midpoint, ImGui.CalcTextSize(summary) + padding * 2, uiScale, viewport, occupied);
+            if (!bounds.HasValue) return null;
+            var minimum = new Vector2(bounds.Value.Left, bounds.Value.Top);
+            var maximum = new Vector2(bounds.Value.Right, bounds.Value.Bottom);
+            drawList.AddRectFilled(minimum, maximum, 0xFF000000, 3f * uiScale);
+            drawList.AddText(minimum + padding, ordered[0].Color, summary);
+            if (ImGui.IsMouseHoveringRect(minimum, maximum, false) && ImGui.BeginTooltip())
+            {
+                ImGui.PushTextWrapPos(ImGui.GetFontSize() * 32);
+                ImGui.TextUnformatted(PluginText.F("atlas.route_destinations", "{0} destinations", labels.Count));
+                int limit = Math.Clamp((int)(ImGui.GetIO().DisplaySize.Y * 0.55f / ImGui.GetTextLineHeightWithSpacing()) - 4, 3, 24);
+                foreach (var label in ordered.Take(limit))
+                {
+                    ImGui.PushStyleColor(ImGuiCol.Text, label.Color);
+                    ImGui.TextUnformatted(label.Text);
+                    ImGui.PopStyleColor();
+                }
+                if (labels.Count > limit)
+                    ImGui.TextUnformatted(PluginText.F("atlas.route_more", "{0} more destinations", labels.Count - limit));
+                ImGui.TextUnformatted(PluginText.T("atlas.route_summary_help", "Nearest destinations first; each map keeps its name at its location on the Atlas."));
+                ImGui.PopTextWrapPos();
+                ImGui.EndTooltip();
+            }
+            return bounds;
         }
 
         // Rebuild the per-node static-data cache (map id / biome / state / content names). This is

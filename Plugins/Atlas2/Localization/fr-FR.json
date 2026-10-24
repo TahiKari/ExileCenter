@@ -1,5 +1,8 @@
 {
   "atlas.settings": "Paramètres",
+  "atlas.route_destinations": "{0} destinations",
+  "atlas.route_more": "{0} autres destinations",
+  "atlas.route_summary_help": "Destinations les plus proches en premier ; chaque carte conserve son nom à son emplacement sur l'Atlas.",
   "atlas.input": "Entrée",
   "atlas.controller_mode": "Mode manette",
   "atlas.controller_mode_hint": "GameHelper détecte automatiquement le mode manette, vous n'en avez donc normalement pas besoin. Cochez-le uniquement pour FORCER la disposition Atlas manette si la détection automatique échoue. Dans tous les cas, le plugin revient à l'autre disposition si celle sélectionnée est introuvable. En mode manette, la surcouche reste également visible lorsque l'inventaire est ouvert.",
