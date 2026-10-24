@@ -2117,8 +2117,14 @@ namespace StashUtility
         private static bool CraftSameInventory(IEnumerable<SortItem> before, IEnumerable<SortItem> after)
         {
             var baseline = before.ToList(); var current = after.ToList();
-            return current.Count == baseline.Count && baseline.All(item => current.Any(other =>
-                other.Address == item.Address && other.Identity == item.Identity && CraftSameCell(item, other)));
+            if (current.Count != baseline.Count) return false;
+            var entries = new Dictionary<IntPtr, SortItem>(current.Count);
+            foreach (var item in current)
+                if (!entries.TryAdd(item.Address, item))
+                    return baseline.All(item => current.Any(other =>
+                        other.Address == item.Address && other.Identity == item.Identity && CraftSameCell(item, other)));
+            return baseline.All(item => entries.TryGetValue(item.Address, out var other) &&
+                other.Identity == item.Identity && CraftSameCell(item, other));
         }
 
         private bool CraftRequireCurrency()
@@ -2366,11 +2372,22 @@ namespace StashUtility
             return placed.Length == 1 ? placed[0] : null;
         }
 
-        private static bool CraftMapContentsEqual(List<SortItem> actual, List<SortItem> expected) =>
-            actual != null && expected != null && actual.Count == expected.Count &&
-            actual.All(item => !string.IsNullOrEmpty(item.Identity)) && expected.All(item => !string.IsNullOrEmpty(item.Identity)) &&
-            actual.GroupBy(item => item.Identity).OrderBy(group => group.Key, StringComparer.Ordinal).Select(group => (group.Key, group.Count()))
-                .SequenceEqual(expected.GroupBy(item => item.Identity).OrderBy(group => group.Key, StringComparer.Ordinal).Select(group => (group.Key, group.Count())));
+        private static bool CraftMapContentsEqual(List<SortItem> actual, List<SortItem> expected)
+        {
+            if (actual == null || expected == null || actual.Count != expected.Count) return false;
+            var remaining = new Dictionary<string, int>(expected.Count, StringComparer.Ordinal);
+            foreach (var item in expected)
+            {
+                if (string.IsNullOrEmpty(item.Identity)) return false;
+                remaining[item.Identity] = remaining.GetValueOrDefault(item.Identity) + 1;
+            }
+            foreach (var item in actual)
+            {
+                if (string.IsNullOrEmpty(item.Identity) || !remaining.TryGetValue(item.Identity, out int count) || count == 0) return false;
+                remaining[item.Identity] = count - 1;
+            }
+            return true;
+        }
 
         private Dictionary<IntPtr, string> CraftReadStashMaps()
         {

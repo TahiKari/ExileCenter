@@ -1,12 +1,14 @@
 ﻿
-ExileCenter 1.17.4
+ExileCenter 1.17.5
 
-- Correction du scintillement et des variations du cadre du Kikimeter en fenêtre dans le jeu : les barres de défilement extérieures ne modifient plus alternativement la surface du cadre.
-- Le contenu conserve sa zone de défilement interne. La position, les dimensions personnalisées, le verrouillage et les modes jeu/autre écran sont conservés.
-- Aucun changement du calcul des dégâts, des compteurs, de la barre du coffre ni de l'auto-craft.
+- Optimisation de deux calculs locaux utilisés pour vérifier l'inventaire et le contenu des maps : moins de recherches répétées et de tris intermédiaires, avec les mêmes résultats.
+- Les délais, les commandes envoyées au jeu, les confirmations et l'arrêt au mouvement de la souris sont inchangés. Aucun mécanisme de simulation d'un comportement humain n'est ajouté.
+- Réglages, position de la barre du coffre et verrouillage conservés.
 - GameOffsets.dll conservée à l'identique, sans recompilation.
 
-Validation : compilation ciblée, 4 608 contrôles graphiques sur 48 configurations françaises/anglaises et 38 contrôles des compteurs réussis. Le défaut a été reproduit avant correction. Aucune entrée envoyée au jeu. La confirmation visuelle en jeu reste à effectuer par l'utilisateur.
+Validation : compilation ciblée et 11 790 contrôles isolés réussis, dont 10 660 vérifications d'équivalence des comparaisons. Aucune entrée envoyée au jeu.
+
+Mesures locales pour 5 000 comparaisons : inventaire de 60 objets, médiane de 69 à 18 ms ; contenu de 96 maps, de 172 à 66 ms. Allocations par comparaison : de 6 440 à 3 296 octets pour l'inventaire et de 25 872 à 3 128 octets pour les maps. Ces mesures concernent uniquement les calculs locaux ; le gain sur la durée totale en jeu n'est pas mesuré.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

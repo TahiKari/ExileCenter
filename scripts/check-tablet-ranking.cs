@@ -972,6 +972,54 @@ internal static class TabletRankingCheck
             "Routing restores the original T15 sub-tab and its saved name before continuing the batch");
         var sameInventory=typeof(StashUtilityCore).GetMethod("CraftSameInventory",flags);
         bool Same(IList before,IList after)=>(bool)sameInventory.Invoke(null,new object[]{before,after});
+        // Compare pure local results against the previous algorithms, including
+        // duplicate addresses, identities, cells and unreadable item identities.
+        (IntPtr Address,string Identity,int X,int Y,int Width,int Height) Key(object item)=>(
+            (IntPtr)cellType.GetField("Address").GetValue(item),(string)cellType.GetField("Identity").GetValue(item),
+            (int)cellType.GetField("X").GetValue(item),(int)cellType.GetField("Y").GetValue(item),
+            (int)cellType.GetField("Width").GetValue(item),(int)cellType.GetField("Height").GetValue(item));
+        var wider=Cell(1,0,"same");cellType.GetField("Width").SetValue(wider,2);
+        var taller=Cell(1,0,"same");cellType.GetField("Height").SetValue(taller,2);
+        var variants=new[]{Cell(1,0,"same"),Cell(2,1,"same"),Cell(1,0,"different"),Cell(1,1,"same"),
+            Cell(3,2,""),Cell(4,3,null),wider,taller};
+        var cases=new List<IList>{Cells()};
+        foreach(var first in variants)
+        {
+            cases.Add(Cells(first));
+            foreach(var second in variants)cases.Add(Cells(first,second));
+        }
+        foreach(var before in cases)foreach(var after in cases)
+        {
+            var beforeKeys=before.Cast<object>().Select(Key).ToArray();var afterKeys=after.Cast<object>().Select(Key).ToArray();
+            bool expectedInventory=beforeKeys.Length==afterKeys.Length&&beforeKeys.All(item=>afterKeys.Any(other=>other==item));
+            bool expectedMaps=beforeKeys.Length==afterKeys.Length&&beforeKeys.All(item=>!string.IsNullOrEmpty(item.Identity))&&
+                afterKeys.All(item=>!string.IsNullOrEmpty(item.Identity))&&
+                beforeKeys.GroupBy(item=>item.Identity).OrderBy(group=>group.Key,StringComparer.Ordinal).Select(group=>(group.Key,group.Count()))
+                    .SequenceEqual(afterKeys.GroupBy(item=>item.Identity).OrderBy(group=>group.Key,StringComparer.Ordinal).Select(group=>(group.Key,group.Count())));
+            Check(Same(before,after)==expectedInventory,"Local inventory comparison retains its previous result for duplicates, identities, cells and dimensions");
+            Check(SameMaps(before,after)==expectedMaps,"Local map-content comparison retains exact identity multiplicities and rejects unreadable identities");
+        }
+        Check(!SameMaps(Cells(Cell(1,0,"map")),Cells(Cell(2,0,"MAP"))),"Map identities remain case-sensitive");
+        Check(!SameMaps(Cells(Cell(1,0,"é")),Cells(Cell(2,0,"e"))),"Map identities preserve accents literally");
+        void BenchmarkComparison(string label,MethodInfo method,IList before,IList after)
+        {
+            var left=Expression.Parameter(typeof(object));var right=Expression.Parameter(typeof(object));
+            var compare=Expression.Lambda<Func<object,object,bool>>(Expression.Call(method,
+                Expression.Convert(left,method.GetParameters()[0].ParameterType),Expression.Convert(right,method.GetParameters()[1].ParameterType)),left,right).Compile();
+            for(int i=0;i<200;i++)compare(before,after);
+            var samples=new List<double>();long allocated=0;
+            for(int round=0;round<5;round++)
+            {
+                long allocationStart=GC.GetAllocatedBytesForCurrentThread();var watch=System.Diagnostics.Stopwatch.StartNew();
+                for(int i=0;i<5000;i++)if(!compare(before,after))throw new InvalidOperationException("Comparison benchmark changed its result");
+                watch.Stop();samples.Add(watch.Elapsed.TotalMilliseconds);allocated=GC.GetAllocatedBytesForCurrentThread()-allocationStart;
+            }
+            Console.WriteLine($"LOCAL COMPARISON {label}: median {samples.OrderBy(value=>value).ElementAt(2):F2} ms / 5000 calls; {allocated/5000} bytes/call; no game input.");
+        }
+        var inventorySample=Enumerable.Range(0,60).Select(index=>Cell(2000+index,index%12,"inventory "+index,index/12)).ToArray();
+        var mapSample=Enumerable.Range(0,96).Select(index=>Cell(3000+index,index%12,"map "+index,index/12)).ToArray();
+        BenchmarkComparison("inventory 60",sameInventory,Cells(inventorySample),Cells(inventorySample.Reverse().ToArray()));
+        BenchmarkComparison("map contents 96",mapContents,Cells(mapSample),Cells(mapSample.Reverse().ToArray()));
         Check(Same(Cells(other,coin),Cells(coin,other)),"Stash crafting permits unchanged inventory order without moving a waystone");
         Check(!Same(Cells(other,coin),Cells(other,coin,target)),"A waystone appearing in the player inventory is rejected by the in-stash invariant");
         Check(!Same(Cells(other,coin),Cells(Cell(1,0,"changed"),coin)),"Currency handling never masks changes to unrelated inventory items");
