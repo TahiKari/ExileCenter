@@ -1,14 +1,14 @@
 ﻿
-ExileCenter 1.18.0
+ExileCenter 1.18.1
 
-- Filtres pierres, tablettes et joyaux : possibilité d'ouvrir l'éditeur dans une fenêtre en jeu ou dans une fenêtre Windows indépendante, déplaçable vers un autre écran.
-- Les filtres restent accessibles dans l'application. Les deux vues utilisent les mêmes règles, rangs, seuils et préréglages.
-- Boutons d'ouverture dans l'onglet Filtres et bascule entre les deux modes depuis la fenêtre. La croix ferme uniquement la fenêtre supplémentaire.
-- Positions et tailles mémorisées séparément pour le jeu et le bureau ; catégorie sélectionnée et état d'ouverture conservés. Fenêtre redimensionnable avec défilement du contenu.
-- Aucune fenêtre supplémentaire ouverte par défaut lors de la mise à jour. Aucun changement à la barre du coffre, au Kikimeter ou aux commandes de l'auto-craft.
+- Filtres en jeu : la fenêtre n'est plus masquée lorsque le jeu perd le focus, notamment après un clic ailleurs ou sur un autre écran.
+- Ajout d'un bouton explicite dans la barre de titre : moins pour réduire en barre, plus pour restaurer la fenêtre. Les infobulles précisent les deux actions.
+- Le bouton de réduction reste disponible même si un autre panneau masque son propre bouton de menu. Le style des autres fenêtres est conservé.
+- Position, taille dépliée, état réduit, catégorie et filtres personnels conservés. La croix continue de fermer uniquement la fenêtre supplémentaire.
+- Accès dans l'application et fenêtre Windows indépendante conservés. Aucun changement à la barre du coffre, au Kikimeter ou aux commandes de l'auto-craft.
 - GameOffsets.dll conservée à l'identique, sans recompilation.
 
-Validation : compilation ciblée et 1 200 contrôles hors jeu, couvrant les deux contextes ImGui, les trois catégories, les langues française et anglaise, plusieurs tailles, les bascules, la fermeture et la conservation des réglages. Aucun jeu contrôlé et aucune entrée système envoyée. L'ouverture native et le déplacement réel entre écrans restent à confirmer par l'utilisateur après la mise à jour.
+Validation : compilation ciblée et 1 211 contrôles hors jeu, comprenant des pertes de focus et clics extérieurs simulés ainsi que les boutons réduire/restaurer. Aperçus de la barre réduite et de la fenêtre restaurée vérifiés. Aucun jeu contrôlé et aucune entrée système envoyée. Le comportement réel dans le jeu et sur plusieurs écrans reste à confirmer par l'utilisateur après la mise à jour.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

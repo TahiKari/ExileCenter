@@ -1,4 +1,6 @@
 {
+  "stashutility.filters.collapse": "Réduire en barre",
+  "stashutility.filters.restore": "Restaurer la fenêtre",
   "stashutility.filters.window_title": "Filtres · Pierres, tablettes et joyaux",
   "stashutility.filters.open_game": "Ouvrir les filtres en jeu",
   "stashutility.filters.open_desktop": "Fenêtre indépendante",

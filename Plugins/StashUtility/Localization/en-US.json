@@ -1,4 +1,6 @@
 {
+  "stashutility.filters.collapse": "Minimize to title bar",
+  "stashutility.filters.restore": "Restore window",
   "stashutility.filters.window_title": "Filters · Waystones, tablets and jewels",
   "stashutility.filters.open_game": "Open filters in game",
   "stashutility.filters.open_desktop": "Independent window",

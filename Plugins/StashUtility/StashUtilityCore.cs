@@ -505,8 +505,7 @@ namespace StashUtility
             if (!Settings.FilterWindowOpen || !Settings.FilterWindowSeparate)
             {
                 filterDisplay?.Render(false);
-                if (Settings.FilterWindowOpen && (Core.Process.Foreground || Core.IsSettingsMenuOpen || ImGui.IsMouseDown(ImGuiMouseButton.Left)))
-                    DrawFilterPanel(false);
+                if (Settings.FilterWindowOpen) DrawFilterPanel(false);
                 return;
             }
             try
@@ -571,14 +570,42 @@ namespace StashUtility
             }
             bool open = Settings.FilterWindowOpen;
             string title = PluginText.T("stashutility.filters.window_title", "Filters");
-            bool expanded = detached
-                ? ExileCenter.Ui.ImGuiTheme.BeginFramedWindow("##StashFiltersDesktop", title, flags)
-                : ExileCenter.Ui.ImGuiTheme.BeginWindow(title + "###StashFiltersPanel", ref open, flags);
+            var style = ImGui.GetStyle();
+            var previousMenuPosition = style.WindowMenuButtonPosition;
+            bool expanded;
+            try
+            {
+                // Keep the native collapse hit target enabled even if another panel hides its menu button.
+                if (!detached) style.WindowMenuButtonPosition = ImGuiDir.Left;
+                expanded = detached
+                    ? ExileCenter.Ui.ImGuiTheme.BeginFramedWindow("##StashFiltersDesktop", title, flags)
+                    : ExileCenter.Ui.ImGuiTheme.BeginWindow(title + "###StashFiltersPanel", ref open, flags);
+            }
+            finally { style.WindowMenuButtonPosition = previousMenuPosition; }
             bool save = open != Settings.FilterWindowOpen;
             Settings.FilterWindowOpen = open;
             if (!detached)
             {
                 bool collapsed = ImGui.IsWindowCollapsed();
+                // Repaint the native collapse button; ImGui owns the interaction, including on the collapsed bar.
+                var center = ImGui.GetWindowPos() + new Vector2(style.FramePadding.X + ImGui.GetFontSize() / 2, ImGui.GetFrameHeight() / 2);
+                float radius = ImGui.GetFontSize() * .48f;
+                var minimum = center - new Vector2(radius);
+                var maximum = center + new Vector2(radius);
+                var draw = ImGui.GetWindowDrawList();
+                uint accent = ImGui.GetColorU32(ExileCenter.Ui.ImGuiTheme.Accent);
+                draw.PushClipRect(ImGui.GetWindowPos(), ImGui.GetWindowPos() + new Vector2(ImGui.GetWindowWidth(), ImGui.GetFrameHeight()), false);
+                draw.AddRectFilled(minimum, maximum, ImGui.GetColorU32(ImGuiCol.TitleBgActive), 2);
+                draw.AddRect(minimum, maximum, accent, 2);
+                draw.AddLine(center - new Vector2(radius * .55f, 0), center + new Vector2(radius * .55f, 0), accent, 1.5f);
+                if (collapsed) draw.AddLine(center - new Vector2(0, radius * .55f), center + new Vector2(0, radius * .55f), accent, 1.5f);
+                draw.PopClipRect();
+                if (ImGui.IsMouseHoveringRect(minimum, maximum, false) && ImGui.BeginTooltip())
+                {
+                    ImGui.TextUnformatted(PluginText.T(collapsed ? "stashutility.filters.restore" : "stashutility.filters.collapse",
+                        collapsed ? "Restore window" : "Minimize to title bar"));
+                    ImGui.EndTooltip();
+                }
                 save |= Settings.FilterWindowCollapsed != collapsed;
                 Settings.FilterWindowCollapsed = collapsed;
                 var occupied = collapsed ? new Vector2(ImGui.GetWindowWidth(), ImGui.GetFrameHeight()) : ImGui.GetWindowSize();

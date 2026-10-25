@@ -152,6 +152,34 @@ internal static class TabletRankingCheck
             for (int frame = 0; frame < 4; frame++)
             { ImGuiNET.ImGui.NewFrame(); render.Invoke(plugin, new object[] { false }); ImGuiNET.ImGui.Render(); }
             Check(FilterSettings() == original, "Error messages and reopening preserve filters and other controls");
+            var display = typeof(StashUtilityCore).GetMethod("DrawFilterDisplay", flags);
+            io = ImGuiNET.ImGui.GetIO();
+            for (int frame = 0; frame < 6; frame++)
+            {
+                io.AddFocusEvent(false); io.AddMousePosEvent(1200, 850); io.AddMouseButtonEvent(0, frame % 2 == 0);
+                ImGuiNET.ImGui.NewFrame(); display.Invoke(plugin, null); ImGuiNET.ImGui.Render();
+                Check(settings.FilterWindowOpen && ImGuiNET.ImGui.GetDrawData().TotalVtxCount > 0,
+                    "The production filter display remains drawn after focus loss and clicks outside the panel");
+            }
+            io.AddFocusEvent(true); io.AddMouseButtonEvent(0, false);
+            var style = ImGuiNET.ImGui.GetStyle(); var menuPosition = style.WindowMenuButtonPosition;
+            style.WindowMenuButtonPosition = ImGuiNET.ImGuiDir.None;
+            for (int frame = 0; frame < 3; frame++) MouseFrame(false, new Vector2(-100), false);
+            var collapseButton = settings.FilterWindowPosition + new Vector2(style.FramePadding.X + ImGuiNET.ImGui.GetFontSize() / 2, ImGuiNET.ImGui.GetFrameHeight() / 2);
+            foreach (bool down in new[] { false, true, false }) MouseFrame(false, collapseButton, down);
+            for (int frame = 0; frame < 3; frame++) MouseFrame(false, new Vector2(-100), false);
+            Check(settings.FilterWindowCollapsed, "The title-bar minus button collapses the panel even when the inherited menu-button style is disabled");
+            Check(settings.FilterWindowPosition == new Vector2(125, 85) && settings.FilterWindowSize == new Vector2(900, 700),
+                "Minimizing to a bar preserves the user's position and expanded size");
+            if (preview != null) SaveUiPreview(Path.Combine(preview, "filters-collapsed-bar.png"), atlas, atlasWidth, atlasHeight);
+            foreach (bool down in new[] { false, true, false }) MouseFrame(false, collapseButton, down);
+            for (int frame = 0; frame < 3; frame++) MouseFrame(false, new Vector2(-100), false);
+            Check(!settings.FilterWindowCollapsed && settings.FilterWindowOpen, "The title-bar plus button restores the panel without closing it");
+            Check(style.WindowMenuButtonPosition == ImGuiNET.ImGuiDir.None, "Filter title-bar controls never change the menu-button style of other windows");
+            style.WindowMenuButtonPosition = menuPosition;
+            Check(FilterSettings() == original && settings.FilterWindowPosition == new Vector2(125, 85) && settings.FilterWindowSize == new Vector2(900, 700),
+                "Focus changes, outside clicks and collapse/restore preserve all filters and placements");
+            if (preview != null) SaveUiPreview(Path.Combine(preview, "filters-restored.png"), atlas, atlasWidth, atlasHeight);
             settings.FilterWindowOpen = false; plugin.SaveSettings();
             var restored = JsonConvert.DeserializeObject<StashUtilitySettings>(File.ReadAllText(Path.Combine(isolated, "config", "settings.txt")));
             Check(!restored.FilterWindowOpen && restored.FilterWindowPosition == new Vector2(125, 85) && restored.FilterWindowSize == new Vector2(900, 700), "Closed state and game placement survive a settings round trip");
