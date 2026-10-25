@@ -593,12 +593,24 @@ namespace StashUtility
                 var minimum = center - new Vector2(radius);
                 var maximum = center + new Vector2(radius);
                 var draw = ImGui.GetWindowDrawList();
-                uint accent = ImGui.GetColorU32(ExileCenter.Ui.ImGuiTheme.Accent);
+                uint symbol = 0xFFFFFFFF;
+                bool hovered = ImGui.IsMouseHoveringRect(minimum, maximum, false);
+                float stroke = MathF.Max(1.8f, ImGui.GetFontSize() * .13f);
                 draw.PushClipRect(ImGui.GetWindowPos(), ImGui.GetWindowPos() + new Vector2(ImGui.GetWindowWidth(), ImGui.GetFrameHeight()), false);
-                draw.AddRectFilled(minimum, maximum, ImGui.GetColorU32(ImGuiCol.TitleBgActive), 2);
-                draw.AddRect(minimum, maximum, accent, 2);
-                draw.AddLine(center - new Vector2(radius * .55f, 0), center + new Vector2(radius * .55f, 0), accent, 1.5f);
-                if (collapsed) draw.AddLine(center - new Vector2(0, radius * .55f), center + new Vector2(0, radius * .55f), accent, 1.5f);
+                draw.AddRectFilled(minimum, maximum, ImGui.GetColorU32(hovered ? new Vector4(.12f, .28f, .42f, 1) : new Vector4(.035f, .05f, .075f, 1)), 2);
+                draw.AddRect(minimum, maximum, symbol, 2, ImDrawFlags.None, 1.5f);
+                draw.AddLine(center - new Vector2(radius * .65f, 0), center + new Vector2(radius * .65f, 0), symbol, stroke);
+                if (collapsed) draw.AddLine(center - new Vector2(0, radius * .65f), center + new Vector2(0, radius * .65f), symbol, stroke);
+                // Repaint the existing close target as well, without changing its position or interaction.
+                var closeCenter = new Vector2(ImGui.GetWindowPos().X + ImGui.GetWindowWidth() - style.FramePadding.X - ImGui.GetFontSize() / 2, center.Y);
+                var closeMinimum = closeCenter - new Vector2(radius);
+                var closeMaximum = closeCenter + new Vector2(radius);
+                bool closeHovered = ImGui.IsMouseHoveringRect(closeMinimum, closeMaximum, false);
+                draw.AddRectFilled(closeMinimum, closeMaximum, ImGui.GetColorU32(closeHovered ? new Vector4(.65f, .06f, .06f, 1) : new Vector4(.34f, .035f, .035f, 1)), 2);
+                draw.AddRect(closeMinimum, closeMaximum, symbol, 2, ImDrawFlags.None, 1.5f);
+                var arm = new Vector2(radius * .5f);
+                draw.AddLine(closeCenter - arm, closeCenter + arm, symbol, stroke);
+                draw.AddLine(closeCenter + new Vector2(-arm.X, arm.Y), closeCenter + new Vector2(arm.X, -arm.Y), symbol, stroke);
                 draw.PopClipRect();
                 if (ImGui.IsMouseHoveringRect(minimum, maximum, false) && ImGui.BeginTooltip())
                 {

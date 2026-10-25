@@ -44,6 +44,8 @@ internal static class TabletRankingCheck
         var open = typeof(StashUtilityCore).GetMethod("OpenFilterWindow", flags);
         var context = ImGuiNET.ImGui.CreateContext();
         var desktopContext = IntPtr.Zero;
+        var frameTexture = typeof(ExileCenter.Ui.ImGuiTheme).GetField("frameTexture", flags);
+        var previousFrameTexture = frameTexture.GetValue(null);
         string FilterSettings()
         {
             var json = Newtonsoft.Json.Linq.JObject.FromObject(settings);
@@ -59,6 +61,14 @@ internal static class TabletRankingCheck
             var atlas = new byte[atlasWidth * atlasHeight * bytes]; Marshal.Copy(pixels, atlas, 0, atlas.Length);
             io.Fonts.SetTexID(new IntPtr(1));
             typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("Apply", flags).Invoke(null, null);
+            if (preview != null)
+            {
+                using var stream = typeof(ExileCenter.Core).Assembly.GetManifestResourceStream("ExileCenter.Data.Poe2Frame.png");
+                using var artwork = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(stream);
+                framePreviewWidth = artwork.Width; framePreviewHeight = artwork.Height;
+                framePreviewPixels = new SixLabors.ImageSharp.PixelFormats.Rgba32[artwork.Width * artwork.Height];
+                artwork.CopyPixelDataTo(framePreviewPixels); frameTexture.SetValue(null, new IntPtr(2));
+            }
             open.Invoke(plugin, new object[] { false });
             // Run existing, intentional profile migrations before checking that a second view preserves them.
             for (int page = 0; page < 3; page++)
@@ -199,6 +209,7 @@ internal static class TabletRankingCheck
         finally
         {
             ExileCenter.Core.GHSettings.UiLanguage = languageBefore;
+            frameTexture.SetValue(null, previousFrameTexture);
             if (desktopContext != IntPtr.Zero) ImGuiNET.ImGui.DestroyContext(desktopContext);
             ImGuiNET.ImGui.DestroyContext(context); ImGuiNET.ImGui.SetCurrentContext(previous);
         }

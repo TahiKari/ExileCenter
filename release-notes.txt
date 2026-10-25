@@ -1,14 +1,13 @@
 ﻿
-ExileCenter 1.18.1
+ExileCenter 1.18.2
 
-- Filtres en jeu : la fenêtre n'est plus masquée lorsque le jeu perd le focus, notamment après un clic ailleurs ou sur un autre écran.
-- Ajout d'un bouton explicite dans la barre de titre : moins pour réduire en barre, plus pour restaurer la fenêtre. Les infobulles précisent les deux actions.
-- Le bouton de réduction reste disponible même si un autre panneau masque son propre bouton de menu. Le style des autres fenêtres est conservé.
-- Position, taille dépliée, état réduit, catégorie et filtres personnels conservés. La croix continue de fermer uniquement la fenêtre supplémentaire.
-- Accès dans l'application et fenêtre Windows indépendante conservés. Aucun changement à la barre du coffre, au Kikimeter ou aux commandes de l'auto-craft.
+- Filtres en jeu : boutons réduire/restaurer et fermer plus visibles sur le cadre décoratif, avec symboles blancs épaissis et contours blancs.
+- Réduction/restauration sur fond bleu très sombre ; fermeture sur fond rouge sombre. Le survol renforce la couleur de chaque bouton.
+- Emplacements, dimensions des boutons et zones de clic conservés. Aucun changement à la position, à la taille de la fenêtre ou aux filtres personnels.
+- Maintien de l'affichage après perte de focus et réduction en barre conservés. Aucun changement au thème des autres fenêtres, à la barre du coffre ou aux commandes au jeu.
 - GameOffsets.dll conservée à l'identique, sans recompilation.
 
-Validation : compilation ciblée et 1 211 contrôles hors jeu, comprenant des pertes de focus et clics extérieurs simulés ainsi que les boutons réduire/restaurer. Aperçus de la barre réduite et de la fenêtre restaurée vérifiés. Aucun jeu contrôlé et aucune entrée système envoyée. Le comportement réel dans le jeu et sur plusieurs écrans reste à confirmer par l'utilisateur après la mise à jour.
+Validation : compilation ciblée et 1 211 contrôles hors jeu. Aperçus vérifiés avec le cadre décoratif réel et en mode barre réduite ; interactions réduire/restaurer/fermer et réglages conservés. Aucun jeu contrôlé et aucune entrée système envoyée. La lisibilité réelle dans le jeu reste à confirmer par l'utilisateur après la mise à jour.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.
