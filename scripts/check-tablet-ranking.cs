@@ -142,6 +142,39 @@ internal static class TabletRankingCheck
                 Check(copiedQuery == Query() && copiedQuery.Length > 0, "The Copy search button copies the exact generated query through an in-memory clipboard callback");
             }
             finally { platform.Platform_SetClipboardTextFn = clipboardBefore; GC.KeepAlive(capture); }
+            var searchField = typeof(StashUtilityCore).GetField("tabletStashSearchTerm", flags);
+            var drawSearch = typeof(StashUtilityCore).GetMethod("DrawTabletStashSearch", flags);
+            uint searchColor = ExileCenter.Utils.ImGuiHelper.Color(new Vector4(.95f, .75f, .2f, .28f));
+            settings.TabletStashSearchType = "Irradiated Tablet";
+            string savedSelection = JsonConvert.SerializeObject(settings.TabletStashSearchMods);
+            foreach (float panelWidth in new[] { 520f, 1000f })
+            foreach (string language in new[] { "fr", "en" })
+            {
+                settings.TabletStashSearchLanguage = language;
+                ExileCenter.Core.GHSettings.UiLanguage = language == "fr" ? ExileCenter.Localization.OverlayLanguage.English : ExileCenter.Localization.OverlayLanguage.French;
+                io.DisplaySize = new Vector2(panelWidth, 1300);
+                (float Height, int Highlights) SearchFrame(string query)
+                {
+                    searchField.SetValue(plugin, query); io.AddMousePosEvent(-100, -100); io.AddMouseButtonEvent(0, false);
+                    ImGuiNET.ImGui.NewFrame(); ImGuiNET.ImGui.SetNextWindowPos(Vector2.Zero); ImGuiNET.ImGui.SetNextWindowSize(io.DisplaySize);
+                    ImGuiNET.ImGui.Begin("Search highlight##stash-search"); drawSearch.Invoke(plugin, null);
+                    float height = ImGuiNET.ImGui.GetCursorPosY(); ImGuiNET.ImGui.End(); ImGuiNET.ImGui.Render();
+                    var data = ImGuiNET.ImGui.GetDrawData();
+                    int highlights = Enumerable.Range(0, data.CmdListsCount).Sum(i => Enumerable.Range(0, data.CmdLists[i].VtxBuffer.Size).Count(j => data.CmdLists[i].VtxBuffer[j].col == searchColor));
+                    return (height, highlights);
+                }
+                SearchFrame("introuvable"); var missing = SearchFrame("introuvable");
+                Check(missing.Highlights == 0, "An unmatched stash modifier search highlights no rows");
+                foreach (string query in new[] { "efficacite", "EFFICACITÉ", "effectiveness" })
+                {
+                    var found = SearchFrame(query);
+                    Check(found.Highlights > 0 && found.Height == missing.Height, "Stash search highlights French/English names without hiding any rows: " + language + "/" + query + "/" + panelWidth);
+                }
+                if (preview != null) SaveUiPreview(Path.Combine(preview, $"stash-mod-highlight-{language}-{panelWidth}.png"), atlas, width, height);
+                Check(SearchFrame("").Highlights == 0 && SearchFrame("  !!!  ").Highlights == 0, "Clearing the search removes all stash modifier highlights");
+                Check(JsonConvert.SerializeObject(settings.TabletStashSearchMods) == savedSelection, "Typing a highlight search never checks or unchecks modifiers");
+            }
+            searchField.SetValue(plugin, "");
             settings.EnableTabletManager = enabled;
             Check(OriginalSettings() == original, "Rendering and changing search language leave the old tablet settings unchanged");
             Console.WriteLine(checks + " tablet stash-search checks passed; generated queries tested offline, no game process or OS input.");

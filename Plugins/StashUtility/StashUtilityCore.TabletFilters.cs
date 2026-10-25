@@ -156,20 +156,32 @@ namespace StashUtility
             if (tabletStashSearchMessage.Length > 0) MetaText(tabletStashSearchMessage);
             MetaText(PluginText.T("stashutility.tablet_search.text_only", "Searches modifier text, not roll values. Variants sharing the same wording may also match. Your rank and highlight filters are unchanged."));
             ImGui.SetNextItemWidth(-1);
-            ImGui.InputTextWithHint("##TabletStashModSearch", PluginText.T("stashutility.filters.search", "Search a modifier in French or English..."), ref tabletStashSearchTerm, 160);
-            foreach (var mod in Data.ModDatabase.AllTabletMods.Where(mod => mod.TabletTypes.Contains(selectedType) &&
-                (MatchesModSearch(tabletStashSearchTerm, mod.Id, mod.Name) || NormalizeModSearch(tabletStashSearchTerm).Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                    .All(NormalizeModSearch(TabletStashModText(mod)).Contains))))
+            ImGui.InputTextWithHint("##TabletStashModSearch", PluginText.T("stashutility.filters.search_highlight", "Type a modifier name to highlight matching rows..."), ref tabletStashSearchTerm, 160);
+            var mods = Data.ModDatabase.AllTabletMods.Where(mod => mod.TabletTypes.Contains(selectedType)).ToList();
+            var searchWords = NormalizeModSearch(tabletStashSearchTerm).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var matches = searchWords.Length == 0 ? new HashSet<string>() : mods.Where(mod =>
+                MatchesModSearch(tabletStashSearchTerm, mod.Id, mod.Name) || searchWords.All(NormalizeModSearch(TabletStashModText(mod)).Contains))
+                .Select(mod => mod.Id).ToHashSet();
+            if (searchWords.Length > 0)
+                ImGui.TextDisabled(PluginText.F("stashutility.filters.search_matches", "{0} matching modifiers", matches.Count));
+            if (ImGui.BeginTable("##TabletStashMods", 1, ImGuiTableFlags.SizingStretchProp))
             {
-                ImGui.PushID("stashSearch_" + mod.Id);
-                bool selected = ids?.Contains(mod.Id) == true;
-                ImGui.BeginDisabled(!selected && count >= 4);
-                if (ImGui.Checkbox("##selected", ref selected) && SetTabletStashMod(selectedType, mod.Id, selected))
-                { tabletStashSearchMessage = ""; SaveSettings(); Settings.TabletStashSearchMods.TryGetValue(selectedType, out ids); count = ids?.Count ?? 0; }
-                ImGui.EndDisabled();
-                ImGui.SameLine(); MetaText(TabletStashModText(mod));
-                if (selected) ImGui.TextDisabled(PluginText.F("stashutility.tablet_search.keyword", "Keyword: {0}", TabletStashKeyword(mod, selectedType)));
-                ImGui.PopID();
+                foreach (var mod in mods)
+                {
+                    ImGui.TableNextRow(); ImGui.TableSetColumnIndex(0);
+                    ImGui.PushID("stashSearch_" + mod.Id);
+                    bool selected = ids?.Contains(mod.Id) == true;
+                    ImGui.BeginDisabled(!selected && count >= 4);
+                    if (ImGui.Checkbox("##selected", ref selected) && SetTabletStashMod(selectedType, mod.Id, selected))
+                    { tabletStashSearchMessage = ""; SaveSettings(); Settings.TabletStashSearchMods.TryGetValue(selectedType, out ids); count = ids?.Count ?? 0; }
+                    ImGui.EndDisabled();
+                    ImGui.SameLine(); MetaText(TabletStashModText(mod));
+                    if (selected) ImGui.TextDisabled(PluginText.F("stashutility.tablet_search.keyword", "Keyword: {0}", TabletStashKeyword(mod, selectedType)));
+                    ImGui.PopID();
+                    if (matches.Contains(mod.Id))
+                        ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGuiHelper.Color(new Vector4(.95f, .75f, .2f, .28f)));
+                }
+                ImGui.EndTable();
             }
         }
 
