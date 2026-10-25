@@ -21,6 +21,133 @@ internal static class TabletRankingCheck
     private static int checks;
     private static SixLabors.ImageSharp.PixelFormats.Rgba32[] framePreviewPixels;
     private static int framePreviewWidth, framePreviewHeight;
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void ClipboardCapture(IntPtr context, IntPtr value);
+
+    private static unsafe void CheckTabletStashSearch(string root, string preview)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
+        var isolated = Path.Combine(Path.GetDirectoryName(typeof(TabletRankingCheck).Assembly.Location), "stash-search-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(isolated, "Localization"));
+        foreach (string language in new[] { "fr-FR", "en-US" })
+            File.Copy(Path.Combine(root, "Plugins", "StashUtility", "Localization", language + ".json"), Path.Combine(isolated, "Localization", language + ".json"));
+        var plugin = new StashUtilityCore { DllDirectory = isolated }; var settings = plugin.Settings;
+        var localization = new ExileCenter.Localization.PluginLocalization(isolated);
+        typeof(StashUtilityCore).GetMethod("ApplyTabletFarmPreset", flags).Invoke(plugin, new object[] { true });
+        settings.StashToolbarOffset = new Vector2(123, -47); settings.StashToolbarLocked = true;
+        var build = typeof(StashUtilityCore).GetMethod("BuildTabletStashQuery", flags);
+        var toggle = typeof(StashUtilityCore).GetMethod("SetTabletStashMod", flags);
+        var text = typeof(StashUtilityCore).GetMethod("TabletStashModText", flags);
+        string Query() => (string)build.Invoke(plugin, null);
+        string OriginalSettings()
+        {
+            var json = Newtonsoft.Json.Linq.JObject.FromObject(settings);
+            foreach (var property in json.Properties().Where(p => p.Name.StartsWith("TabletStashSearch", StringComparison.Ordinal)).ToList()) property.Remove();
+            return json.ToString(Newtonsoft.Json.Formatting.None);
+        }
+        string original = OriginalSettings();
+        Check(Query() == "", "An empty selection cannot copy a broad or empty search");
+        var languageBefore = ExileCenter.Core.GHSettings.UiLanguage;
+        var previous = ImGuiNET.ImGui.GetCurrentContext(); var context = IntPtr.Zero;
+        try
+        {
+            bool Matches(string query, string item) => System.Text.RegularExpressions.Regex.Matches(query, "\"([^\"]+)\"").All(block =>
+                item.Split('\n').Any(line => System.Text.RegularExpressions.Regex.IsMatch(line, block.Groups[1].Value,
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant)));
+            foreach (string language in new[] { "fr", "en" })
+            {
+                settings.TabletStashSearchLanguage = language;
+                // Search language stays independent from the application's language.
+                ExileCenter.Core.GHSettings.UiLanguage = language == "fr" ? ExileCenter.Localization.OverlayLanguage.English : ExileCenter.Localization.OverlayLanguage.French;
+                foreach (string type in StashUtilitySettings.TabletTypes)
+                {
+                    settings.TabletStashSearchType = type;
+                    var catalog = ModDatabase.AllTabletMods.Where(mod => mod.TabletTypes.Contains(type)).ToArray();
+                    string baseName = localization.T("stashutility.tablet_search.base." + type.Replace(" ", ""), type,
+                        language == "fr" ? ExileCenter.Localization.OverlayLanguage.French : ExileCenter.Localization.OverlayLanguage.English);
+                    foreach (var mod in catalog)
+                    {
+                        settings.TabletStashSearchMods[type] = new() { mod.Id };
+                        string query = Query();
+                        Check(query.Length > 0 && query.Length <= 250, "Every catalogued tablet modifier produces a bounded query: " + language + "/" + mod.Id);
+                        string description = (string)text.Invoke(plugin, new object[] { mod });
+                        description = System.Text.RegularExpressions.Regex.Replace(description, @"\((\d+)[^\d)]+(\d+)\)", "$1");
+                        Check(Matches(query, baseName + "\n" + description), "A generated keyword matches the modifier's displayed text with actual roll numbers: " + language + "/" + mod.Id + "; query=" + query);
+                        Check(!Matches(query, "Unrelated base\n" + description), "The tablet family remains required even when modifier text is shared");
+                    }
+                    for (int count = 1; count <= 4; count++)
+                    foreach (bool all in new[] { true, false })
+                    {
+                        var mods = catalog.Take(count).ToArray(); settings.TabletStashSearchMods[type] = mods.Select(mod => mod.Id).ToList(); settings.TabletStashSearchAll = all;
+                        string query = Query(); Check(query.Length > 0, "One through four selected modifiers work in AND and OR modes");
+                        for (int mask = 0; mask < 1 << count; mask++)
+                        {
+                            string item = baseName + "\n" + string.Join("\n", mods.Where((mod, index) => (mask & (1 << index)) != 0).Select(mod => (string)text.Invoke(plugin, new object[] { mod })));
+                            Check(Matches(query, item) == (all ? mask == (1 << count) - 1 : mask != 0), "AND/OR searches respect every combination of selected and missing modifiers");
+                        }
+                    }
+                }
+                Check(OriginalSettings() == original, "Building searches never changes rank filters, presets, thresholds or toolbar placement");
+            }
+            string chosenType = StashUtilitySettings.TabletTypes[0]; var choices = ModDatabase.AllTabletMods.Where(mod => mod.TabletTypes.Contains(chosenType)).Take(5).ToArray();
+            settings.TabletStashSearchType = chosenType; settings.TabletStashSearchMods[chosenType] = new();
+            for (int i = 0; i < 4; i++) Check((bool)toggle.Invoke(plugin, new object[] { chosenType, choices[i].Id, true }), "Four independent checkboxes can be enabled");
+            Check(!(bool)toggle.Invoke(plugin, new object[] { chosenType, choices[4].Id, true }) && settings.TabletStashSearchMods[chosenType].Count == 4, "A fifth modifier is refused without altering the selection");
+            Check(!(bool)toggle.Invoke(plugin, new object[] { chosenType, "missing", true }), "Unknown modifiers cannot enter a query");
+            Check((bool)toggle.Invoke(plugin, new object[] { chosenType, choices[0].Id, false }) && (bool)toggle.Invoke(plugin, new object[] { chosenType, choices[4].Id, true }), "Removing a modifier frees a selection slot");
+            settings.TabletStashSearchMods[chosenType].Add(choices[0].Id); Check(Query() == "", "Malformed saved selections above four terms cannot be copied");
+            settings.TabletStashSearchMods[chosenType].Remove(choices[0].Id);
+            settings.TabletStashSearchMods[chosenType].Add("missing"); Check(Query() == "", "Unavailable saved modifiers cannot silently produce a partial query"); settings.TabletStashSearchMods[chosenType].Remove("missing");
+            plugin.SaveSettings();
+            var restored = JsonConvert.DeserializeObject<StashUtilitySettings>(File.ReadAllText(Path.Combine(isolated, "config", "settings.txt")));
+            Check(JsonConvert.SerializeObject(restored.TabletStashSearchMods) == JsonConvert.SerializeObject(settings.TabletStashSearchMods), "Selections for all eight tablet families survive restart independently");
+            Check(OriginalSettings() == original && restored.StashToolbarOffset == new Vector2(123, -47) && restored.StashToolbarLocked, "Saving a stash search preserves existing filters and the locked toolbar");
+            context = ImGuiNET.ImGui.CreateContext(); var io = ImGuiNET.ImGui.GetIO(); io.NativePtr->IniFilename = null; io.DeltaTime = 1f / 60;
+            io.Fonts.AddFontFromFileTTF(Path.Combine(root, "fonts", "DejaVuSans.ttf"), 15);
+            io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels, out int width, out int height, out int bytes); io.Fonts.SetTexID(new IntPtr(1));
+            var atlas = new byte[width * height * bytes]; Marshal.Copy(pixels, atlas, 0, atlas.Length);
+            typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("Apply", flags).Invoke(null, null);
+            var draw = typeof(StashUtilityCore).GetMethod("DrawTabletSettings", flags);
+            bool enabled = settings.EnableTabletManager; settings.EnableTabletManager = false;
+            foreach (var language in new[] { ExileCenter.Localization.OverlayLanguage.French, ExileCenter.Localization.OverlayLanguage.English })
+            foreach (float panelWidth in new[] { 520f, 1000f })
+            {
+                ExileCenter.Core.GHSettings.UiLanguage = language; settings.TabletStashSearchLanguage = language == ExileCenter.Localization.OverlayLanguage.French ? "fr" : "en";
+                io.DisplaySize = new Vector2(panelWidth, 900);
+                Vector2 searchTab = new(-100);
+                for (int frame = 0; frame < 7; frame++)
+                {
+                    io.AddMousePosEvent(frame is >= 1 and <= 3 ? searchTab.X : -100, frame is >= 1 and <= 3 ? searchTab.Y : -100);
+                    io.AddMouseButtonEvent(0, frame == 2);
+                    ImGuiNET.ImGui.NewFrame(); ImGuiNET.ImGui.SetNextWindowPos(Vector2.Zero); ImGuiNET.ImGui.SetNextWindowSize(io.DisplaySize);
+                    ImGuiNET.ImGui.Begin("Tablettes / Tablets");
+                    searchTab = ImGuiNET.ImGui.GetCursorScreenPos() + new Vector2(ImGuiNET.ImGui.CalcTextSize(localization.T("stashutility.tablet_search.ranks", "Filters and ranks")).X + 60, ImGuiNET.ImGui.GetFrameHeight() / 2);
+                    draw.Invoke(plugin, null); ImGuiNET.ImGui.End(); ImGuiNET.ImGui.Render();
+                    if (frame >= 4) Check(ImGuiNET.ImGui.GetDrawData().TotalVtxCount > 3000 && Query().Length > 0, "The independent search sub-tab opens while the old tablet manager is disabled");
+                    if (frame == 6 && preview != null) { Directory.CreateDirectory(preview); SaveUiPreview(Path.Combine(preview, $"tablet-stash-search-{language}-{panelWidth}.png"), atlas, width, height); }
+                }
+            }
+            string copiedQuery = null;
+            ClipboardCapture capture = (_, value) => copiedQuery = Marshal.PtrToStringUTF8(value);
+            var platform = ImGuiNET.ImGui.GetPlatformIO(); var clipboardBefore = platform.Platform_SetClipboardTextFn;
+            try
+            {
+                platform.Platform_SetClipboardTextFn = Marshal.GetFunctionPointerForDelegate(capture);
+                foreach (bool down in new[] { false, true, false })
+                {
+                    io.AddMousePosEvent(75, 326); io.AddMouseButtonEvent(0, down);
+                    ImGuiNET.ImGui.NewFrame(); ImGuiNET.ImGui.SetNextWindowPos(Vector2.Zero); ImGuiNET.ImGui.SetNextWindowSize(io.DisplaySize);
+                    ImGuiNET.ImGui.Begin("Tablettes / Tablets"); draw.Invoke(plugin, null); ImGuiNET.ImGui.End(); ImGuiNET.ImGui.Render();
+                }
+                Check(copiedQuery == Query() && copiedQuery.Length > 0, "The Copy search button copies the exact generated query through an in-memory clipboard callback");
+            }
+            finally { platform.Platform_SetClipboardTextFn = clipboardBefore; GC.KeepAlive(capture); }
+            settings.EnableTabletManager = enabled;
+            Check(OriginalSettings() == original, "Rendering and changing search language leave the old tablet settings unchanged");
+            Console.WriteLine(checks + " tablet stash-search checks passed; generated queries tested offline, no game process or OS input.");
+        }
+        finally { ExileCenter.Core.GHSettings.UiLanguage = languageBefore; if (context != IntPtr.Zero) ImGuiNET.ImGui.DestroyContext(context); ImGuiNET.ImGui.SetCurrentContext(previous); }
+    }
 
     private static unsafe void CheckFilterWindow(string root, string preview)
     {
@@ -1707,6 +1834,11 @@ internal static class TabletRankingCheck
             if (args.Length > 1 && args[1] == "--filter-window-only")
             {
                 CheckFilterWindow(root, args.Length > 2 ? args[2] : null);
+                return 0;
+            }
+            if (args.Length > 1 && args[1] == "--tablet-stash-search-only")
+            {
+                CheckTabletStashSearch(root, args.Length > 2 ? args[2] : null);
                 return 0;
             }
             if (args.Length > 1 && args[1] == "--radar-only")

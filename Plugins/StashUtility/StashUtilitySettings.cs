@@ -33,6 +33,11 @@ namespace StashUtility
         public string WaystoneCraftT14PageName = "Craft";
         public string WaystoneCraftT16PageName = "Craft";
         public bool EnableTabletManager = true;
+        // Stash search has its own choices; never reuse highlight profiles or presets.
+        public string TabletStashSearchType = "Breach Tablet";
+        public string TabletStashSearchLanguage = "";
+        public bool TabletStashSearchAll = true;
+        public Dictionary<string, List<string>> TabletStashSearchMods = new();
         public bool TabletHelpTooltips = true;
         public int TabletHoverDetailsMode = 1; // 0: hidden, 1: summary, 2: detailed.
         public bool EnableTabletUI = true;

@@ -13,6 +13,8 @@ namespace StashUtility
     public sealed partial class StashUtilityCore
     {
         private string tabletProfileJson = "", tabletProfileMessage = "";
+        private string tabletStashSearchTerm = "", tabletStashSearchMessage = "";
+        private readonly Dictionary<string, string> tabletStashSearchKeywords = new();
         private TabletObservation lastMetaObservation;
         private string lastMetaItemName = "";
         private DateTime lastMetaObservedUtc;
@@ -26,6 +28,150 @@ namespace StashUtility
                 ? modifier.FrenchText : modifier.EnglishText;
         private static TabletFilterProfile ActiveMetaProfile(TabletProfile settings)
             => settings.MetaProfiles?.FirstOrDefault(p => p != null && p.Id == settings.ActiveMetaProfileId);
+
+        private void DrawTabletSettings()
+        {
+            if (!ImGui.BeginTabBar("##TabletTools")) return;
+            if (ImGui.BeginTabItem(PluginText.T("stashutility.tablet_search.ranks", "Filters and ranks") + "###TabletRanks"))
+            { DrawTabletFilterSettings(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem(PluginText.T("stashutility.tablet_search.title", "Stash search") + "###TabletStashSearch"))
+            { DrawTabletStashSearch(); ImGui.EndTabItem(); }
+            ImGui.EndTabBar();
+        }
+
+        private ExileCenter.Localization.OverlayLanguage TabletStashSearchLanguage => Settings.TabletStashSearchLanguage switch
+        {
+            "fr" => ExileCenter.Localization.OverlayLanguage.French,
+            "en" => ExileCenter.Localization.OverlayLanguage.English,
+            _ => ExileCenter.Localization.OverlayLocalization.CurrentLanguage
+        };
+
+        private string TabletStashModText(Models.TabletMod mod) =>
+            PluginText.T("stashutility.mod." + mod.Id, mod.Name, TabletStashSearchLanguage);
+
+        private static string[] TabletStashTextLines(string text) =>
+            // Numeric rolls are boundaries: a keyword must never join words that the game separates by a value.
+            System.Text.RegularExpressions.Regex.Replace(text ?? "", @"\([^)]*\)|[+\-]?\d+(?:[.,]\d+)?|[%#]", "\n").Split('\n')
+            .Select(line => System.Text.RegularExpressions.Regex.Replace(line.Replace('’', '\''), @"\s+", " ").Trim().ToLowerInvariant())
+            .Where(line => line.Length > 0).ToArray();
+
+        private string TabletStashKeyword(Models.TabletMod mod, string type)
+        {
+            string key = TabletStashSearchLanguage + "|" + type + "|" + mod.Id;
+            if (tabletStashSearchKeywords.TryGetValue(key, out var cached)) return cached;
+            var others = Data.ModDatabase.AllTabletMods.Where(other => other.Id != mod.Id && other.TabletTypes.Contains(type))
+                .SelectMany(other => TabletStashTextLines(TabletStashModText(other))).ToArray();
+            var candidates = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string line in TabletStashTextLines(TabletStashModText(mod)))
+            {
+                var words = System.Text.RegularExpressions.Regex.Matches(line, @"[\p{L}]+(?:'[\p{L}]+)*");
+                for (int start = 0; start < words.Count; start++)
+                for (int count = 1; count <= 6 && start + count <= words.Count; count++)
+                {
+                    var last = words[start + count - 1];
+                    string candidate = line.Substring(words[start].Index, last.Index + last.Length - words[start].Index);
+                    if (System.Text.RegularExpressions.Regex.IsMatch(candidate, @"\p{L}{4}")) candidates.Add(candidate);
+                }
+            }
+            // Prefer short phrases that distinguish the selected mod within this tablet family.
+            // Identical textual variants can still match; roll values are deliberately not searched.
+            return tabletStashSearchKeywords[key] = candidates.OrderBy(candidate => others.Count(line => line.Contains(candidate, StringComparison.Ordinal)))
+                .ThenBy(candidate => candidate.Length).ThenBy(candidate => candidate, StringComparer.Ordinal).FirstOrDefault() ?? "";
+        }
+
+        private static string EscapeTabletStashTerm(string text) => System.Text.RegularExpressions.Regex.Replace(
+            System.Text.RegularExpressions.Regex.Escape(text).Replace("\\ ", " "), "['’]", "['’]");
+
+        private string BuildTabletStashQuery()
+        {
+            string type = Settings.TabletStashSearchType;
+            if (!StashUtilitySettings.TabletTypes.Contains(type) || Settings.TabletStashSearchMods == null ||
+                !Settings.TabletStashSearchMods.TryGetValue(type, out var ids) || ids == null || ids.Count is < 1 or > 4 || ids.Distinct().Count() != ids.Count) return "";
+            var selected = ids.Select(id => Data.ModDatabase.AllTabletMods.SingleOrDefault(mod => mod.Id == id && mod.TabletTypes.Contains(type))).ToArray();
+            if (selected.Any(mod => mod == null)) return "";
+            var terms = selected.Select(mod => TabletStashKeyword(mod, type)).ToArray();
+            if (terms.Any(string.IsNullOrWhiteSpace)) return "";
+            string baseName = PluginText.T("stashutility.tablet_search.base." + type.Replace(" ", ""), type, TabletStashSearchLanguage);
+            string query = "\"" + EscapeTabletStashTerm(baseName) + "\" " + (Settings.TabletStashSearchAll
+                ? string.Join(" ", terms.Select(term => "\"" + EscapeTabletStashTerm(term) + "\""))
+                : "\"" + string.Join("|", terms.Select(EscapeTabletStashTerm)) + "\"");
+            // GGG 0.5.0: https://www.pathofexile.com/forum/view-thread/3932540 (search textboxes: 250 characters).
+            return query.Length <= 250 ? query : "";
+        }
+
+        private bool SetTabletStashMod(string type, string id, bool selected)
+        {
+            if (!StashUtilitySettings.TabletTypes.Contains(type) || !Data.ModDatabase.AllTabletMods.Any(mod => mod.Id == id && mod.TabletTypes.Contains(type))) return false;
+            Settings.TabletStashSearchMods ??= new();
+            if (!Settings.TabletStashSearchMods.TryGetValue(type, out var ids) || ids == null)
+                Settings.TabletStashSearchMods[type] = ids = new();
+            if (selected)
+            {
+                if (ids.Count >= 4 || ids.Contains(id)) return false;
+                ids.Add(id); return true;
+            }
+            return ids.Remove(id);
+        }
+
+        private void DrawTabletStashSearch()
+        {
+            MetaText(PluginText.T("stashutility.tablet_search.help", "Independent search: choose a tablet and 1 to 4 modifiers, copy the query, then paste it into the stash search box."));
+            bool changed = false;
+            ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
+            if (ImGui.BeginCombo(PluginText.T("stashutility.tablet_search.type", "Tablet type"), TabletTypeLabel(Settings.TabletStashSearchType ?? "")))
+            {
+                foreach (string type in StashUtilitySettings.TabletTypes)
+                    if (ImGui.Selectable(TabletTypeLabel(type), Settings.TabletStashSearchType == type)) { Settings.TabletStashSearchType = type; changed = true; }
+                ImGui.EndCombo();
+            }
+            int language = TabletStashSearchLanguage == ExileCenter.Localization.OverlayLanguage.French ? 0 : 1;
+            ImGui.SetNextItemWidth(Math.Min(180, ImGui.GetContentRegionAvail().X));
+            if (ImGui.Combo(PluginText.T("stashutility.tablet_search.language", "Game language"), ref language, "Français\0English\0"))
+            { Settings.TabletStashSearchLanguage = language == 0 ? "fr" : "en"; changed = true; }
+            if (ImGui.RadioButton(PluginText.T("stashutility.tablet_search.and", "AND · all selected modifiers"), Settings.TabletStashSearchAll))
+            { Settings.TabletStashSearchAll = true; changed = true; }
+            if (ImGui.RadioButton(PluginText.T("stashutility.tablet_search.or", "OR · at least one selected modifier"), !Settings.TabletStashSearchAll))
+            { Settings.TabletStashSearchAll = false; changed = true; }
+            if (changed) { tabletStashSearchMessage = ""; SaveSettings(); }
+            string selectedType = Settings.TabletStashSearchType;
+            List<string> ids = null;
+            Settings.TabletStashSearchMods?.TryGetValue(selectedType ?? "", out ids);
+            int count = ids?.Count ?? 0;
+            ImGui.TextUnformatted(PluginText.F("stashutility.tablet_search.count", "{0}/4 modifiers selected", count));
+            string query = BuildTabletStashQuery();
+            ImGui.SetNextItemWidth(-1);
+            ImGui.InputTextMultiline("##TabletStashQuery", ref query, 1024, new Vector2(-1, ImGui.GetTextLineHeightWithSpacing() * 3), ImGuiInputTextFlags.ReadOnly);
+            if (count > 0 && query.Length == 0)
+                MetaText(PluginText.T("stashutility.tablet_search.invalid", "Select 1 to 4 available modifiers. The complete search must fit within 250 characters."));
+            ImGui.BeginDisabled(query.Length == 0);
+            if (ImGui.Button(PluginText.T("stashutility.tablet_search.copy", "Copy search")))
+            {
+                try { ImGui.SetClipboardText(query); tabletStashSearchMessage = PluginText.T("stashutility.tablet_search.copied", "Copied. Paste it into the stash search box."); }
+                catch (Exception ex) { tabletStashSearchMessage = ex.Message; }
+            }
+            ImGui.EndDisabled();
+            ImGui.SameLine();
+            if (ImGui.Button(PluginText.T("stashutility.tablet_search.clear", "Clear selection")) && count > 0)
+            { Settings.TabletStashSearchMods.Remove(selectedType); tabletStashSearchMessage = ""; SaveSettings(); ids = null; count = 0; }
+            if (tabletStashSearchMessage.Length > 0) MetaText(tabletStashSearchMessage);
+            MetaText(PluginText.T("stashutility.tablet_search.text_only", "Searches modifier text, not roll values. Variants sharing the same wording may also match. Your rank and highlight filters are unchanged."));
+            ImGui.SetNextItemWidth(-1);
+            ImGui.InputTextWithHint("##TabletStashModSearch", PluginText.T("stashutility.filters.search", "Search a modifier in French or English..."), ref tabletStashSearchTerm, 160);
+            foreach (var mod in Data.ModDatabase.AllTabletMods.Where(mod => mod.TabletTypes.Contains(selectedType) &&
+                (MatchesModSearch(tabletStashSearchTerm, mod.Id, mod.Name) || NormalizeModSearch(tabletStashSearchTerm).Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    .All(NormalizeModSearch(TabletStashModText(mod)).Contains))))
+            {
+                ImGui.PushID("stashSearch_" + mod.Id);
+                bool selected = ids?.Contains(mod.Id) == true;
+                ImGui.BeginDisabled(!selected && count >= 4);
+                if (ImGui.Checkbox("##selected", ref selected) && SetTabletStashMod(selectedType, mod.Id, selected))
+                { tabletStashSearchMessage = ""; SaveSettings(); Settings.TabletStashSearchMods.TryGetValue(selectedType, out ids); count = ids?.Count ?? 0; }
+                ImGui.EndDisabled();
+                ImGui.SameLine(); MetaText(TabletStashModText(mod));
+                if (selected) ImGui.TextDisabled(PluginText.F("stashutility.tablet_search.keyword", "Keyword: {0}", TabletStashKeyword(mod, selectedType)));
+                ImGui.PopID();
+            }
+        }
 
         private static Dictionary<string, TabletProfile> CopyTabletProfiles(Dictionary<string, TabletProfile> profiles) =>
             Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, TabletProfile>>(

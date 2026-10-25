@@ -32,14 +32,17 @@ namespace ExileCenter.Localization
         ///     Resolves a localized string by key, falling back to English and then
         ///     <paramref name="fallback"/> when a plugin resource is missing.
         /// </summary>
-        public string T(string key, string fallback)
+        public string T(string key, string fallback) => this.T(key, fallback, OverlayLocalization.CurrentLanguage);
+
+        /// <summary>Resolves text for an explicit language without changing the application's language.</summary>
+        public string T(string key, string fallback, OverlayLanguage language)
         {
             if (string.IsNullOrWhiteSpace(key))
             {
                 return OverlayLocalization.NormalizeDisplayText(fallback);
             }
 
-            var currentLanguage = OverlayLocalization.CurrentLanguage;
+            var currentLanguage = language;
             if (this.TryGet(currentLanguage, key, out var value))
             {
                 return OverlayLocalization.NormalizeDisplayText(value);

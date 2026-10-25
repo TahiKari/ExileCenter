@@ -1,13 +1,17 @@
 ﻿
-ExileCenter 1.18.2
+ExileCenter 1.19.0
 
-- Filtres en jeu : boutons réduire/restaurer et fermer plus visibles sur le cadre décoratif, avec symboles blancs épaissis et contours blancs.
-- Réduction/restauration sur fond bleu très sombre ; fermeture sur fond rouge sombre. Le survol renforce la couleur de chaque bouton.
-- Emplacements, dimensions des boutons et zones de clic conservés. Aucun changement à la position, à la taille de la fenêtre ou aux filtres personnels.
-- Maintien de l'affichage après perte de focus et réduction en barre conservés. Aucun changement au thème des autres fenêtres, à la barre du coffre ou aux commandes au jeu.
+- Tablettes : deux sous-onglets indépendants, Filtres et rangs (éditeur existant) et Recherche coffre.
+- Recherche coffre : choix du type de tablette et de 1 à 4 modificateurs à cocher, avec logique ET (tous) ou OU (au moins un), aperçu de la recherche et bouton Copier.
+- Langue du jeu française ou anglaise sélectionnable indépendamment de celle de l'application. La requête inclut le type de tablette et des mots-clés issus des textes des mods, dans la limite de 250 caractères.
+- Sélections mémorisées séparément pour chacun des huit types de tablettes. Aucune réutilisation ni modification des rangs, surlignages ou préréglages existants. Le nouvel outil reste accessible lorsque la gestion des tablettes est désactivée.
+- Recherche par texte, sans filtrage des valeurs des jets ; des variantes ayant le même texte peuvent aussi correspondre. Le collage dans la barre du coffre reste manuel.
+- Disponible dans l'application et dans la fenêtre de filtres en jeu ou indépendante. Position, taille, réduction en barre, boutons contrastés et réglages personnels conservés. Aucune commande envoyée au jeu.
 - GameOffsets.dll conservée à l'identique, sans recompilation.
 
-Validation : compilation ciblée et 1 211 contrôles hors jeu. Aperçus vérifiés avec le cadre décoratif réel et en mode barre réduite ; interactions réduire/restaurer/fermer et réglages conservés. Aucun jeu contrôlé et aucune entrée système envoyée. La lisibilité réelle dans le jeu reste à confirmer par l'utilisateur après la mise à jour.
+Validation : 2 640 contrôles de recherche FR/EN (catalogue, combinaisons ET/OU, limites, enregistrement indépendant et bouton Copier avec presse-papiers simulé), 1 211 contrôles de fenêtre et 6 contrôles de persistance de la barre du coffre. Compilation et aperçus vérifiés hors jeu. Aucun jeu contrôlé, aucune entrée système envoyée et presse-papiers Windows préservé pendant les tests. Le résultat réel des recherches dans le coffre reste à confirmer par l'utilisateur.
+
+Référence GGG pour la limite de recherche : https://www.pathofexile.com/forum/view-thread/3932540.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

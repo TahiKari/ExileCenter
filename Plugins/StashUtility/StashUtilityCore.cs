@@ -475,7 +475,7 @@ namespace StashUtility
                 switch (i)
                 {
                     case 0: DrawWaystoneFilterSettings(); break;
-                    case 1: DrawTabletFilterSettings(); break;
+                    case 1: DrawTabletSettings(); break;
                     case 2: DrawJewelFilterSettings(); break;
                 }
                 ImGui.EndTabItem();
