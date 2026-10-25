@@ -7,6 +7,15 @@ namespace StashUtility
     public sealed class StashUtilitySettings : IPSettings
     {
         // General
+        public bool FilterWindowOpen = false;
+        public bool FilterWindowSeparate = false;
+        public int FilterWindowTab = 0;
+        public Vector2 FilterWindowPosition = new(60, 100);
+        public Vector2 FilterWindowSize = new(940, 720);
+        public bool FilterWindowCollapsed = false;
+        public bool FilterDesktopPositionSaved = false;
+        public int FilterDesktopX, FilterDesktopY;
+        public int FilterDesktopWidth = 1000, FilterDesktopHeight = 780;
         public bool EnableWaystoneManager = true;
         public bool WaystoneCraftAlchemy = true;
         public bool WaystoneCraftMagic = true;

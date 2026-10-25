@@ -1,4 +1,8 @@
 {
+  "stashutility.filters.window_title": "Filters · Waystones, tablets and jewels",
+  "stashutility.filters.open_game": "Open filters in game",
+  "stashutility.filters.open_desktop": "Independent window",
+  "stashutility.filters.window_error": "The independent window could not open. Filters remain available in game.",
   "stashutility.craft.report_tiers": "T15 after final scan: {0} · T14 results: {1} · T16 results: {2}",
   "stashutility.craft.cursor_position": "Cursor expected: {0}, {1}; read: {2}, {3}.",
   "stashutility.craft.cursor_target": "Windows did not place the cursor on the verified target. Crafting stopped.",

@@ -22,6 +22,11 @@ namespace StashUtility
     public sealed partial class StashUtilityCore : PCore<StashUtilitySettings>
     {
         private readonly Dictionary<string, IntPtr> tabletIconHandles = new();
+        private SettingsDisplay filterDisplay;
+        private string filterDisplayError = "";
+        private Vector2? filterPanelPosition, filterPanelSize;
+        private bool filterPanelMoved;
+        private int filterSettingsTab, filterWindowSelectTab = -1;
         private readonly List<(Item Item, Vector2 Position, Vector2 Size, IntPtr UiAddress)> pendingItemHighlights = new();
         private readonly List<(Vector2 Position, Vector2 Size)> tabletOcclusions = new();
         private bool tabletHighlightsHiddenManually;
@@ -212,6 +217,7 @@ namespace StashUtility
 
         public override void OnDisable()
         {
+            CloseFilterDisplay();
             craftSelectionOpen = false;
             StopWaystoneCraft();
             UnloadTabletIcons();
@@ -223,6 +229,7 @@ namespace StashUtility
 
         public override void OnEnable(bool isGameOpened)
         {
+            filterPanelPosition = filterPanelSize = null;
             LoadTabletIcons();
             inventoryToolbarAnchor = null;
             affinityItemOffsets.Clear();
@@ -357,6 +364,7 @@ namespace StashUtility
             }
 
             InitReflection();
+            filterWindowSelectTab = Math.Clamp(Settings.FilterWindowTab, 0, 2);
         }
 
         public override void SaveSettings()
@@ -442,15 +450,28 @@ namespace StashUtility
             ImGui.EndTabBar();
         }
 
-        private void DrawFilterSettings()
+        private unsafe void DrawFilterSettings(bool floating = false)
         {
+            if (!floating)
+            {
+                if (ImGui.Button(PluginText.T("stashutility.filters.open_game", "Open filters in game"))) OpenFilterWindow(false);
+                string desktop = PluginText.T("stashutility.filters.open_desktop", "Independent window");
+                if (ImGui.GetItemRectMax().X + ImGui.CalcTextSize(desktop).X + ImGui.GetStyle().FramePadding.X * 2 + 12 <
+                    ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X) ImGui.SameLine();
+                if (ImGui.Button(desktop)) OpenFilterWindow(true);
+            }
             var groups = new[] { "waystones", "tablets", "jewels" };
             var labels = new[] { "Waystones", "Tablets", "Jewels" };
             if (!ImGui.BeginTabBar("##stashFilterPages", ImGuiTabBarFlags.FittingPolicyScroll)) return;
             for (int i = 0; i < groups.Length; i++)
             {
                 using var theme = ExileCenter.Ui.ImGuiTheme.UsePluginTheme("StashUtility/" + groups[i]);
-                if (!ImGui.BeginTabItem(PluginText.T("stashutility.ui." + groups[i], labels[i]) + "###stashFilter_" + groups[i])) continue;
+                var flags = floating && filterWindowSelectTab == i ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
+                // A null close pointer keeps the original tabs non-closable while allowing selection on detach.
+                fixed (byte* label = System.Text.Encoding.UTF8.GetBytes(PluginText.T("stashutility.ui." + groups[i], labels[i]) + "###stashFilter_" + groups[i] + "\0"))
+                    if (ImGuiNative.igBeginTabItem(label, null, flags) == 0) continue;
+                if (!floating) filterSettingsTab = i;
+                else if (Settings.FilterWindowTab != i) { Settings.FilterWindowTab = i; SaveSettings(); }
                 switch (i)
                 {
                     case 0: DrawWaystoneFilterSettings(); break;
@@ -460,6 +481,140 @@ namespace StashUtility
                 ImGui.EndTabItem();
             }
             ImGui.EndTabBar();
+            if (floating) filterWindowSelectTab = -1;
+        }
+
+        private void OpenFilterWindow(bool separate)
+        {
+            Settings.FilterWindowOpen = true;
+            Settings.FilterWindowSeparate = separate;
+            filterWindowSelectTab = filterSettingsTab;
+            filterDisplayError = "";
+            SaveSettings();
+        }
+
+        private void CloseFilterDisplay()
+        {
+            var display = filterDisplay;
+            filterDisplay = null;
+            display?.Dispose();
+        }
+
+        private void DrawFilterDisplay()
+        {
+            if (!Settings.FilterWindowOpen || !Settings.FilterWindowSeparate)
+            {
+                filterDisplay?.Render(false);
+                if (Settings.FilterWindowOpen && (Core.Process.Foreground || Core.IsSettingsMenuOpen || ImGui.IsMouseDown(ImGuiMouseButton.Left)))
+                    DrawFilterPanel(false);
+                return;
+            }
+            try
+            {
+                if (filterDisplay == null)
+                {
+                    var placement = new ExileCenter.Settings.State
+                    {
+                        SettingsWindowPositionSaved = Settings.FilterDesktopPositionSaved,
+                        SettingsWindowX = Settings.FilterDesktopX, SettingsWindowY = Settings.FilterDesktopY,
+                        SettingsWindowWidth = Settings.FilterDesktopWidth, SettingsWindowHeight = Settings.FilterDesktopHeight
+                    };
+                    filterDisplay = new SettingsDisplay(Core.Overlay, () => DrawFilterPanel(true),
+                        () => { Settings.FilterWindowOpen = false; SaveSettings(); }, placement,
+                        () => "ExileCenter · " + PluginText.T("stashutility.filters.window_title", "Filters"), bounds =>
+                        {
+                            Settings.FilterDesktopX = bounds.X; Settings.FilterDesktopY = bounds.Y;
+                            Settings.FilterDesktopWidth = bounds.Width; Settings.FilterDesktopHeight = bounds.Height;
+                            Settings.FilterDesktopPositionSaved = true;
+                            SaveSettings();
+                        }, new System.Drawing.Size(520, 360), new System.Drawing.Size(1000, 780));
+                }
+                filterDisplay.Render(true);
+            }
+            catch (Exception ex)
+            {
+                filterDisplayError = ex.Message;
+                try { CloseFilterDisplay(); } catch { }
+                Settings.FilterWindowSeparate = false;
+                SaveSettings();
+                Console.WriteLine($"[StashUtility.Filters] {ex}");
+            }
+        }
+
+        private void DrawFilterPanel(bool detached)
+        {
+            using var theme = ExileCenter.Ui.ImGuiTheme.UsePluginTheme("StashUtility/filters");
+            var viewport = ImGui.GetIO().DisplaySize;
+            if (viewport.X <= 0 || viewport.Y <= 0) return;
+            var flags = ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing |
+                ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse;
+            if (detached)
+            {
+                ImGui.SetNextWindowPos(Vector2.Zero);
+                ImGui.SetNextWindowSize(viewport);
+                flags |= ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove;
+            }
+            else
+            {
+                var minimum = Vector2.Min(new Vector2(520, 360), viewport);
+                var size = Settings.FilterWindowSize;
+                if (!float.IsFinite(size.X) || !float.IsFinite(size.Y)) size = new Vector2(940, 720);
+                size = Vector2.Clamp(size, minimum, viewport);
+                if (filterPanelSize != size) ImGui.SetNextWindowSize(size);
+                ImGui.SetNextWindowSizeConstraints(minimum, viewport);
+                var position = Settings.FilterWindowPosition;
+                if (!float.IsFinite(position.X) || !float.IsFinite(position.Y)) position = new Vector2(60, 100);
+                var occupied = Settings.FilterWindowCollapsed ? new Vector2(size.X, ImGui.GetFrameHeight()) : size;
+                position = Vector2.Clamp(position, Vector2.Zero, Vector2.Max(Vector2.Zero, viewport - occupied));
+                if (filterPanelPosition != position) ImGui.SetNextWindowPos(position);
+                ImGui.SetNextWindowCollapsed(Settings.FilterWindowCollapsed, ImGuiCond.Always);
+            }
+            bool open = Settings.FilterWindowOpen;
+            string title = PluginText.T("stashutility.filters.window_title", "Filters");
+            bool expanded = detached
+                ? ExileCenter.Ui.ImGuiTheme.BeginFramedWindow("##StashFiltersDesktop", title, flags)
+                : ExileCenter.Ui.ImGuiTheme.BeginWindow(title + "###StashFiltersPanel", ref open, flags);
+            bool save = open != Settings.FilterWindowOpen;
+            Settings.FilterWindowOpen = open;
+            if (!detached)
+            {
+                bool collapsed = ImGui.IsWindowCollapsed();
+                save |= Settings.FilterWindowCollapsed != collapsed;
+                Settings.FilterWindowCollapsed = collapsed;
+                var occupied = collapsed ? new Vector2(ImGui.GetWindowWidth(), ImGui.GetFrameHeight()) : ImGui.GetWindowSize();
+                var position = Vector2.Clamp(ImGui.GetWindowPos(), Vector2.Zero, Vector2.Max(Vector2.Zero, viewport - occupied));
+                if (position != ImGui.GetWindowPos()) ImGui.SetWindowPos(position);
+                if (position != Settings.FilterWindowPosition || !collapsed && ImGui.GetWindowSize() != Settings.FilterWindowSize) filterPanelMoved = true;
+                Settings.FilterWindowPosition = position;
+                if (!collapsed) Settings.FilterWindowSize = ImGui.GetWindowSize();
+                filterPanelPosition = position; filterPanelSize = Settings.FilterWindowSize;
+                if (filterPanelMoved && !ImGui.IsMouseDown(ImGuiMouseButton.Left)) { save = true; filterPanelMoved = false; }
+            }
+            try
+            {
+                if (expanded)
+                {
+                    if (ImGui.SmallButton(PluginText.T(detached ? "stashutility.filters.open_game" : "stashutility.filters.open_desktop",
+                        detached ? "Open filters in game" : "Independent window") + "##FilterDisplayMode"))
+                    {
+                        Settings.FilterWindowSeparate = !detached;
+                        filterWindowSelectTab = Settings.FilterWindowTab;
+                        filterDisplayError = "";
+                        save = true;
+                    }
+                    if (filterDisplayError.Length > 0)
+                        ImGuiHelper.WrappedText(PluginText.T("stashutility.filters.window_error", "The independent window could not open. Filters remain available in game.") + " " + filterDisplayError);
+                    if (ImGui.BeginChild("##FilterWindowBody", Vector2.Zero, ImGuiChildFlags.None, ImGuiWindowFlags.HorizontalScrollbar))
+                    {
+                        ImGui.PushItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X * .4f, 140f, 280f));
+                        DrawFilterSettings(true);
+                        ImGui.PopItemWidth();
+                    }
+                    ImGui.EndChild();
+                }
+            }
+            finally { ImGui.End(); }
+            if (save) SaveSettings();
         }
 
         private void DrawDebugSettings()
@@ -6664,6 +6819,7 @@ namespace StashUtility
 
         public override void DrawUI()
         {
+            DrawFilterDisplay();
             pendingItemHighlights.Clear();
             tabletItemHovered = false;
             tabletTooltipVisible = false;

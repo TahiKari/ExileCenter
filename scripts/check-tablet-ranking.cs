@@ -22,6 +22,160 @@ internal static class TabletRankingCheck
     private static SixLabors.ImageSharp.PixelFormats.Rgba32[] framePreviewPixels;
     private static int framePreviewWidth, framePreviewHeight;
 
+    private static unsafe void CheckFilterWindow(string root, string preview)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
+        var previous = ImGuiNET.ImGui.GetCurrentContext();
+        var languageBefore = ExileCenter.Core.GHSettings.UiLanguage;
+        var isolated = Path.Combine(Path.GetDirectoryName(typeof(TabletRankingCheck).Assembly.Location), "filter-window-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(isolated, "Localization"));
+        foreach (string language in new[] { "fr-FR", "en-US" })
+            File.Copy(Path.Combine(root, "Plugins", "StashUtility", "Localization", language + ".json"), Path.Combine(isolated, "Localization", language + ".json"));
+        var plugin = new StashUtilityCore { DllDirectory = isolated };
+        var settings = plugin.Settings;
+        Check(!settings.FilterWindowOpen && !settings.FilterWindowSeparate, "Existing installations gain no unsolicited window");
+        settings.StashToolbarOffset = new Vector2(121, -53); settings.StashToolbarLocked = true;
+        settings.InventoryTransferButtonOffset = new Vector2(-19, 25);
+        settings.FilterDesktopPositionSaved = true; settings.FilterDesktopX = -1800; settings.FilterDesktopY = 70;
+        settings.FilterDesktopWidth = 1000; settings.FilterDesktopHeight = 780;
+        typeof(StashUtilityCore).GetMethod("ApplyTabletFarmPreset", flags).Invoke(plugin, new object[] { true });
+        var render = typeof(StashUtilityCore).GetMethod("DrawFilterPanel", flags);
+        var select = typeof(StashUtilityCore).GetField("filterWindowSelectTab", flags);
+        var open = typeof(StashUtilityCore).GetMethod("OpenFilterWindow", flags);
+        var context = ImGuiNET.ImGui.CreateContext();
+        var desktopContext = IntPtr.Zero;
+        string FilterSettings()
+        {
+            var json = Newtonsoft.Json.Linq.JObject.FromObject(settings);
+            foreach (var property in json.Properties().Where(p => p.Name.StartsWith("FilterWindow", StringComparison.Ordinal) || p.Name.StartsWith("FilterDesktop", StringComparison.Ordinal)).ToList()) property.Remove();
+            return json.ToString(Newtonsoft.Json.Formatting.None);
+        }
+        try
+        {
+            var io = ImGuiNET.ImGui.GetIO(); io.NativePtr->IniFilename = null; io.DeltaTime = 1f / 60;
+            io.DisplaySize = new Vector2(1280, 900);
+            io.Fonts.AddFontFromFileTTF(Path.Combine(root, "fonts", "DejaVuSans.ttf"), 15);
+            io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels, out int atlasWidth, out int atlasHeight, out int bytes);
+            var atlas = new byte[atlasWidth * atlasHeight * bytes]; Marshal.Copy(pixels, atlas, 0, atlas.Length);
+            io.Fonts.SetTexID(new IntPtr(1));
+            typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("Apply", flags).Invoke(null, null);
+            open.Invoke(plugin, new object[] { false });
+            // Run existing, intentional profile migrations before checking that a second view preserves them.
+            for (int page = 0; page < 3; page++)
+                for (int frame = 0; frame < 3; frame++)
+                {
+                    if (frame == 0) select.SetValue(plugin, page);
+                    ImGuiNET.ImGui.NewFrame(); render.Invoke(plugin, new object[] { false }); ImGuiNET.ImGui.Render();
+                }
+            string original = FilterSettings();
+            desktopContext = ImGuiNET.ImGui.CreateContext(io.Fonts);
+            ImGuiNET.ImGui.SetCurrentContext(desktopContext);
+            ImGuiNET.ImGui.GetIO().NativePtr->IniFilename = null; ImGuiNET.ImGui.GetIO().DeltaTime = 1f / 60;
+            typeof(ExileCenter.Ui.ImGuiTheme).GetMethod("Apply", flags).Invoke(null, null);
+            foreach (var language in new[] { ExileCenter.Localization.OverlayLanguage.French, ExileCenter.Localization.OverlayLanguage.English })
+            foreach (bool detached in new[] { false, true })
+            foreach (var size in new[] { new Vector2(520, 360), new Vector2(800, 600), new Vector2(1280, 900) })
+            foreach (int page in new[] { 0, 1, 2 })
+            {
+                ExileCenter.Core.GHSettings.UiLanguage = language;
+                ImGuiNET.ImGui.SetCurrentContext(detached ? desktopContext : context);
+                io = ImGuiNET.ImGui.GetIO(); io.DisplaySize = size;
+                open.Invoke(plugin, new object[] { detached });
+                Vector2 overlayPosition = settings.FilterWindowPosition, overlaySize = settings.FilterWindowSize;
+                for (int frame = 0; frame < 8; frame++)
+                {
+                    io.AddMousePosEvent(-100, -100);
+                    if (frame == 0) select.SetValue(plugin, page);
+                    ImGuiNET.ImGui.NewFrame(); render.Invoke(plugin, new object[] { detached }); ImGuiNET.ImGui.Render();
+                    Check(ImGuiNET.ImGui.GetDrawData().TotalVtxCount > 0, "Filters render in both contexts, languages and sizes: " + (detached, size, page));
+                    if (frame == 7) Check(settings.FilterWindowTab == page, "Opening a floating view selects the requested filter category");
+                    Check(FilterSettings() == original, "Rendering either view preserves rules, ranks, presets, currency options and toolbar placement");
+                    Check(settings.FilterDesktopX == -1800 && settings.FilterDesktopY == 70 && settings.FilterDesktopWidth == 1000 && settings.FilterDesktopHeight == 780,
+                        "Drawing filters preserves the independent window's negative-monitor coordinates");
+                    if (detached) Check(settings.FilterWindowPosition == overlayPosition && settings.FilterWindowSize == overlaySize,
+                        "Desktop rendering never replaces the in-game position or size");
+                    else Check(settings.FilterWindowPosition.X >= 0 && settings.FilterWindowPosition.Y >= 0 &&
+                        settings.FilterWindowPosition.X + settings.FilterWindowSize.X <= size.X + 1 &&
+                        settings.FilterWindowPosition.Y + settings.FilterWindowSize.Y <= size.Y + 1, "The in-game window remains reachable at small resolutions");
+                    if (frame == 7 && preview != null && language == ExileCenter.Localization.OverlayLanguage.French)
+                    {
+                        Directory.CreateDirectory(preview);
+                        SaveUiPreview(Path.Combine(preview, $"filters-{(detached ? "desktop" : "game")}-{size.X}-{page}.png"), atlas, atlasWidth, atlasHeight);
+                    }
+                }
+            }
+            void MouseFrame(bool detached, Vector2 mouse, bool down)
+            {
+                var input = ImGuiNET.ImGui.GetIO(); input.AddMousePosEvent(mouse.X, mouse.Y); input.AddMouseButtonEvent(0, down);
+                ImGuiNET.ImGui.NewFrame(); render.Invoke(plugin, new object[] { detached }); ImGuiNET.ImGui.Render();
+            }
+            ImGuiNET.ImGui.SetCurrentContext(desktopContext);
+            ImGuiNET.ImGui.GetIO().DisplaySize = new Vector2(520, 360);
+            settings.FilterWindowSeparate = true; select.SetValue(plugin, 1);
+            for (int frame = 0; frame < 3; frame++) MouseFrame(true, new Vector2(-100), false);
+            foreach (bool down in new[] { false, true, false }) MouseFrame(true, new Vector2(75, 25), down);
+            Check(!settings.FilterWindowSeparate && settings.FilterWindowTab == 1, "The desktop button returns to the game view without changing the selected category");
+            ImGuiNET.ImGui.SetCurrentContext(context);
+            ImGuiNET.ImGui.GetIO().DisplaySize = new Vector2(800, 600);
+            settings.FilterWindowPosition = Vector2.Zero; settings.FilterWindowSize = new Vector2(520, 360);
+            typeof(StashUtilityCore).GetField("filterPanelPosition", flags).SetValue(plugin, null);
+            typeof(StashUtilityCore).GetField("filterPanelSize", flags).SetValue(plugin, null);
+            select.SetValue(plugin, 1);
+            for (int frame = 0; frame < 3; frame++) MouseFrame(false, new Vector2(-100), false);
+            foreach (bool down in new[] { false, true, false }) MouseFrame(false, new Vector2(75, 60), down);
+            Check(settings.FilterWindowSeparate && settings.FilterWindowTab == 1, "The game button detaches the same filters and category");
+            settings.FilterWindowSeparate = false;
+            foreach (bool down in new[] { false, true, false }) MouseFrame(false, new Vector2(503, 12), down);
+            Check(!settings.FilterWindowOpen, "The in-game close button hides only the extra filter window");
+            var embedded = typeof(StashUtilityCore).GetMethod("DrawFilterSettings", flags);
+            for (int frame = 0; frame < 3; frame++)
+            {
+                ImGuiNET.ImGui.NewFrame(); ImGuiNET.ImGui.SetNextWindowPos(Vector2.Zero); ImGuiNET.ImGui.SetNextWindowSize(new Vector2(800, 600));
+                ImGuiNET.ImGui.Begin("Embedded filters"); embedded.Invoke(plugin, new object[] { false }); ImGuiNET.ImGui.End(); ImGuiNET.ImGui.Render();
+            }
+            Check(ImGuiNET.ImGui.GetDrawData().TotalVtxCount > 0 && !settings.FilterWindowOpen && FilterSettings() == original,
+                "Closing the extra window leaves the original embedded filters available and unchanged");
+            // Apply saved bounds as on restart; they must win over ImGui defaults.
+            ImGuiNET.ImGui.SetCurrentContext(context);
+            ImGuiNET.ImGui.GetIO().DisplaySize = new Vector2(1280, 900);
+            settings.FilterWindowOpen = true;
+            settings.FilterWindowPosition = new Vector2(125, 85); settings.FilterWindowSize = new Vector2(900, 700);
+            typeof(StashUtilityCore).GetField("filterPanelPosition", flags).SetValue(plugin, null);
+            typeof(StashUtilityCore).GetField("filterPanelSize", flags).SetValue(plugin, null);
+            settings.FilterWindowCollapsed = true;
+            for (int frame = 0; frame < 4; frame++)
+            { ImGuiNET.ImGui.NewFrame(); render.Invoke(plugin, new object[] { false }); ImGuiNET.ImGui.Render(); }
+            Check(settings.FilterWindowCollapsed && settings.FilterWindowPosition == new Vector2(125, 85) && settings.FilterWindowSize == new Vector2(900, 700),
+                "Collapsed panels preserve the expanded size and custom position");
+            settings.FilterWindowCollapsed = false;
+            typeof(StashUtilityCore).GetField("filterDisplayError", flags).SetValue(plugin, "Erreur à 100 % : échec d'ouverture");
+            for (int frame = 0; frame < 4; frame++)
+            { ImGuiNET.ImGui.NewFrame(); render.Invoke(plugin, new object[] { false }); ImGuiNET.ImGui.Render(); }
+            Check(FilterSettings() == original, "Error messages and reopening preserve filters and other controls");
+            settings.FilterWindowOpen = false; plugin.SaveSettings();
+            var restored = JsonConvert.DeserializeObject<StashUtilitySettings>(File.ReadAllText(Path.Combine(isolated, "config", "settings.txt")));
+            Check(!restored.FilterWindowOpen && restored.FilterWindowPosition == new Vector2(125, 85) && restored.FilterWindowSize == new Vector2(900, 700), "Closed state and game placement survive a settings round trip");
+            Check(restored.FilterDesktopX == -1800 && restored.FilterDesktopPositionSaved && restored.StashToolbarOffset == new Vector2(121, -53) && restored.StashToolbarLocked,
+                "Desktop placement and the user's locked toolbar survive the same save");
+            Check(!JsonConvert.DeserializeObject<StashUtilitySettings>("{\"StashToolbarLocked\":true,\"MinTier\":13}").FilterWindowOpen,
+                "Legacy settings remain compatible without opening a new window");
+            var fit = typeof(ExileCenter.SettingsDisplay).GetMethod("FitDisplayBounds", flags);
+            var saved = new System.Drawing.Rectangle(-1800, 70, 1000, 780);
+            var work = new System.Drawing.Rectangle(-1920, 0, 1920, 1080);
+            Check((System.Drawing.Rectangle)fit.Invoke(null, new object[] { saved, work, new System.Drawing.Size(520, 360) }) == saved,
+                "The shared desktop host keeps a valid placement on a monitor to the left of the game");
+            var recovered = (System.Drawing.Rectangle)fit.Invoke(null, new object[] { saved, new System.Drawing.Rectangle(0, 0, 1920, 1080), new System.Drawing.Size(520, 360) });
+            Check(recovered.X >= 0 && recovered.Right <= 1920, "The shared host makes the panel reachable if the saved monitor disappears");
+            Console.WriteLine(checks + " filter-window checks passed; no native window, game process or OS input.");
+        }
+        finally
+        {
+            ExileCenter.Core.GHSettings.UiLanguage = languageBefore;
+            if (desktopContext != IntPtr.Zero) ImGuiNET.ImGui.DestroyContext(desktopContext);
+            ImGuiNET.ImGui.DestroyContext(context); ImGuiNET.ImGui.SetCurrentContext(previous);
+        }
+    }
+
     private static unsafe void CheckAtlasRouteSummaries(string root,string preview)
     {
         const BindingFlags flags=BindingFlags.Instance|BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic;
@@ -1509,6 +1663,11 @@ internal static class TabletRankingCheck
             if (args.Length > 1 && args[1] == "--atlas-labels-only")
             {
                 CheckAtlasRouteSummaries(root,args.Length>2?args[2]:null);
+                return 0;
+            }
+            if (args.Length > 1 && args[1] == "--filter-window-only")
+            {
+                CheckFilterWindow(root, args.Length > 2 ? args[2] : null);
                 return 0;
             }
             if (args.Length > 1 && args[1] == "--radar-only")

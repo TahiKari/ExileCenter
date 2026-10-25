@@ -1,4 +1,8 @@
 {
+  "stashutility.filters.window_title": "Filtres · Pierres, tablettes et joyaux",
+  "stashutility.filters.open_game": "Ouvrir les filtres en jeu",
+  "stashutility.filters.open_desktop": "Fenêtre indépendante",
+  "stashutility.filters.window_error": "La fenêtre indépendante n’a pas pu s’ouvrir. Les filtres restent accessibles en jeu.",
   "stashutility.craft.report_tiers": "T15 après contrôle final : {0} · résultats T14 : {1} · résultats T16 : {2}",
   "stashutility.craft.cursor_position": "Curseur attendu : {0}, {1} ; lu : {2}, {3}.",
   "stashutility.craft.cursor_target": "Windows n’a pas placé le curseur sur la cible vérifiée. Auto-craft arrêté.",
