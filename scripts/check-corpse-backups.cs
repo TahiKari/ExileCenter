@@ -201,7 +201,8 @@ if (args.Length == 3 && args[2] == "--stage-real-game")
     return;
 }
 string? legacyPackage = args.Length == 3 && args[1] == "--legacy-package" ? args[2] : null;
-if (args.Length > 1 && legacyPackage == null)
+string? productionPackage = args.Length == 3 && args[1] == "--production-restore" ? Path.GetFullPath(args[2]) : null;
+if (args.Length > 1 && legacyPackage == null && productionPackage == null)
 {
     // Read only three known assets from the real Steam index; never open it for writing.
     string game = args[1], indexPath = Path.Combine(game, "Bundles2", "_.index.bin");
@@ -377,6 +378,12 @@ foreach (bool ggpk in new[] { false, true })
     Reject(() => CorpseArchive.ApplyVisuals(incompatible, source, cache, minimap, default, () => { }, minimapOnly: true), "missing second shader rejects the whole minimap patch " + ggpk);
     Check(Hash(incompatibleArchive) == incompatibleHash, "neither shader is committed when the pair is incomplete " + ggpk);
 }
+var productionContext = productionPackage == null ? null : new LegacyBackupContext(productionPackage);
+var productionRestore = productionContext?.LoadFromAssemblyPath(Path.Combine(productionPackage!, "Plugins", "CorpseCleaner", "CorpseCleaner.dll"))
+    .GetType("CorpseCleaner.CorpseArchive", true)!.GetMethod("Restore", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+string RestoreUpdatedGame(string game, Action guard, bool minimapOnly = false) => productionRestore == null
+    ? CorpseArchive.Restore(game, default, guard, minimapOnly)
+    : (string)productionRestore.Invoke(null, new object?[] { game, CancellationToken.None, guard, minimapOnly })!;
 foreach (bool ggpk in new[] { false, true })
 foreach (bool minimapOnly in new[] { false, true })
 {
@@ -397,19 +404,19 @@ foreach (bool minimapOnly in new[] { false, true })
     // An unrelated edit while a patch is still referenced must never retire its state.
     using (var changed = File.Open(archive, FileMode.Append)) changed.WriteByte(42);
     string changedHash = Hash(archive);
-    Reject(() => CorpseArchive.Restore(game, default, () => { }, minimapOnly), "active bundle references preserve the restoration refusal after external edits " + ggpk + minimapOnly);
+    Reject(() => RestoreUpdatedGame(game, () => { }, minimapOnly), "active bundle references preserve the restoration refusal after external edits " + ggpk + minimapOnly);
     Check(Hash(archive) == changedHash && manifests.Select(Hash).SequenceEqual(manifestHashes), "refusal preserves both layered patch states and the changed game " + ggpk + minimapOnly);
     // Replacing the index with a newer complete game simulates a launcher update.
     var updatedPayloads = new Dictionary<string, byte[]>(payloads) { [Other] = Utf16("Life { base_maximum_life = 123456 } // new game version") };
     CreateGame(game, updatedPayloads, ggpk);
     string updatedHash = Hash(archive);
     // A failure between the two metadata moves must roll the first move back.
-    Reject(() => CorpseArchive.Restore(game, default, () =>
+    Reject(() => RestoreUpdatedGame(game, () =>
     {
         if (!File.Exists(manifests[0])) throw new IOException("fixture archival interruption");
     }, minimapOnly), "interrupted stale-state archival rolls back " + ggpk + minimapOnly);
     Check(manifests.Select(Hash).SequenceEqual(manifestHashes) && Hash(archive) == updatedHash, "rollback preserves both original states and the updated game " + ggpk + minimapOnly);
-    string result = CorpseArchive.Restore(game, default, () => { }, minimapOnly);
+    string result = RestoreUpdatedGame(game, () => { }, minimapOnly);
     Check(result.Contains("États archivés") && manifests.All(path => !File.Exists(path)), "either restore button retires both obsolete layers after a game update " + ggpk + minimapOnly);
     Check(stores.SelectMany(store => Directory.GetFiles(store, "state.json.superseded-*")).Select(Hash).Order().SequenceEqual(manifestHashes.Order()), "obsolete manifests are archived byte for byte " + ggpk + minimapOnly);
     Check(Hash(archive) == updatedHash && backups.Select(Hash).SequenceEqual(backupHashes), "updated game and original backups remain byte-identical " + ggpk + minimapOnly);
@@ -432,9 +439,11 @@ foreach (bool corruptBackup in new[] { false, true })
     }
     else File.WriteAllBytes(archive, Array.Empty<byte>());
     string updatedHash = Hash(archive);
-    Reject(() => CorpseArchive.Restore(game, default, () => { }), "unreadable index or damaged backup prevents stale-state retirement " + ggpk + corruptBackup);
+    Reject(() => RestoreUpdatedGame(game, () => { }), "unreadable index or damaged backup prevents stale-state retirement " + ggpk + corruptBackup);
     Check(Hash(manifest) == stateHash && Hash(archive) == updatedHash, "failed verification preserves the manifest and all game bytes " + ggpk + corruptBackup);
 }
+productionContext?.Unload();
+if (productionPackage != null) Check(productionRestore != null, "update recovery exercised directly against the distributed production plugin");
 if (legacyPackage != null)
 {
     string pluginDirectory = Path.Combine(legacyPackage, "Plugins", "CorpseCleaner");

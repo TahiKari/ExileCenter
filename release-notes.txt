@@ -8,7 +8,7 @@ ExileCenter 1.19.2
 - Correction limitée à la gestion de restauration et des sauvegardes. Les préférences visuelles, positions et réglages personnels sont conservés ; aucun patch n'est réappliqué automatiquement.
 - GameOffsets.dll conservée à l'identique, sans recompilation.
 
-Validation : compilation du cœur et de CorpseCleaner ; 154 contrôles sur des archives synthétiques Steam/Epic et Content.ggpk, avec mises à jour simulées, deux couches de patch, restauration exacte, refus conservés et retour arrière après interruption. Aucun fichier du jeu réel modifié et aucune entrée système envoyée. Le comportement lors d'une future mise à jour réelle et le rendu en jeu ne sont pas validés par ces fixtures.
+Validation : compilation du cœur et de CorpseCleaner ; 155 contrôles sur des archives synthétiques Steam/Epic et Content.ggpk, avec mises à jour simulées, deux couches de patch, restauration exacte, refus conservés et retour arrière après interruption. Les scénarios de mise à jour ont aussi été exécutés directement contre le plugin du ZIP officiel. Aucun fichier du jeu réel modifié et aucune entrée système envoyée. Le comportement lors d'une future mise à jour réelle et le rendu en jeu ne sont pas validés par ces fixtures.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.
