@@ -1,13 +1,14 @@
 ﻿
-ExileCenter 1.19.1
+ExileCenter 1.19.2
 
-- Tablettes > Recherche coffre : le champ de recherche de mod met maintenant les lignes correspondantes en évidence avec un fond doré et affiche le nombre de résultats.
-- Recherche en français ou en anglais, sans tenir compte des accents ni des majuscules, y compris lorsque la langue du jeu diffère de celle de l'application.
-- Tous les mods de la tablette restent visibles pendant la recherche. Effacer le texte retire le surlignage, sans cocher ni décocher de mod et sans modifier la logique ET/OU ni la recherche à copier.
-- Même fonctionnement dans l'application et dans la fenêtre de filtres en jeu ou indépendante. Positions, tailles, verrouillages et réglages personnels conservés. Aucun accès réseau ni aucune commande au jeu ajoutés.
+- Réglages visuels permanents : après une mise à jour ou réparation qui a remplacé les fichiers patchés, un clic sur l'un des boutons Restaurer peut maintenant classer les anciens états devenus obsolètes, sans remettre une ancienne archive sur la nouvelle version du jeu.
+- La détection vérifie que l'index actuel ne référence plus aucun bundle de patch ExileCenter ou GameHelper, puis vérifie les sauvegardes d'origine. Une différence de SHA256 seule ne suffit pas à autoriser cet archivage.
+- Les états minimap et cadavres/caméra superposés sont archivés ensemble ; leurs sauvegardes et les fichiers actuels du jeu sont conservés. Une interruption pendant l'archivage remet les états déjà déplacés en place.
+- Si des patches restent référencés, si l'index est illisible ou si une sauvegarde est absente ou altérée, le refus de restauration est maintenu. Le contrôle se fait au clic Restaurer, jeu fermé, sans vérification lourde en continu pendant la partie.
+- Correction limitée à la gestion de restauration et des sauvegardes. Les préférences visuelles, positions et réglages personnels sont conservés ; aucun patch n'est réappliqué automatiquement.
 - GameOffsets.dll conservée à l'identique, sans recompilation.
 
-Validation : compilation du cœur et de StashUtility, 2 664 contrôles de recherche FR/EN (dont surlignage, accents, majuscules, effacement, sélections et bouton Copier simulé), 1 211 contrôles de fenêtre et 6 contrôles de persistance de la barre du coffre. Aperçus vérifiés hors jeu. Aucun jeu contrôlé, aucune entrée système envoyée et presse-papiers Windows préservé pendant les tests. Le rendu réel en jeu reste à confirmer par l'utilisateur.
+Validation : compilation du cœur et de CorpseCleaner ; 154 contrôles sur des archives synthétiques Steam/Epic et Content.ggpk, avec mises à jour simulées, deux couches de patch, restauration exacte, refus conservés et retour arrière après interruption. Aucun fichier du jeu réel modifié et aucune entrée système envoyée. Le comportement lors d'une future mise à jour réelle et le rendu en jeu ne sont pas validés par ces fixtures.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

@@ -377,6 +377,64 @@ foreach (bool ggpk in new[] { false, true })
     Reject(() => CorpseArchive.ApplyVisuals(incompatible, source, cache, minimap, default, () => { }, minimapOnly: true), "missing second shader rejects the whole minimap patch " + ggpk);
     Check(Hash(incompatibleArchive) == incompatibleHash, "neither shader is committed when the pair is incomplete " + ggpk);
 }
+foreach (bool ggpk in new[] { false, true })
+foreach (bool minimapOnly in new[] { false, true })
+{
+    string game = Path.Combine(data, $"updated-{ggpk}-{minimapOnly}");
+    CreateGame(game, payloads, ggpk);
+    CorpseArchive.Apply(game, source, cache, default, () => { });
+    CorpseArchive.ApplyVisuals(game, source, cache, visuals with { HideCorpses = false, CameraDistance = null }, default, () => { }, minimapOnly: true);
+    string[] stores = { Path.Combine(game, ".ExileCenterMinimap"), Path.Combine(game, ".ExileCenterCadavres") };
+    string[] manifests = stores.Select(store => Path.Combine(store, "state.json")).ToArray();
+    string[] manifestHashes = manifests.Select(Hash).ToArray();
+    var backups = manifests.Select(path =>
+    {
+        using var state = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+        return Path.Combine(Path.GetDirectoryName(path)!, state.RootElement.GetProperty("Id").GetString()!, "original.bin");
+    }).ToArray();
+    string[] backupHashes = backups.Select(Hash).ToArray();
+    string archive = Path.Combine(game, ggpk ? "Content.ggpk" : "Bundles2/_.index.bin");
+    // An unrelated edit while a patch is still referenced must never retire its state.
+    using (var changed = File.Open(archive, FileMode.Append)) changed.WriteByte(42);
+    string changedHash = Hash(archive);
+    Reject(() => CorpseArchive.Restore(game, default, () => { }, minimapOnly), "active bundle references preserve the restoration refusal after external edits " + ggpk + minimapOnly);
+    Check(Hash(archive) == changedHash && manifests.Select(Hash).SequenceEqual(manifestHashes), "refusal preserves both layered patch states and the changed game " + ggpk + minimapOnly);
+    // Replacing the index with a newer complete game simulates a launcher update.
+    var updatedPayloads = new Dictionary<string, byte[]>(payloads) { [Other] = Utf16("Life { base_maximum_life = 123456 } // new game version") };
+    CreateGame(game, updatedPayloads, ggpk);
+    string updatedHash = Hash(archive);
+    // A failure between the two metadata moves must roll the first move back.
+    Reject(() => CorpseArchive.Restore(game, default, () =>
+    {
+        if (!File.Exists(manifests[0])) throw new IOException("fixture archival interruption");
+    }, minimapOnly), "interrupted stale-state archival rolls back " + ggpk + minimapOnly);
+    Check(manifests.Select(Hash).SequenceEqual(manifestHashes) && Hash(archive) == updatedHash, "rollback preserves both original states and the updated game " + ggpk + minimapOnly);
+    string result = CorpseArchive.Restore(game, default, () => { }, minimapOnly);
+    Check(result.Contains("États archivés") && manifests.All(path => !File.Exists(path)), "either restore button retires both obsolete layers after a game update " + ggpk + minimapOnly);
+    Check(stores.SelectMany(store => Directory.GetFiles(store, "state.json.superseded-*")).Select(Hash).Order().SequenceEqual(manifestHashes.Order()), "obsolete manifests are archived byte for byte " + ggpk + minimapOnly);
+    Check(Hash(archive) == updatedHash && backups.Select(Hash).SequenceEqual(backupHashes), "updated game and original backups remain byte-identical " + ggpk + minimapOnly);
+    Check(stores.All(store => !File.Exists(Path.Combine(store, "pending.json"))), "no active pending state remains after retirement " + ggpk + minimapOnly);
+}
+foreach (bool ggpk in new[] { false, true })
+foreach (bool corruptBackup in new[] { false, true })
+{
+    string game = Path.Combine(data, $"unsafe-update-{ggpk}-{corruptBackup}");
+    CreateGame(game, payloads, ggpk);
+    CorpseArchive.Apply(game, source, cache, default, () => { });
+    string manifest = Path.Combine(game, ".ExileCenterCadavres", "state.json"), stateHash = Hash(manifest);
+    string archive = Path.Combine(game, ggpk ? "Content.ggpk" : "Bundles2/_.index.bin");
+    if (corruptBackup)
+    {
+        using var state = System.Text.Json.JsonDocument.Parse(File.ReadAllText(manifest));
+        string saved = Path.Combine(Path.GetDirectoryName(manifest)!, state.RootElement.GetProperty("Id").GetString()!, "original.bin");
+        using (var broken = File.Open(saved, FileMode.Append)) broken.WriteByte(1);
+        CreateGame(game, new Dictionary<string, byte[]>(payloads) { [Other] = Utf16("new official data") }, ggpk);
+    }
+    else File.WriteAllBytes(archive, Array.Empty<byte>());
+    string updatedHash = Hash(archive);
+    Reject(() => CorpseArchive.Restore(game, default, () => { }), "unreadable index or damaged backup prevents stale-state retirement " + ggpk + corruptBackup);
+    Check(Hash(manifest) == stateHash && Hash(archive) == updatedHash, "failed verification preserves the manifest and all game bytes " + ggpk + corruptBackup);
+}
 if (legacyPackage != null)
 {
     string pluginDirectory = Path.Combine(legacyPackage, "Plugins", "CorpseCleaner");

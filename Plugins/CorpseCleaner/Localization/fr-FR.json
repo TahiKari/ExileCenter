@@ -25,7 +25,7 @@
   "directory": "Dossier de PoE 2",
   "native_help": "Le codec des archives est inclus dans ExileCenter. Aucune DLL externe ni ExileForge n'est nécessaire. Les archives modifiées peuvent occuper davantage d'espace disque.",
   "close_game": "PoE est ouvert. Fermez le jeu pour appliquer ou restaurer ce patch. Il n'y a pas de bascule instantanée pendant une partie.",
-  "backup": "L'archive d'origine est conservée dans .ExileCenterCadavres, dans le dossier du jeu. Le lanceur officiel nécessite assez d'espace libre pour une copie complète de Content.ggpk. La restauration est refusée si une mise à jour du jeu ou un autre outil a modifié l'archive patchée.",
+  "backup": "L'archive d'origine est conservée dans .ExileCenterCadavres, dans le dossier du jeu. Le lanceur officiel nécessite assez d'espace libre pour une copie complète de Content.ggpk. Après une mise à jour ou réparation, cliquez sur Restaurer : si l'index ne référence plus aucun ancien patch, leurs états sont archivés et les sauvegardes conservées, sans remplacer les fichiers du jeu. Si des patches restent référencés ou si la vérification échoue, la restauration reste refusée.",
   "apply": "Appliquer les cadavres / la caméra (jeu fermé)",
   "restore": "Restaurer les cadavres / la caméra",
   "cancel": "Annuler la préparation",

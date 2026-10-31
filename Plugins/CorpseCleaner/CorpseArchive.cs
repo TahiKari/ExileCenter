@@ -200,15 +200,22 @@ internal static class CorpseArchive
         void Check() { token.ThrowIfCancellationRequested(); guard(); }
         Check();
         string root = Path.GetFullPath(directory.Trim().Trim('"'));
-        if (!minimapOnly && LoadState(Safe(root, ".ExileCenterMinimap")) != null)
-            throw new InvalidOperationException("Restaurez uniquement la minimap avant de restaurer les autres patches.");
+        State? minimap = LoadState(Safe(root, ".ExileCenterMinimap"));
         string storage = minimapOnly ? Safe(root, ".ExileCenterMinimap") : StoragePath(root);
-        State state = LoadState(storage) ?? throw new FileNotFoundException("Aucune sauvegarde CorpseCleaner dans ce dossier.");
-        if (minimapOnly != (state.BundleDirectory == "ExileCenterMinimap"))
+        State? selected = minimapOnly ? minimap : LoadState(storage);
+        State top = minimap ?? selected ?? throw new FileNotFoundException("Aucune sauvegarde CorpseCleaner dans ce dossier.");
+        if (minimap != null && minimap.BundleDirectory != "ExileCenterMinimap" || selected != null &&
+            (minimapOnly != (selected.BundleDirectory == "ExileCenterMinimap") || selected.Archive != top.Archive))
             throw new InvalidDataException("La sauvegarde ne correspond pas au type de patch demandé.");
-        string archive = Safe(root, state.Archive), backup = Safe(storage, state.Id + "/original.bin");
+        string archive = Safe(root, top.Archive);
         using var current = new FileStream(archive, FileMode.Open, FileAccess.Read, FileShare.Read);
         string currentHash = Hash(current, Check);
+        if (currentHash != top.PatchedHash && currentHash != top.OriginalHash && ArchiveReplacedPatches(root, archive, currentHash, Check))
+            return "Les anciens patches ne sont plus référencés par l'index actuel (mise à jour ou réparation du jeu). États archivés, sauvegardes conservées. Aucun fichier du jeu remplacé.";
+        if (!minimapOnly && minimap != null)
+            throw new InvalidOperationException("Restaurez uniquement la minimap avant de restaurer les autres patches.");
+        State state = selected ?? throw new FileNotFoundException("Aucune sauvegarde CorpseCleaner dans ce dossier.");
+        string backup = Safe(storage, state.Id + "/original.bin");
         if (currentHash == state.OriginalHash)
         {
             // Recover a preparation interrupted before the atomic replacement,
@@ -247,6 +254,63 @@ internal static class CorpseArchive
         }
         File.Delete(previous);
         return "Fichiers d'origine restaurés et vérifiés. Les autres réglages du jeu ont été conservés.";
+    }
+
+    private static bool ArchiveReplacedPatches(string root, string archive, string currentHash, Action check)
+    {
+        // A different hash alone does not prove removal: preserve the refusal whenever
+        // any resource still points at an ExileCenter or historical GameHelper bundle.
+        string[] directories = [".ExileCenterMinimap", ".ExileCenterCadavres", ".GameHelperCadavres"];
+        var states = directories.Select(name => (Storage: Safe(root, name), State: LoadState(Safe(root, name))))
+            .Where(item => item.State != null).Select(item => (item.Storage, State: item.State!)).ToArray();
+        if (states.Any(item => Safe(root, item.State.Archive) != archive || currentHash == item.State.PatchedHash ||
+            (item.State.BundleDirectory == "ExileCenterMinimap") != item.Storage.EndsWith(".ExileCenterMinimap", StringComparison.OrdinalIgnoreCase))) return false;
+        check();
+        NativeOodle.Ensure("", "");
+        using (var session = Open(archive, Path.GetFileName(archive) == "Content.ggpk", Safe(root, "Bundles2"), root, false))
+        {
+            if (session.Index.Files.Count == 0) throw new InvalidDataException("Index vide : sauvegardes conservées, vérifiez les fichiers avec le lanceur officiel.");
+            int inspected = 0;
+            foreach (var asset in session.Index.Files.Values)
+            {
+                if ((inspected++ & 4095) == 0) check();
+                string path = asset.BundleRecord.Path.Replace('\\', '/');
+                if (path.StartsWith("ExileCenterMinimap/", StringComparison.OrdinalIgnoreCase) ||
+                    path.StartsWith("ExileCenterCadavres/", StringComparison.OrdinalIgnoreCase) ||
+                    path.StartsWith("GameHelperCadavres/", StringComparison.OrdinalIgnoreCase)) return false;
+            }
+        }
+        var manifests = new List<(string Source, string Archived)>();
+        string suffix = ".superseded-" + DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ") + "-" + Guid.NewGuid().ToString("N");
+        foreach (var item in states)
+        {
+            check();
+            if ((File.GetAttributes(item.Storage) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Le dossier de sauvegarde ne doit pas être une jonction.");
+            string saved = Safe(item.Storage, item.State.Id + "/original.bin");
+            if (!File.Exists(saved) || Hash(saved, check) != item.State.OriginalHash)
+                throw new InvalidDataException("Sauvegarde absente ou altérée : états conservés, vérifiez les fichiers avec le lanceur officiel.");
+            string[] active = new[] { "state.json", "pending.json" }.Select(name => Safe(item.Storage, name)).Where(File.Exists).ToArray();
+            if (active.Length != 1) throw new InvalidDataException("Plusieurs états de préparation : sauvegardes conservées.");
+            manifests.Add((active[0], active[0] + suffix));
+        }
+        var moved = new List<(string Source, string Archived)>();
+        try
+        {
+            foreach (var manifest in manifests)
+            {
+                check();
+                File.Move(manifest.Source, manifest.Archived);
+                moved.Add(manifest);
+            }
+            check();
+        }
+        catch
+        {
+            foreach (var manifest in moved.AsEnumerable().Reverse()) File.Move(manifest.Archived, manifest.Source);
+            throw;
+        }
+        return true;
     }
 
     internal static void EnsureClosed()

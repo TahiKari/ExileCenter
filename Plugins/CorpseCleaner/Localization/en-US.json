@@ -25,7 +25,7 @@
   "directory": "PoE 2 folder",
   "native_help": "The archive codec is included in ExileCenter. No external DLL or ExileForge is required. Modified archives may use more disk space.",
   "close_game": "PoE is open. Close the game to apply or restore this patch. There is no instant in-game toggle.",
-  "backup": "The original archive is kept in .ExileCenterCadavres inside the game folder. Standalone installations need enough free space for a full copy of Content.ggpk. Restoration is refused if a game update or another tool has changed the patched archive.",
+  "backup": "The original archive is kept in .ExileCenterCadavres inside the game folder. Standalone installations need enough free space for a full copy of Content.ggpk. After an update or repair, click Restore: if the index no longer references any old patch, their states are archived and backups kept without replacing game files. Restoration stays blocked if patch references remain or verification fails.",
   "apply": "Apply corpses / camera (game closed)",
   "restore": "Restore corpses / camera",
   "cancel": "Cancel preparation",
