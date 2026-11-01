@@ -1230,6 +1230,42 @@ internal static class TabletRankingCheck
             defaults.WaystoneCraftCorrupt&&defaults.WaystoneCraftStopOnMissingCurrency&&defaults.WaystoneCraftCurrencyLimit==200&&
             defaults.WaystoneCraftDelayMs==80&&!defaults.WaystoneCraftDiagnostic&&!defaults.WaystoneCraftDryRun,
             "Existing settings receive bounded craft defaults, compatible magic-alchemy policy, and inactive diagnostic modes without migration");
+        Check(defaults.WaystoneCraftFastMode,"Fast craft mode is enabled for the requested performance upgrade without overwriting the saved manual delay");
+        var interactionDelay=typeof(StashUtilityCore).GetProperty("CraftInteractionDelay",flags);
+        var navigationDelay=typeof(StashUtilityCore).GetProperty("StashNavigationDelay",flags);
+        int Delay()=>(int)interactionDelay.GetValue(plugin);
+        foreach(int saved in new[]{-1,40,80,137,500,999})
+        {
+            plugin.Settings.WaystoneCraftDelayMs=saved;plugin.Settings.WaystoneCraftFastMode=true;
+            Check(Delay()==20&&plugin.Settings.WaystoneCraftDelayMs==saved,"Fast timing preserves the saved manual delay: "+saved);
+            typeof(StashUtilityCore).GetField("affinityActionDelay",flags).SetValue(plugin,Delay());
+            typeof(StashUtilityCore).GetField("waystoneCraftRunning",flags).SetValue(plugin,true);
+            Check((int)navigationDelay.GetValue(plugin)==40,"Fast craft navigation uses a bounded post-click wait");
+            typeof(StashUtilityCore).GetField("waystoneCraftRunning",flags).SetValue(plugin,false);
+            Check((int)navigationDelay.GetValue(plugin)==80,"Transfers outside auto-craft keep their original navigation timing");
+            plugin.Settings.WaystoneCraftFastMode=false;
+            Check(Delay()==Math.Clamp(saved,40,500),"Disabling fast mode restores the previous bounded manual delay: "+saved);
+        }
+        plugin.Settings.WaystoneCraftDelayMs=80;plugin.Settings.WaystoneCraftFastMode=true;
+        var scanBudget=typeof(StashUtilityCore).GetMethod("StashScanHasBudget",flags);
+        bool ScanBudget(bool fast,int processed,int microseconds)=>(bool)scanBudget.Invoke(null,new object[]{fast,processed,TimeSpan.FromTicks(microseconds*10L)});
+        Check(ScanBudget(true,0,5000)&&!ScanBudget(true,1,2000)&&!ScanBudget(true,128,0),"Fast scans always progress but yield at two milliseconds or 128 nodes");
+        Check(ScanBudget(false,3,5000)&&!ScanBudget(false,4,0),"Normal and fallback scans keep exactly the previous four-node frame budget");
+        int SimulatedFrames(bool fast,int nodes,int nodeMicroseconds)
+        {
+            int frames=0;
+            while(nodes>0)
+            {
+                int processed=0;
+                while(nodes>0&&ScanBudget(fast,processed,processed*nodeMicroseconds)){processed++;nodes--;}
+                frames++;
+            }
+            return frames;
+        }
+        int oldFrames=SimulatedFrames(false,12000,20),fastFrames=SimulatedFrames(true,12000,20);
+        Check(oldFrames==3000&&fastFrames==120,"A synthetic 12000-node scan with 20-microsecond reads uses 120 bounded frames instead of 3000");
+        Check(SimulatedFrames(true,100,3000)==100,"Slow memory reads still process only one node per frame");
+        Console.WriteLine($"SCAN MODEL: {oldFrames} -> {fastFrames} frames for 12000 simulated nodes at 20 us/node; no game reads or input; actual throughput depends on read cost.");
         var cellType=typeof(StashUtilityCore).GetNestedType("SortItem",BindingFlags.NonPublic);
         object Cell(int address,int x,string identity,int y=0)
         {
@@ -1317,10 +1353,16 @@ internal static class TabletRankingCheck
         var ready=typeof(StashUtilityCore).GetMethod("CraftPageIsReady",flags);
         var now=DateTime.UtcNow;
         bool Ready(IList items,int milliseconds)=>(bool)ready.Invoke(plugin,new object[]{items,now.AddMilliseconds(milliseconds)});
+        plugin.Settings.WaystoneCraftFastMode=false;
         Check(!Ready(null,0)&&!Ready(Cells(),10)&&!Ready(Cells(),500),"Initial hidden or empty native grids are allowed to load within the first run");
         Check(!Ready(Cells(target),600)&&!Ready(Cells(target),900)&&Ready(Cells(target),1100),"A loaded initial map grid starts after one stable half-second without restarting");
         Check(!Ready(Cells(Cell(3,2,"changed map")),1200),"Changing native item content restarts the readiness interval");
         Check(!Ready(null,1300)&&!Ready(Cells(target),1400)&&Ready(Cells(target),1900),"A temporarily unavailable grid cannot retain an obsolete ready state");
+        plugin.Settings.WaystoneCraftFastMode=true;
+        Check(!Ready(null,2000)&&!Ready(Cells(target),2100)&&!Ready(Cells(target),2199)&&Ready(Cells(target),2200),"Fast mode requires a full stable 100 ms before using a loaded map page");
+        Check(!Ready(Cells(Cell(3,2,"changed map")),2300)&&!Ready(Cells(Cell(3,2,"changed map")),2399)&&Ready(Cells(Cell(3,2,"changed map")),2400),"Changes to the native map identity reset fast page stabilization");
+        Check(!Ready(null,2500)&&!Ready(Cells(),3000)&&!Ready(Cells(),5499)&&Ready(Cells(),5500),"Fast mode preserves the full 2500 ms allowance before declaring a page empty");
+        Check(!Ready(null,5600)&&!Ready(Cells(target),5700)&&Ready(Cells(target),5800),"An unavailable grid also clears the fast-mode readiness snapshot");
         var batchCurrency=typeof(StashUtilityCore).GetMethod("CraftBatchCurrency",flags);
         string BatchCurrency(IEnumerable<string> currencies)=>(string)batchCurrency.Invoke(null,new object[]{currencies});
         foreach(bool magicAlchemy in new[]{true,false})
@@ -3822,7 +3864,7 @@ internal static class TabletRankingCheck
                 ImGuiNET.ImGui.SetNextWindowPos(new Vector2(16));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width,750));
                 ImGuiNET.ImGui.Begin("Auto-craft des pierres de téléportation##craft-options",ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
                 craftOptions.Invoke(plugin,null);
-                Check(ImGuiNET.ImGui.GetCursorPosY()<740,"Craft settings fit inside the pane: "+width);
+                Check(ImGuiNET.ImGui.GetCursorPosY()<740,"Craft settings fit inside the pane: "+width+" (content height "+ImGuiNET.ImGui.GetCursorPosY()+")");
                 Check(ImGuiNET.ImGui.GetItemRectMax().X<=16+width,"Craft budget control stays inside compact and wide panes: "+width);
                 ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
                 if(previewDirectory!=null)SaveUiPreview(Path.Combine(previewDirectory,"waystone-craft-"+width+".png"),pixels,atlasWidth,atlasHeight);

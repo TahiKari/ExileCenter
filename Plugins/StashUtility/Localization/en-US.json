@@ -73,6 +73,8 @@
   "stashutility.craft.diagnostic": "Diagnostics",
   "stashutility.craft.dry_run": "Simulation without consumption",
   "stashutility.craft.delay": "Delay between actions (ms)",
+  "stashutility.craft.fast": "Fast mode",
+  "stashutility.craft.fast_help": "20 ms interaction waits, navigation from 40 ms and faster initial scanning. Currency and Vaal-result confirmations and stopping on mouse movement remain mandatory. Disable this mode to restore your saved manual delay and the previous pacing.",
   "stashutility.craft.pause": "Pause",
   "stashutility.craft.resume": "Resume",
   "stashutility.craft.stop": "Stop",

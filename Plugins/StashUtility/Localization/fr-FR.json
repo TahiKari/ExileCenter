@@ -73,6 +73,8 @@
   "stashutility.craft.diagnostic": "Diagnostic",
   "stashutility.craft.dry_run": "Simulation sans consommation",
   "stashutility.craft.delay": "Délai entre les actions (ms)",
+  "stashutility.craft.fast": "Mode rapide",
+  "stashutility.craft.fast_help": "Attentes de 20 ms entre les interactions, navigation à partir de 40 ms et scan initial accéléré. Les confirmations des monnaies, du résultat Vaal et l'arrêt au mouvement de souris restent obligatoires. Désactive ce mode pour retrouver le délai manuel enregistré et le rythme précédent.",
   "stashutility.craft.pause": "Pause",
   "stashutility.craft.resume": "Reprendre",
   "stashutility.craft.stop": "Arrêter",

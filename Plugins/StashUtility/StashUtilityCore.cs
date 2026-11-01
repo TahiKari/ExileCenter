@@ -2745,12 +2745,16 @@ namespace StashUtility
 
         private static IEnumerable<SortItem> CraftColumnOrder(IEnumerable<SortItem> items) => items.OrderBy(item => item.X).ThenBy(item => item.Y);
 
+        private int CraftInteractionDelay => Settings.WaystoneCraftFastMode ? 20 : Math.Clamp(Settings.WaystoneCraftDelayMs, 40, 500);
+        private int StashNavigationDelay => Math.Max(waystoneCraftRunning && Settings.WaystoneCraftFastMode ? 40 : 80, affinityActionDelay * 2);
+
         private bool CraftPageIsReady(List<SortItem> items, DateTime now)
         {
             if (items == null) { craftPageSnapshot = null; return false; }
             string snapshot = string.Join(";", items.OrderBy(item => item.Address.ToInt64()).Select(item => item.Address + ":" + item.Identity));
-            if (craftPageSnapshot != snapshot) { craftPageSnapshot = snapshot; craftPageReady = now.AddMilliseconds(500); return false; }
-            return now >= craftPageReady && (items.Count > 0 || now >= craftPageReady.AddSeconds(2));
+            if (craftPageSnapshot != snapshot) { craftPageSnapshot = snapshot; craftPageReady = now.AddMilliseconds(Settings.WaystoneCraftFastMode ? 100 : 500); return false; }
+            // Empty pages keep the full 2.5-second loading allowance in both modes.
+            return now >= craftPageReady && (items.Count > 0 || now >= craftPageReady.AddMilliseconds(Settings.WaystoneCraftFastMode ? 2400 : 2000));
         }
 
         private bool CraftCancelCurrency()
@@ -2858,7 +2862,7 @@ namespace StashUtility
             if (!CraftUiChildren(ResolvePath(header, new[] { 1 }), count, out var pages))
             {
                 if (!navigate) return IntPtr.Zero;
-                affinityNextAction = DateTime.UtcNow.AddMilliseconds(100);
+                affinityNextAction = DateTime.UtcNow.AddMilliseconds(Settings.WaystoneCraftFastMode ? 20 : 100);
                 return IntPtr.Zero;
             }
             var page = pages[index];
@@ -3263,7 +3267,7 @@ namespace StashUtility
                 ReleaseAffinityControl();
                 if (affinityCtrlHeld || affinityShiftHeld || !AffinityGetCursorPos(out affinityCursor)) throw CraftFailure("input", "Release the mouse buttons and modifier keys before starting.");
                 affinityWindow = Core.Process.WindowArea;
-                affinityActionDelay = Math.Clamp(Settings.WaystoneCraftDelayMs, 40, 500);
+                affinityActionDelay = CraftInteractionDelay;
                 affinityMousePositioned = true;
                 if (!resuming) craftSpent = craftDone = craftSkipped = 0;
                 craftInputPhase = craftPhase = 0;
@@ -3272,7 +3276,7 @@ namespace StashUtility
                 craftClipboardBefore = CraftClipboardText(); craftClipboardSequence = GetClipboardSequenceNumber();
                 if (!fromInventory && craftSource == null) StartCraftStashScan(0);
                 waystoneCraftRunning = true;
-                affinityNextAction = DateTime.UtcNow.AddMilliseconds(500);
+                affinityNextAction = DateTime.UtcNow.AddMilliseconds(Settings.WaystoneCraftFastMode ? 50 : 500);
             }
             catch (Exception ex) { StopWaystoneCraft(ex.GetBaseException().Message); }
         }
@@ -3478,7 +3482,7 @@ namespace StashUtility
                 {
                     using var game = System.Diagnostics.Process.GetProcessById((int)Core.Process.Pid);
                     AffinitySetForegroundWindow(game.MainWindowHandle);
-                    craftPhase = craftFromInventory ? 1 : 13; affinityNextAction = now.AddMilliseconds(300); return;
+                    craftPhase = craftFromInventory ? 1 : 13; affinityNextAction = now.AddMilliseconds(Settings.WaystoneCraftFastMode ? 50 : 300); return;
                 }
                 if (!AffinityGameIsForeground()) throw CraftFailure("focus", "The game lost focus. Crafting stopped.");
                 if (affinityShiftHeld && !CraftKeyDown(0x10)) throw CraftFailure("shift_lost", "Shift was released unexpectedly. Crafting stopped.");
@@ -3850,11 +3854,23 @@ namespace StashUtility
             if (ImGui.Checkbox(PluginText.T("stashutility.craft.corrupt", "Corrupt after six modifiers"), ref Settings.WaystoneCraftCorrupt)) SaveSettings();
             if (ImGui.Checkbox(PluginText.T("stashutility.craft.stop_missing", "Stop when currency is missing"), ref Settings.WaystoneCraftStopOnMissingCurrency)) SaveSettings();
             if (ImGui.Checkbox(PluginText.T("stashutility.craft.diagnostic", "Log input events"), ref Settings.WaystoneCraftDiagnostic)) SaveSettings();
+            ImGui.SameLine();
+            if (ImGui.Checkbox(PluginText.T("stashutility.craft.fast", "Fast mode"), ref Settings.WaystoneCraftFastMode)) SaveSettings();
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.BeginTooltip();
+                ImGui.PushTextWrapPos(ImGui.GetFontSize() * 30);
+                ImGui.TextUnformatted(PluginText.T("stashutility.craft.fast_help", "Fast mode uses short interaction waits and faster loaded-page checks. Currency confirmations and mouse-movement stops remain mandatory. Disable it to use your saved manual delay."));
+                ImGui.PopTextWrapPos();
+                ImGui.EndTooltip();
+            }
             if (ImGui.Checkbox(PluginText.T("stashutility.craft.dry_run", "Diagnostic without currency application"), ref Settings.WaystoneCraftDryRun)) SaveSettings();
             if (Settings.WaystoneCraftDryRun) ImGui.TextWrapped(PluginText.T("stashutility.craft.diagnostic_help", "Moves the cursor and selects currency; never clicks a waystone to apply it."));
+            ImGui.BeginDisabled(Settings.WaystoneCraftFastMode);
             ImGui.TextWrapped(PluginText.T("stashutility.craft.delay", "Interaction delay (ms)"));
             ImGui.SetNextItemWidth(-1);
             if (ImGui.SliderInt("##waystoneCraftDelay", ref Settings.WaystoneCraftDelayMs, 40, 500)) SaveSettings();
+            ImGui.EndDisabled();
             ImGui.TextWrapped(PluginText.T("stashutility.craft.limit", "Maximum currency attempts per run"));
             ImGui.SetNextItemWidth(-1);
             if (ImGui.SliderInt("##waystoneCraftLimit", ref Settings.WaystoneCraftCurrencyLimit, 1, 2000)) SaveSettings();
@@ -5783,7 +5799,7 @@ namespace StashUtility
                 throw new InvalidOperationException(PluginText.T("stashutility.transfer.affinity_click_failed", "Windows did not accept the mouse click."));
             }
             affinityNavigationElement = IntPtr.Zero;
-            affinityNextAction = DateTime.UtcNow.AddMilliseconds(Math.Max(80, affinityActionDelay * 2));
+            affinityNextAction = DateTime.UtcNow.AddMilliseconds(StashNavigationDelay);
         }
 
         private static bool AffinityGameIsForeground()
@@ -6295,6 +6311,9 @@ namespace StashUtility
             if (!string.IsNullOrEmpty(reason)) stashScanStatus += "\n" + reason;
         }
 
+        private static bool StashScanHasBudget(bool craftOnly, int processed, TimeSpan elapsed) =>
+            processed < (craftOnly ? 128 : 4) && (!craftOnly || processed == 0 || elapsed.TotalMilliseconds < 2);
+
         private void UpdateStashScan()
         {
             if (stashScanQueue.Count == 0) return;
@@ -6308,8 +6327,11 @@ namespace StashUtility
                     return;
                 }
 
-                // Spread memory reads across frames; inactive pages may contain cached items.
-                for (int i = 0; i < 4 && stashScanQueue.Count > 0; i++)
+                // Craft discovery uses a bounded time slice instead of four nodes per frame.
+                // Keep normal scans unchanged and retain the existing traversal safeguards.
+                long scanStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+                for (int i = 0; stashScanQueue.Count > 0 && StashScanHasBudget(stashScanForCraft && Settings.WaystoneCraftFastMode, i,
+                    System.Diagnostics.Stopwatch.GetElapsedTime(scanStarted)); i++)
                 {
                     var node = stashScanQueue.Dequeue();
                     if (++stashScanNodeCount > 20000 || !TryReadMemory<UiElementBaseOffset>(node.address, out var offset) || offset.Self != node.address)

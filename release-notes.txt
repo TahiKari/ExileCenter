@@ -1,14 +1,14 @@
 ﻿
-ExileCenter 1.19.2
+ExileCenter 1.20.0
 
-- Réglages visuels permanents : après une mise à jour ou réparation qui a remplacé les fichiers patchés, un clic sur l'un des boutons Restaurer peut maintenant classer les anciens états devenus obsolètes, sans remettre une ancienne archive sur la nouvelle version du jeu.
-- La détection vérifie que l'index actuel ne référence plus aucun bundle de patch ExileCenter ou GameHelper, puis vérifie les sauvegardes d'origine. Une différence de SHA256 seule ne suffit pas à autoriser cet archivage.
-- Les états minimap et cadavres/caméra superposés sont archivés ensemble ; leurs sauvegardes et les fichiers actuels du jeu sont conservés. Une interruption pendant l'archivage remet les états déjà déplacés en place.
-- Si des patches restent référencés, si l'index est illisible ou si une sauvegarde est absente ou altérée, le refus de restauration est maintenu. Le contrôle se fait au clic Restaurer, jeu fermé, sans vérification lourde en continu pendant la partie.
-- Correction limitée à la gestion de restauration et des sauvegardes. Les préférences visuelles, positions et réglages personnels sont conservés ; aucun patch n'est réappliqué automatiquement.
+- Auto-craft des pierres de téléportation : nouveau Mode rapide activé par défaut. Les attentes entre interactions passent à 20 ms ; la navigation attend au moins 40 ms et les pages chargées sont utilisées après 100 ms de contenu stable. Le rythme réel dépend des images de l'application et des confirmations du jeu.
+- Le scan de découverte propre au craft traite jusqu'à 128 éléments par image dans un budget de 2 ms, au lieu de 4 éléments par image. Les autres scans conservent leur fonctionnement. Une page vide bénéficie toujours de 2,5 secondes pour se charger.
+- Ces délais réduits s'appliquent aux phases de monnaies et au rangement des pierres T15 devenues T14 ou T16 après corruption. Les vérifications de consommation et du résultat, les limites de monnaies, les contrôles de destination et l'arrêt au mouvement de souris restent obligatoires.
+- Le Mode rapide peut être désactivé dans les options du craft pour retrouver le rythme précédent et le délai manuel enregistré. Son aide s'affiche au survol ; les réglages personnalisés et les positions de la barre du coffre restent conservés.
+- Aucun ajout d'injection, de hook ou d'écriture dans le processus de PoE. Les règles de GGG continuent de s'appliquer à l'automatisation ; l'absence d'injection ne vaut pas autorisation de GGG.
 - GameOffsets.dll conservée à l'identique, sans recompilation.
 
-Validation : compilation du cœur et de CorpseCleaner ; 155 contrôles sur des archives synthétiques Steam/Epic et Content.ggpk, avec mises à jour simulées, deux couches de patch, restauration exacte, refus conservés et retour arrière après interruption. Les scénarios de mise à jour ont aussi été exécutés directement contre le plugin du ZIP officiel. Aucun fichier du jeu réel modifié et aucune entrée système envoyée. Le comportement lors d'une future mise à jour réelle et le rendu en jeu ne sont pas validés par ces fixtures.
+Validation : compilation du cœur et de StashUtility ; 11 823 contrôles de craft hors jeu, avec entrées interceptées, incluant consommation unique, confirmation des monnaies, destinations T14/T16, navigation et conservation de la barre verrouillée. Contrôles de l'affichage compact et large et de la barre indépendante. Le modèle de scan est simulé : aucun multiplicateur de vitesse réelle en jeu n'est garanti. Aucun fichier du jeu réel modifié et aucune entrée système envoyée pendant les tests ; fluidité et rendu en jeu à confirmer.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

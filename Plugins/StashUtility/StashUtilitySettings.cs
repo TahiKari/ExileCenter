@@ -25,6 +25,7 @@ namespace StashUtility
         public bool WaystoneCraftStopOnMissingCurrency = true;
         public bool WaystoneCraftDiagnostic = false;
         public bool WaystoneCraftDryRun = false;
+        public bool WaystoneCraftFastMode = true;
         public int WaystoneCraftDelayMs = 80;
         public int WaystoneCraftCurrencyLimit = 200;
         public Dictionary<string, WaystoneCraftPreset> WaystoneCraftPresets = new();
