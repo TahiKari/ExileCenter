@@ -2091,6 +2091,9 @@ namespace StashUtility
         private DateTime craftNamedPageReady;
         private static readonly string[] CraftTierNames = { "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI" };
         private readonly Queue<IntPtr> craftQueue = new();
+        private readonly Dictionary<IntPtr, IntPtr> craftKnownSlots = new();
+        private List<SortItem> craftScanGrid;
+        private IntPtr craftScanInventory;
         private readonly List<SortItem> craftInventoryBefore = new();
         private IntPtr craftItem, craftSlot;
         private string craftIdentity, craftCurrency, craftStatus = "", craftClipboardBefore;
@@ -2129,6 +2132,19 @@ namespace StashUtility
             if (affinityCtrlHeld && CraftSendInputs(new[] { AffinityKeyInput(2) }) == 1) affinityCtrlHeld = false;
             if (endSession && affinityShiftHeld && CraftSendInputs(new[] { AffinityKeyInput(2, 0x10) }) == 1) affinityShiftHeld = false;
             craftInputPhase = 0;
+        }
+
+        private bool CraftFinishInput(bool freshCopy)
+        {
+            bool keepControl = Settings.WaystoneCraftFastMode && craftPhase == 2 && !craftRescanning && craftQueue.Count > 0;
+            if (keepControl && (!affinityCtrlHeld || !CraftKeyDown(0x11)))
+                throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
+            bool releasingModifiers = !keepControl && (affinityCtrlHeld || craftSelectedCurrency == null && affinityShiftHeld);
+            if (keepControl) craftInputPhase = 0; // Same-page initial scan: keep Ctrl between verified copies.
+            else CraftReleaseInput(endSession: craftSelectedCurrency == null);
+            if (affinityCtrlHeld && !keepControl || craftSelectedCurrency == null && affinityShiftHeld)
+                throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
+            return freshCopy || craftPhase == 8 || Settings.WaystoneCraftFastMode && !releasingModifiers;
         }
 
         private bool CraftNavigationModifiersAllowed() => !affinityCtrlHeld &&
@@ -2283,7 +2299,11 @@ namespace StashUtility
                     bool slotSize = visibleOnly ? PluginUiElementReflection.TryGetAbsoluteRect(node.address, out _, out var size) &&
                         size.X is >= 15 and <= 110 && size.Y is >= 15 and <= 110 :
                         data.UnscaledSize.X is >= 15 and <= 110 && data.UnscaledSize.Y is >= 15 and <= 110;
-                    if (slotSize) result.Add(item, node.address);
+                    if (slotSize)
+                    {
+                        result.Add(item, node.address);
+                        if (Settings.WaystoneCraftFastMode) continue;
+                    }
                 }
                 long count = data.ChildrensPtr.TotalElements(IntPtr.Size);
                 if (count < 0 || count > 4096) throw CraftFailure("changed", "The item or inventory changed. Crafting stopped.");
@@ -2557,7 +2577,7 @@ namespace StashUtility
             }
         }
 
-        private static int CraftFreeMapCell(List<SortItem> items) => Enumerable.Range(0, 96)
+        private static int CraftFreeMapCell(List<SortItem> items) => Enumerable.Range(0, 96).Select(index => index % 8 * 12 + index / 8)
             .FirstOrDefault(cell => !items.Any(item => item.X == cell % 12 && item.Y == cell / 12), -1);
 
         private static SortItem CraftPlacedMap(List<SortItem> after, List<SortItem> before, string identity)
@@ -2612,6 +2632,15 @@ namespace StashUtility
         private bool CraftLocateStashTarget(bool navigate = true)
         {
             if (FindSelectedStashPage(affinityStashRoot) != craftSource.Page) return false;
+            // Reuse only the UI route, never item state. Validate its live pointer,
+            // visibility, page and identity again before positioning or clicking.
+            if (Settings.WaystoneCraftFastMode && craftKnownSlots.TryGetValue(craftItem, out var knownSlot) &&
+                GetHighlightItemAddress(knownSlot) == craftItem && IsElementVisible(knownSlot) &&
+                (craftIdentity == null || SortItemIdentity(ReadFreshItem(craftItem)) == craftIdentity) && CraftSelectTargetPage(navigate))
+            {
+                craftSlot = knownSlot;
+                return true;
+            }
             if (!CraftUiChildren(ResolvePath(craftSource.Page, new[] { 0, 1 }), 16, out var tiers)) return false;
             if (craftTargetTier is >= 0 and < 16 && craftTargetPage is >= 0 and < 6 &&
                 IsElementVisible(tiers[craftTargetTier]) &&
@@ -2622,6 +2651,7 @@ namespace StashUtility
                 (craftIdentity == null || SortItemIdentity(ReadFreshItem(craftItem)) == craftIdentity))
             {
                 craftSlot = expectedSlot;
+                craftKnownSlots[craftItem] = expectedSlot;
                 return CraftSelectTargetPage(navigate) && IsElementVisible(craftSlot);
             }
             var tierOrder = Enumerable.Range(0, 16).OrderBy(t => IsElementVisible(tiers[t]) ? 0 : t == craftTargetTier ? 1 : t == craftTier ? 2 : 3)
@@ -2636,6 +2666,7 @@ namespace StashUtility
                     if (slots.TryGetValue(craftItem, out var slot) && (craftIdentity == null || SortItemIdentity(ReadFreshItem(craftItem)) == craftIdentity))
                     {
                         craftTargetTier = tier; craftTargetPage = page; craftSlot = slot;
+                        craftKnownSlots[craftItem] = slot;
                         return CraftSelectTargetPage(navigate) && IsElementVisible(slot);
                     }
                     if (!string.IsNullOrEmpty(craftIdentity))
@@ -2793,12 +2824,16 @@ namespace StashUtility
         {
             craftQueue.Clear();
             var slots = CraftVisibleSlots(root);
-            var items = craftFromInventory ? craftInventoryBefore : CraftReadMapGrid(root, out _, out _, out _);
+            craftKnownSlots.Clear();
+            craftScanInventory = IntPtr.Zero;
+            var items = craftFromInventory ? craftInventoryBefore : CraftReadMapGrid(root, out craftScanInventory, out _, out _);
             if (items == null) throw CraftFailure("changed", "The waystone grid could not be read.");
+            craftScanGrid = items;
             foreach (var position in CraftColumnOrder(items))
             {
                 var address = position.Address;
                 if (!slots.ContainsKey(address)) throw CraftFailure("changed", "The waystone grid changed.");
+                craftKnownSlots[address] = slots[address];
                 var cell = craftInventoryBefore.SingleOrDefault(item => item.Address == address);
                 if (craftFromInventory && (cell == null || Settings.ProtectedInventoryCells?.Contains(cell.Y * InventoryColumns + cell.X) == true)) continue;
                 var stone = ReadFreshItem(address);
@@ -2808,6 +2843,15 @@ namespace StashUtility
                     craftQueue.Enqueue(address);
                 }
             }
+        }
+
+        private List<SortItem> CraftReadScanGrid()
+        {
+            // The initial pass never modifies maps. Bind its native inventory once,
+            // then require the same complete address/cell layout on every copied map.
+            if (craftScanInventory == IntPtr.Zero || !CraftSelectTargetPage(navigate: false)) return null;
+            var current = ReadSortItems(craftScanInventory, 12, 8);
+            return craftScanGrid != null && SortGridEquals(current, craftScanGrid) ? current : null;
         }
 
         private void QueueCraftPages()
@@ -3255,6 +3299,7 @@ namespace StashUtility
                 craftSourcePage = fromInventory ? IntPtr.Zero : page;
                 craftInventoryBefore.Clear(); craftInventoryBefore.AddRange(CraftInventory());
                 craftQueue.Clear();
+                craftKnownSlots.Clear(); craftScanGrid = null; craftScanInventory = IntPtr.Zero;
                 craftPages.Clear(); craftTier = craftPage = -1;
                 if (fromInventory)
                 {
@@ -3431,6 +3476,19 @@ namespace StashUtility
 
         private void UpdateWaystoneCraft()
         {
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
+            for (int step = 0; step < 4; step++)
+            {
+                int before = craftPhase;
+                UpdateWaystoneCraftStep();
+                // Never spin on loading, receipts, clipboard or an input delay.
+                if (!Settings.WaystoneCraftFastMode || !waystoneCraftRunning || craftPhase == before ||
+                    DateTime.UtcNow < affinityNextAction || System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds >= 8) break;
+            }
+        }
+
+        private void UpdateWaystoneCraftStep()
+        {
             bool pause = CraftKeyDown(0x77), resume = CraftKeyDown(0x78); // F8 / F9, independent of mouse position.
             bool pausePressed = pause && !craftPauseKeyHeld, resumePressed = resume && !craftResumeKeyHeld;
             craftPauseKeyHeld = pause; craftResumeKeyHeld = resume;
@@ -3488,10 +3546,7 @@ namespace StashUtility
                 if (affinityShiftHeld && !CraftKeyDown(0x10)) throw CraftFailure("shift_lost", "Shift was released unexpectedly. Crafting stopped.");
                 if (craftInputPhase == 2)
                 {
-                    CraftReleaseInput(endSession: craftSelectedCurrency == null);
-                    if (affinityCtrlHeld || craftSelectedCurrency == null && affinityShiftHeld)
-                        throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
-                    if (!freshCopy && craftPhase != 8) return;
+                    if (!CraftFinishInput(freshCopy)) return;
                 }
                 if (craftPhase is >= 22 and <= 27) { CraftUpdateMapMove(now, held); return; }
                 if (craftPhase == 1)
@@ -3542,7 +3597,8 @@ namespace StashUtility
                         }
                         else
                         {
-                            var cells = craftFromInventory ? craftInventoryBefore : CraftReadMapGrid(CraftMapPage(craftTargetTier, craftTargetPage), out _, out _, out _);
+                            var cells = craftFromInventory ? craftInventoryBefore : Settings.WaystoneCraftFastMode ? CraftReadScanGrid() :
+                                CraftReadMapGrid(CraftMapPage(craftTargetTier, craftTargetPage), out _, out _, out _);
                             var cell = cells?.SingleOrDefault(item => item.Address == craftItem);
                             if (cell == null) throw CraftFailure("changed", "The waystone position could not be verified.");
                             bool maximized = mods.Rarity == Rarity.Rare && mods.ExplicitMods.Count == 6;
@@ -6342,7 +6398,8 @@ namespace StashUtility
                     if (offset.UnscaledSize.X > 0 && offset.UnscaledSize.Y > 0 &&
                         offset.UnscaledSize.X <= 512 && offset.UnscaledSize.Y <= 512)
                     {
-                        var itemAddress = GetItemAddressFromElement(node.address);
+                        var itemAddress = stashScanForCraft && Settings.WaystoneCraftFastMode ?
+                            GetHighlightItemAddress(node.address) : GetItemAddressFromElement(node.address);
                         if (itemAddress != IntPtr.Zero && !node.tab.ItemAddresses.Contains(itemAddress))
                         {
                             var item = ReadFreshItem(itemAddress);

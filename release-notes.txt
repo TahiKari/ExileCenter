@@ -1,14 +1,15 @@
 ﻿
-ExileCenter 1.20.0
+ExileCenter 1.20.1
 
-- Auto-craft des pierres de téléportation : nouveau Mode rapide activé par défaut. Les attentes entre interactions passent à 20 ms ; la navigation attend au moins 40 ms et les pages chargées sont utilisées après 100 ms de contenu stable. Le rythme réel dépend des images de l'application et des confirmations du jeu.
-- Le scan de découverte propre au craft traite jusqu'à 128 éléments par image dans un budget de 2 ms, au lieu de 4 éléments par image. Les autres scans conservent leur fonctionnement. Une page vide bénéficie toujours de 2,5 secondes pour se charger.
-- Ces délais réduits s'appliquent aux phases de monnaies et au rangement des pierres T15 devenues T14 ou T16 après corruption. Les vérifications de consommation et du résultat, les limites de monnaies, les contrôles de destination et l'arrêt au mouvement de souris restent obligatoires.
-- Le Mode rapide peut être désactivé dans les options du craft pour retrouver le rythme précédent et le délai manuel enregistré. Son aide s'affiche au survol ; les réglages personnalisés et les positions de la barre du coffre restent conservés.
+- Premier scan du craft : la grille est liée une fois à son inventaire natif, puis l'ensemble des adresses et positions est relu et comparé après chaque copie. Le parcours complet de tous les widgets et inventaires n'est plus répété pour trouver chaque position. Ctrl reste maintenu entre les copies de ce premier passage et est relâché à la fin ou à l'arrêt ; les scans suivants conservent leur gestion précédente.
+- Les routes des emplacements déjà trouvés sont réutilisées uniquement après vérification du pointeur d'objet affiché, de sa visibilité, de son identité et de la page cible. Une route devenue invalide repasse par la recherche complète. Les descendants décoratifs d'un emplacement d'objet validé ne sont plus parcourus en Mode rapide.
+- Le Mode rapide enchaîne jusqu'à quatre changements d'étape par image lorsqu'aucune attente n'est nécessaire, avec un budget de 8 ms entre les étapes. Il rend la main dès qu'une étape reste en attente, qu'un délai d'entrée n'est pas écoulé ou que le craft s'arrête. La fin d'un clic de sélection de monnaie ne consomme plus une image vide lorsqu'aucune touche n'est à relâcher.
+- Rangement des résultats T14/T16 : dans leurs destinations respectives, remplissage de la colonne de gauche de haut en bas, puis de chaque colonne suivante vers la droite. Les trous plus à gauche sont prioritaires ; aucun objet déjà rangé n'est déplacé.
+- Les confirmations des monnaies et du résultat Vaal, les contrôles de destination, les limites de dépenses et l'arrêt au mouvement de souris restent obligatoires. Les délais manuels, les préférences et les positions de la barre du coffre sont conservés.
 - Aucun ajout d'injection, de hook ou d'écriture dans le processus de PoE. Les règles de GGG continuent de s'appliquer à l'automatisation ; l'absence d'injection ne vaut pas autorisation de GGG.
 - GameOffsets.dll conservée à l'identique, sans recompilation.
 
-Validation : compilation du cœur et de StashUtility ; 11 823 contrôles de craft hors jeu, avec entrées interceptées, incluant consommation unique, confirmation des monnaies, destinations T14/T16, navigation et conservation de la barre verrouillée. Contrôles de l'affichage compact et large et de la barre indépendante. Le modèle de scan est simulé : aucun multiplicateur de vitesse réelle en jeu n'est garanti. Aucun fichier du jeu réel modifié et aucune entrée système envoyée pendant les tests ; fluidité et rendu en jeu à confirmer.
+Validation : compilation du cœur et de StashUtility ; 11 938 contrôles de craft hors jeu incluant les 96 positions successives de rangement par colonnes, les routes périmées, la grille native liée, les copies avec Ctrl maintenu et relâché, les confirmations de monnaies, la navigation T14/T16 et la conservation de la barre verrouillée. Entrées interceptées : aucun fichier du jeu réel modifié et aucune entrée système envoyée pendant les tests. Le rythme réel après correction reste à mesurer en partie ; les confirmations réseau restent nécessaires et aucun multiplicateur de vitesse n'est garanti.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

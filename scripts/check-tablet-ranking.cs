@@ -784,6 +784,31 @@ internal static class TabletRankingCheck
             foreach(var p in subpages[14])Visible(p,false);Visible(subpages[14][2],true);
             SetCraft("craftTargetTier",14);SetCraft("craftTargetPage",2);
             Check((bool)Call("CraftSelectTargetPage",false),"A crafted map can be followed into another bucket without overwriting the original T15 batch page");
+            var nativeGrid=Allocate(0x300);var nativeCells=Allocate(96*IntPtr.Size);
+            Marshal.WriteInt32(nativeGrid+0x150,12);Marshal.WriteInt32(nativeGrid+0x154,8);
+            Marshal.StructureToPtr(new GameOffsets.Natives.StdVector{First=nativeCells,Last=nativeCells+96*IntPtr.Size,End=nativeCells+96*IntPtr.Size},nativeGrid+0x170,false);
+            var sortCellType=typeof(StashUtilityCore).GetNestedType("SortItem",flags);
+            var initialGrid=(IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(sortCellType));
+            SetCraft("craftScanInventory",nativeGrid);SetCraft("craftScanGrid",initialGrid);
+            Check(((IList)Call("CraftReadScanGrid"))?.Count==0,"A bound initial inventory is reread directly while its exact native page remains selected");
+            var unexpected=Activator.CreateInstance(sortCellType);sortCellType.GetField("Address").SetValue(unexpected,new IntPtr(1234));initialGrid.Add(unexpected);
+            Check(Call("CraftReadScanGrid")==null,"A changed address/cell layout rejects the initial scan instead of trusting its stored plan");initialGrid.Clear();
+            SetCraft("craftTargetPage",5);
+            Check(Call("CraftReadScanGrid")==null,"The initial inventory binding cannot be used while another native page is visible");SetCraft("craftTargetPage",2);
+            SetCraft("craftScanInventory",IntPtr.Zero);
+            Check(Call("CraftReadScanGrid")==null,"An absent initial inventory binding cannot supply a copied map position");
+            var itemEntity=Allocate(0x80);var itemDetails=Allocate(0x80);Text(itemDetails,8,"Metadata/Items/Maps/MapKeyTier15");Marshal.WriteIntPtr(itemEntity+8,itemDetails);
+            var decoration=Node();var badDecoration=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(decoration);
+            badDecoration.ChildrensPtr=new GameOffsets.Natives.StdVector{First=new IntPtr(8),Last=new IntPtr(8+4097*8)};Marshal.StructureToPtr(badDecoration,decoration,false);
+            var knownSlot=Node(decoration);Marshal.WriteIntPtr(knownSlot+0x4E0,itemEntity);
+            var knownData=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(knownSlot);knownData.ParentPtr=subpages[14][2];Marshal.StructureToPtr(knownData,knownSlot,false);
+            Check(((IDictionary)Call("CraftVisibleSlots",knownSlot,false)).Count==1,"A verified item slot ends traversal before unrelated decorative descendants");
+            var knownSlots=(IDictionary)GetCraft("craftKnownSlots");knownSlots[itemEntity]=knownSlot;
+            SetCraft("affinityStashRoot",rootHeader);SetCraft("craftItem",itemEntity);SetCraft("craftIdentity",null);
+            Check((bool)Call("CraftLocateStashTarget",false)&&(IntPtr)GetCraft("craftSlot")==knownSlot,"A known route is reused only after its displayed item and exact selected page are revalidated");
+            Marshal.WriteIntPtr(knownSlot+0x4E0,IntPtr.Zero);
+            Check(!(bool)Call("CraftLocateStashTarget",false),"A reused widget whose displayed item changed cannot supply the target route");
+            knownSlots.Clear();SetCraft("craftItem",IntPtr.Zero);SetCraft("affinityStashRoot",IntPtr.Zero);
             SetCraft("craftTargetPage",5);
             Check(!(bool)Call("CraftSelectTargetPage",false),"A map is never clicked while a different native target bucket is visible");
             Visible(tiers[14],false);Visible(tiers[15],true);foreach(var p in subpages[15])Visible(p,false);Visible(subpages[15][1],true);
@@ -1049,6 +1074,29 @@ internal static class TabletRankingCheck
         Check(!Copy(),"A later clipboard copy starts with an owned Ctrl press");
         pressed.Remove(0x11);int beforeLostCtrl=events.Count;
         Check(RejectedCopy()&&events.Count==beforeLostCtrl,"Losing Ctrl between copy frames prevents an unmodified C from reaching the game");Release(true);
+        events.Clear();Set("craftPhase",2);Set("craftRescanning",false);Set("craftSelectedCurrency",null);
+        var scanQueue=(Queue<IntPtr>)Get("craftQueue");scanQueue.Enqueue(new IntPtr(123));
+        bool FinishCopy()=>(bool)Call("CraftFinishInput",true);
+        Check(!Copy()&&Copy()&&FinishCopy()&&pressed.Contains(0x11),"The initial scan retains verified Ctrl after copying while another map remains");
+        Check(Copy()&&FinishCopy()&&events.Count(e=>e=="CTRL_DOWN")==1&&!events.Contains("CTRL_UP"),"Two initial copies use one Ctrl hold without an extra modifier frame per map");
+        scanQueue.Clear();
+        Check(Copy()&&FinishCopy()&&!pressed.Contains(0x11)&&events.Last()=="CTRL_UP","The last initial copy releases Ctrl before any currency or navigation phase");
+        foreach(bool rescan in new[]{false,true})
+        {
+            plugin.Settings.WaystoneCraftFastMode=rescan;Set("craftRescanning",rescan);scanQueue.Enqueue(new IntPtr(123));
+            Check(!Copy()&&Copy()&&FinishCopy()&&!pressed.Contains(0x11),"Fallback mode and subsequent scans keep their prior Ctrl-release behavior: "+rescan);
+            scanQueue.Clear();
+        }
+        plugin.Settings.WaystoneCraftFastMode=true;Set("craftRescanning",false);scanQueue.Enqueue(new IntPtr(123));
+        Check(!Copy()&&Copy(),"A guarded initial scan owns Ctrl before completion");pressed.Remove(0x11);int beforeLostScanCtrl=events.Count;bool rejectedScanCtrl=false;
+        try{FinishCopy();}catch(TargetInvocationException error)when(error.InnerException is InvalidOperationException){rejectedScanCtrl=true;}
+        Check(rejectedScanCtrl&&events.Count==beforeLostScanCtrl,"Losing Ctrl during the initial scan stops completion without another input");Release(true);scanQueue.Clear();
+        Check(!Input(true)&&Input(true),"Currency selection still establishes its own Shift session after the initial scan");
+        Set("craftSelectedCurrency","CurrencyCorrupt");Set("craftPhase",19);int beforeSelectionCleanup=events.Count;
+        Check((bool)Call("CraftFinishInput",false)&&events.Count==beforeSelectionCleanup&&pressed.Contains(0x10),"Finishing a selected-currency click needs no empty update or extra input when no modifier must be released");
+        plugin.Settings.WaystoneCraftFastMode=false;
+        Check(!(bool)Call("CraftFinishInput",false)&&events.Count==beforeSelectionCleanup,"Fallback mode retains the previous update boundary after input completion");plugin.Settings.WaystoneCraftFastMode=true;
+        Set("craftSelectedCurrency",null);Release(true);
         events.Clear();Set("waystoneCraftRunning",true);Set("craftCurrency","CurrencyCorrupt");Set("craftTargetTier",14);Set("craftTargetPage",5);Set("craftFromInventory",false);
         var stoneType=typeof(StashUtilityCore).GetNestedType("CraftStone",BindingFlags.NonPublic);
         var batch=(IList)Get("craftBatch");
@@ -1441,6 +1489,16 @@ internal static class TabletRankingCheck
         Check((int)freeMapCell.Invoke(null,new object[]{mapCells})==-1,"A full sixth map page is detected before any map pickup");
         mapCells.RemoveAt(95);Check((int)freeMapCell.Invoke(null,new object[]{mapCells})==95,"The last free cell of a 12x8 page remains a valid destination");
         mapCells.RemoveAt(12);Check((int)freeMapCell.Invoke(null,new object[]{mapCells})==12,"Routing uses the first verified empty cell without swapping another map");
+        mapCells.Clear();
+        foreach(int index in Enumerable.Range(0,96))
+        {
+            int expected=index%8*12+index/8;
+            Check((int)freeMapCell.Invoke(null,new object[]{mapCells})==expected,"T14/T16 placement fills each column top-to-bottom before moving right: "+index);
+            mapCells.Add(Cell(1000+index,expected%12,"placed "+index,expected/12));
+        }
+        Check((int)freeMapCell.Invoke(null,new object[]{mapCells})==-1,"Column-wise placement stops once every destination cell is occupied");
+        mapCells.RemoveAt(9);mapCells.RemoveAt(0);
+        Check((int)freeMapCell.Invoke(null,new object[]{mapCells})==0,"Column-wise placement fills an earlier hole before using a later column");
         typeof(StashUtilityCore).GetField("craftOriginalPage",flags).SetValue(plugin,(14,5,"10 - 19"));
         typeof(StashUtilityCore).GetField("craftTier",flags).SetValue(plugin,15);typeof(StashUtilityCore).GetField("craftPage",flags).SetValue(plugin,2);
         typeof(StashUtilityCore).GetField("craftSelectedPageName",flags).SetValue(plugin,"Renamed T16 destination");
