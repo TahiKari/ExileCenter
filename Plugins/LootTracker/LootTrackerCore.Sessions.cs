@@ -620,18 +620,86 @@ namespace LootTracker
             catch { /* Normal settings saves can retry; historical data remains untouched. */ }
         }
 
+        private string SelectedTrackingLeague => string.IsNullOrWhiteSpace(this.Settings.TrackingLeague)
+            ? this.Settings.League : this.Settings.TrackingLeague;
+
+        private SessionMap TrackingRoot(SessionMap map, SessionRecord session) => map.ParentHash.Length == 0 ? map :
+            session.Maps.FirstOrDefault(m => m != null && m.ParentHash.Length == 0 && m.Hash.Length > 0 && m.Hash == map.ParentHash &&
+                string.Equals(this.TrackingMapLeague(m, session), this.TrackingMapLeague(map, session), StringComparison.OrdinalIgnoreCase)) ?? map;
+
+        private string TrackingMapLeague(SessionMap root, SessionRecord session) => !string.IsNullOrEmpty(root.League) ? root.League :
+            !string.IsNullOrEmpty(session.League) ? session.League : this.Settings.LegacyHistoryLeague;
+
+        private List<string> TrackingLeagueChoices()
+        {
+            if (this.sessionCache == null) this.LoadSessions();
+            return new[] { this.Settings.League, this.Settings.LegacyHistoryLeague, this.Settings.TrackingLeague }
+                .Concat(this.completed.Select(r => r.League))
+                .Concat((this.sessionCache ?? new List<SessionRecord>()).SelectMany(session =>
+                    new[] { session.League }.Concat((session.Maps ?? new List<SessionMap>()).Where(m => m != null).Select(m => m.League))))
+                .Concat(NinjaLeagues.ComboItems(this.Settings.League)).Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private void SelectTrackingLeague(string league)
+        {
+            this.Settings.TrackingLeague = league?.Trim() ?? string.Empty;
+            this.SaveSettings();
+        }
+
+        private void DrawTrackingLeagueSelector()
+        {
+            ContinueTrackerRow(260f);
+            ImGui.SetNextItemWidth(Math.Min(260f, ImGui.GetContentRegionAvail().X));
+            string follow = this.LF("lt.history_league.follow", "Follow recording league: {0}", this.Settings.League);
+            string preview = this.LF("lt.history_league.selected", "League: {0}", this.SelectedTrackingLeague);
+            if (ImGui.BeginCombo("##tracking_league", preview))
+            {
+                if (ImGui.Selectable(follow, string.IsNullOrWhiteSpace(this.Settings.TrackingLeague))) this.SelectTrackingLeague(string.Empty);
+                foreach (var league in this.TrackingLeagueChoices())
+                    if (ImGui.Selectable(league, string.Equals(league, this.Settings.TrackingLeague, StringComparison.OrdinalIgnoreCase)))
+                        this.SelectTrackingLeague(league);
+                ImGui.EndCombo();
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.BeginTooltip(); ImGui.PushTextWrapPos(ImGui.GetFontSize() * 32);
+                ImGui.TextUnformatted(preview);
+                ImGui.TextUnformatted(this.L("lt.history_league.hint", "Filters displayed history only. Recording, prices and the legacy-history association stay unchanged."));
+                ImGui.PopTextWrapPos(); ImGui.EndTooltip();
+            }
+            if (!string.Equals(this.SelectedTrackingLeague, this.Settings.League, StringComparison.OrdinalIgnoreCase))
+            {
+                ImGui.PushTextWrapPos(0);
+                ImGui.TextUnformatted(this.LF("lt.history_league.rates", "Archived Ex values are preserved; conversions use current rates from {0}.", this.Settings.League));
+                ImGui.PopTextWrapPos();
+            }
+        }
+
         private SessionRecord BuildTrackingView(DateTime nowUtc, TimeZoneInfo zone)
         {
             int period = Math.Clamp(this.Settings.TrackingPeriod, 0, TrackingPeriods.Length - 1);
             var start = TrackingPeriodStart(period, nowUtc, zone, this.Settings.TrackingResetUtc);
-            var view = new SessionRecord { StartUtc = start, EndUtc = nowUtc, DivineRate = this.priceCache.DivineToExaltedRate };
+            string selectedLeague = this.SelectedTrackingLeague;
+            var view = new SessionRecord { StartUtc = start, EndUtc = nowUtc, League = selectedLeague, DivineRate = this.priceCache.DivineToExaltedRate };
             this.periodExcludedMaps = 0;
             this.periodFirstKnownUtc = null;
             var live = new SessionRecord { StartUtc = this.sessionStartUtc, EndUtc = nowUtc,
                 HistoryIncomplete = this.trackingHistoryIncomplete,
                 Maps = this.completed.Where(r => r.ParentHash.Length == 0).Reverse().SelectMany(this.RunFamily)
                     .Select(r => this.BuildSessionMap(r, false)).ToList() };
-            if (period == 0) return live; // Original session scope, with live pricing/timers and no disk reads.
+            if (period == 0)
+            {
+                // Keep the live session clock/pricing and avoid reading archives for this view.
+                live.Maps = live.Maps.Where(map =>
+                {
+                    string league = this.TrackingMapLeague(this.TrackingRoot(map, live), live);
+                    if (string.IsNullOrEmpty(league)) league = this.Settings.League;
+                    return string.Equals(league, selectedLeague, StringComparison.OrdinalIgnoreCase);
+                }).ToList();
+                live.League = selectedLeague;
+                return live;
+            }
             if (this.sessionCache == null) this.LoadSessions();
             foreach (var session in new[] { live }.Concat((this.sessionCache ?? new List<SessionRecord>())
                 .Where(session => session.StartUtc != live.StartUtc).GroupBy(session => session.StartUtc)
@@ -641,12 +709,10 @@ namespace LootTracker
                 view.HistoryIncomplete |= session.HistoryIncomplete;
                 foreach (var map in session.Maps.Where(m => m != null))
                 {
-                    var root = map.ParentHash.Length == 0 ? map : session.Maps.FirstOrDefault(m => m != null &&
-                        m.ParentHash.Length == 0 && m.Hash.Length > 0 && m.Hash == map.ParentHash) ?? map;
-                    string league = !string.IsNullOrEmpty(root.League) ? root.League : session.League;
-                    if (string.IsNullOrEmpty(league)) league = this.Settings.LegacyHistoryLeague;
+                    var root = this.TrackingRoot(map, session);
+                    string league = this.TrackingMapLeague(root, session);
                     if (string.IsNullOrEmpty(league)) { if (map.ParentHash.Length == 0) this.periodExcludedMaps++; continue; }
-                    if (!string.Equals(league, this.Settings.League, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!string.Equals(league, selectedLeague, StringComparison.OrdinalIgnoreCase)) continue;
                     DateTime? date = root.StartedUtc == default ? null : TrackingUtc(root.StartedUtc);
                     if (date.HasValue && date.Value >= TrackingUtc(this.Settings.TrackingResetUtc) && date.Value <= nowUtc &&
                         (!this.periodFirstKnownUtc.HasValue || date.Value < this.periodFirstKnownUtc.Value))

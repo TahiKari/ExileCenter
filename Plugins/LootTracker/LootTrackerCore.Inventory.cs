@@ -595,6 +595,7 @@ namespace LootTracker
             ImGui.SetWindowFontScale(s);
             float width = ImGui.GetContentRegionAvail().X;
             this.DrawTrackingPeriodSelector();
+            this.DrawTrackingLeagueSelector();
             var period = this.BuildTrackingView(DateTime.UtcNow, TimeZoneInfo.Local);
             var totalActive = TimeSpan.FromSeconds(Math.Clamp(period.TotalActiveSeconds(), 0, TimeSpan.MaxValue.TotalSeconds - 1));
             double totalEx = period.TotalEx();

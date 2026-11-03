@@ -97,6 +97,28 @@ internal static class TabletRankingCheck
         dynamic empty=View(5);Check(Maps(empty)==0&&(double)empty.TotalEx()==0&&(double)empty.PerHourEx()==0,"An empty period has zero maps and zero safe hourly profit");plugin.Settings.League="Season A";
         dynamic zero=Record("2026-11-03T07:00:00Z",5,0);Check((double)zero.PerHourEx()==0,"Zero-duration archived maps never divide by zero");
         for(int unit=0;unit<7;unit++)Check(!((string)Call("FormatProfitCurrency",123d,unit)).StartsWith("—"),"Period totals use the existing conversion for currency "+unit);
+        string priceBefore=JsonConvert.SerializeObject((object)priceCache);
+        dynamic otherRun=Activator.CreateInstance(runType);otherRun.Name="Current map";otherRun.Hash="current";otherRun.ProcessId=7u;otherRun.StartedUtc=U("2026-11-03T11:00:00Z");otherRun.League="Other season";otherRun.ActiveTime=TimeSpan.FromSeconds(600);otherRun.Gained.Add("Metadata/Items/Currency/CurrencyAddModToRare",5L);runs.Add(otherRun);
+        dynamic otherChild=Activator.CreateInstance(runType);otherChild.Name="Other sub-area";otherChild.Hash="other-child";otherChild.ParentHash="current";otherChild.ProcessId=7u;otherChild.StartedUtc=U("2026-11-03T11:05:00Z");otherChild.League="Other season";otherChild.ActiveTime=TimeSpan.FromSeconds(300);otherChild.Gained.Add("Metadata/Items/Currency/CurrencyAddModToRare",2L);runs.Add(otherChild);
+        var choices=((IEnumerable)Call("TrackingLeagueChoices")).Cast<string>().ToArray();
+        Check(choices.Contains("Other season")&&choices.Contains("Season A")&&choices.Length==choices.Distinct(StringComparer.OrdinalIgnoreCase).Count(),"League choices include archived-only names and are deduplicated without networking");
+        Call("SelectTrackingLeague","Other season");
+        for(int period=0;period<6;period++)
+        {
+            dynamic view=View(period);
+            Check(Maps(view)==(period==0?1:2)&&(double)view.TotalEx()==(period==0?7d:100006d)&&((IEnumerable)view.Maps).Cast<dynamic>().All(m=>(string)m.League=="Other season"),"All periods isolate another league, including same-name maps and reused parent hashes: "+period);
+        }
+        dynamic restoredChoice=JsonConvert.DeserializeObject(File.ReadAllText(Path.Combine(isolated,"config","settings.txt")),core.GetField("Settings").FieldType);
+        Check((string)restoredChoice.TrackingLeague=="Other season"&&(string)restoredChoice.League=="Season A","The persisted display league is independent of the recording and pricing league");
+        Check((string)plugin.Settings.LegacyHistoryLeague==""&&JsonConvert.SerializeObject((object)priceCache)==priceBefore,"Browsing another league leaves cached prices and legacy association unchanged");
+        Call("SelectTrackingLeague","Season A");
+        for(int period=0;period<6;period++)Check(Maps(View(period))==counts[period]&&(double)View(period).TotalEx()==totals[period],"Switching back preserves every original league total: "+period);
+        Check(((IEnumerable)View(0).Maps).Cast<dynamic>().All(m=>(string)m.League=="Season A"),"A child from another league never leaks into the current-session table");
+        Call("SelectTrackingLeague","HC Season A");Check(Maps(View(1))==0,"Normal and hardcore league names remain distinct");
+        Call("SelectTrackingLeague","Archived league no longer indexed");Check(((IEnumerable)Call("TrackingLeagueChoices")).Cast<string>().Contains("Archived league no longer indexed")&&Maps(View(1))==0,"An empty or unindexed saved league remains selectable without falling back to another league");
+        Call("SelectTrackingLeague",string.Empty);Check(Maps(View(1))==counts[1]&&(string)plugin.Settings.League=="Season A","Following the recording league restores the default display without changing recording");
+        runs.Remove(otherChild);runs.Remove(otherRun);
+        Check(JsonConvert.SerializeObject((object)runs)==before&&files.All(pair=>File.ReadAllText(pair.Key)==pair.Value),"Switching display leagues leaves current maps and historical files intact");
         plugin.Settings.TrackingPeriod=5;Set("trackingHistoryIncomplete",true);Call("SaveSettings");Call("SaveActiveState");
         string activePath=Path.Combine(isolated,"config","active.json");string savedActive=File.ReadAllText(activePath);
         Check(savedActive.Contains("StartedUtc")&&savedActive.Contains("Season A"),"New map dates and league metadata survive the existing active-session autosave");
@@ -116,23 +138,23 @@ internal static class TabletRankingCheck
                 var io=ImGuiNET.ImGui.GetIO();io.DisplaySize=new Vector2(1200,900);io.DeltaTime=1f/60;unsafe{io.NativePtr->IniFilename=null;}
                 io.Fonts.AddFontDefault();io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels,out int aw,out int ah,out int bpp);io.Fonts.SetTexID((IntPtr)1);
                 var atlas=new byte[aw*ah*bpp];Marshal.Copy(pixels,atlas,0,atlas.Length);
-                foreach(int width in new[]{320,460,820})foreach(int period in new[]{0,1,5})foreach(int currencies in new[]{1,127})
+                foreach(string displayLeague in new[]{"","Other season"})foreach(int width in new[]{320,460,820})foreach(int period in new[]{0,1,5})foreach(int currencies in new[]{1,127})
                 {
-                    plugin.Settings.TrackingPeriod=period;plugin.Settings.ProfitCurrencies=currencies;
+                    plugin.Settings.TrackingLeague=displayLeague;plugin.Settings.TrackingPeriod=period;plugin.Settings.ProfitCurrencies=currencies;
                     for(int frame=0;frame<2;frame++)
                     {
                         io.AddMousePosEvent(-100,-100);ImGuiNET.ImGui.NewFrame();ImGuiNET.ImGui.SetNextWindowPos(new Vector2(10));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width,500));
-                        ImGuiNET.ImGui.Begin("Suivi du butin##period-fixture",ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                        ImGuiNET.ImGui.Begin("Suivi du butin##period-fixture-"+width+"-"+period+"-"+currencies+"-"+displayLeague,ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
                         using(var theme=ExileCenter.Ui.ImGuiTheme.UsePluginTheme("LootTracker"))Call("DrawTrackerContents",500f,1f,true);
-                        Check(ImGuiNET.ImGui.GetScrollMaxX()==0,"Period controls and statistics fit the panel horizontally: "+width+"/"+period+"/"+currencies);
+                        Check(ImGuiNET.ImGui.GetScrollMaxX()==0,"Period controls and statistics fit the panel horizontally: "+width+"/"+period+"/"+currencies+"/"+displayLeague);
                         ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
                     }
-                    if(currencies==1)SaveUiPreview(Path.Combine(previews,$"loot-period-{width}-{period}.png"),atlas,aw,ah);
+                    if(currencies==1)SaveUiPreview(Path.Combine(previews,$"loot-period-{width}-{period}{(displayLeague.Length==0?"":"-other")}.png"),atlas,aw,ah);
                 }
             }
             finally{ImGuiNET.ImGui.DestroyContext(context);ImGuiNET.ImGui.SetCurrentContext(previous);ExileCenter.Core.GHSettings.UiLanguage=language;}
         }
-        plugin.Settings.TrackingPeriod=1;plugin.Settings.ProfitCurrencies=1;
+        plugin.Settings.TrackingLeague="";plugin.Settings.TrackingPeriod=1;plugin.Settings.ProfitCurrencies=1;
         Call("ResetSession");Check(runs.Count==0&&(DateTime)plugin.Settings.TrackingResetUtc==DateTime.MinValue,"New session archives data without resetting Total's accounting boundary");
         Call("LoadSessions");var cache=(IList)Get("sessionCache");
         Check(cache.Count==records.Length+1&&File.Exists(activePath)==false,"The completed live session joins existing archives through the original storage mechanism");

@@ -1,13 +1,13 @@
-ExileCenter 1.21.1
+ExileCenter 1.22.0
 
-- Suivi du butin : correction du Total vide après la mise à jour lorsque les cartes restaurées et les archives anciennes ne contenaient pas de ligue.
-- Au premier lancement de cette correction, l'ancien historique sans ligue est rattaché à la ligue déjà configurée. Ce rattachement est mémorisé séparément et reste associé à cette ligue après un changement de saison. Une ligue explicitement enregistrée dans une carte ou une session reste prioritaire.
-- Le Total retrouve les cartes de la session restaurée et des sessions archivées sans réécrire les fichiers de cartes ni inventer leur date. Nouvelle session continue de cumuler les archives, sans réinitialiser le Total.
-- Pour les périodes courtes, une ancienne session non datée par carte n'est incluse que si elle entre entièrement dans la période. Une session traversant une limite reste exclue, avec un message explicite. Les sessions entièrement antérieures ne sont plus présentées comme des cartes impossibles à dater dans la période.
-- Le rattachement de l'ancien historique est indiqué dans l'infobulle Historique limité. Les dates manquantes et les données déjà supprimées ne peuvent pas être reconstituées.
-- Aucun changement aux positions des fenêtres, barres ou icônes. Aucune nouvelle requête réseau ni interaction avec PoE. GameOffsets.dll conservée à l'identique, sans recompilation.
+- Suivi du butin : ajout d'un sélecteur de ligue à côté du choix de période. En largeur compacte, il passe sur la ligne suivante. Les positions et dimensions personnalisées des fenêtres, barres et icônes restent conservées.
+- Chaque période, y compris Session actuelle, affiche uniquement les cartes de la ligue choisie. Les profits, moyennes, nombres de cartes et durées sont calculés sur cette même sélection. Les ligues normales et hardcore restent distinctes.
+- Le choix d'affichage est mémorisé indépendamment de la ligue utilisée par le suivi et les prix. L'option Suivre la ligue du suivi conserve le comportement par défaut ; choisir une ancienne ligue ne change pas l'enregistrement des nouvelles cartes, ne réinitialise rien et ne réaffecte pas les anciennes données.
+- La liste réutilise les ligues déjà connues et les noms présents dans les cartes et archives locales. Une ancienne ligue reste sélectionnable après sa disparition de la liste courante. Aucune requête réseau supplémentaire au changement de sélection.
+- Le rattachement déjà enregistré de l'ancien historique à sa ligue reste conservé. Les dates manquantes et les limites de conservation existantes ne changent pas. Les valeurs archivées en exaltées sont conservées ; les conversions restent fondées sur les taux actuels du suivi, avec une indication explicite lorsqu'une autre ligue est consultée.
+- Aucun changement aux commandes en jeu ni à GameOffsets.dll, conservée à l'identique sans recompilation.
 
-Validation : compilation et contrôles isolés des six périodes, du rattachement des anciennes données, de sa persistance après changement de ligue, des réinitialisations, de la conservation des archives et du suivi en cours. Reproduction du cas de 50 cartes restaurées et de 250 cartes archivées ; contrôle sur une copie locale de l'historique concerné. Aperçus ImGui en tailles compacte et normale. Aucun arrêt d'application ni entrée système pendant les tests ; validation réelle en jeu non effectuée.
+Validation : compilation et fixtures isolées des périodes et des ligues ; sélection d'une ligue archivée, séparation du normal et du hardcore, homonymes de cartes et identifiants réutilisés, persistance du choix, absence de modification du suivi, des prix ou des archives, conservation du rattachement de l'ancien historique et des positions de la barre du coffre. Aperçus ImGui en largeurs compacte et normale. Aucun arrêt d'application ni entrée système pendant les tests ; validation réelle en jeu non effectuée.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.
