@@ -117,13 +117,9 @@ namespace StashUtility
         {
             MetaText(PluginText.T("stashutility.tablet_search.help", "Independent search: choose a tablet and 1 to 4 modifiers, copy the query, then paste it into the stash search box."));
             bool changed = false;
-            ImGui.SetNextItemWidth(Math.Min(300, ImGui.GetContentRegionAvail().X));
-            if (ImGui.BeginCombo(PluginText.T("stashutility.tablet_search.type", "Tablet type"), TabletTypeLabel(Settings.TabletStashSearchType ?? "")))
-            {
-                foreach (string type in StashUtilitySettings.TabletTypes)
-                    if (ImGui.Selectable(TabletTypeLabel(type), Settings.TabletStashSearchType == type)) { Settings.TabletStashSearchType = type; changed = true; }
-                ImGui.EndCombo();
-            }
+            int selectedTypeIndex = Array.IndexOf(StashUtilitySettings.TabletTypes, Settings.TabletStashSearchType);
+            if (DrawTabletTypeButtons(ref selectedTypeIndex))
+            { Settings.TabletStashSearchType = StashUtilitySettings.TabletTypes[selectedTypeIndex]; changed = true; }
             int language = TabletStashSearchLanguage == ExileCenter.Localization.OverlayLanguage.French ? 0 : 1;
             ImGui.SetNextItemWidth(Math.Min(180, ImGui.GetContentRegionAvail().X));
             if (ImGui.Combo(PluginText.T("stashutility.tablet_search.language", "Game language"), ref language, "Français\0English\0"))

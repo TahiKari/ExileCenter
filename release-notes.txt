@@ -1,13 +1,11 @@
-ExileCenter 1.22.0
+ExileCenter 1.22.1
 
-- Suivi du butin : ajout d'un sélecteur de ligue à côté du choix de période. En largeur compacte, il passe sur la ligne suivante. Les positions et dimensions personnalisées des fenêtres, barres et icônes restent conservées.
-- Chaque période, y compris Session actuelle, affiche uniquement les cartes de la ligue choisie. Les profits, moyennes, nombres de cartes et durées sont calculés sur cette même sélection. Les ligues normales et hardcore restent distinctes.
-- Le choix d'affichage est mémorisé indépendamment de la ligue utilisée par le suivi et les prix. L'option Suivre la ligue du suivi conserve le comportement par défaut ; choisir une ancienne ligue ne change pas l'enregistrement des nouvelles cartes, ne réinitialise rien et ne réaffecte pas les anciennes données.
-- La liste réutilise les ligues déjà connues et les noms présents dans les cartes et archives locales. Une ancienne ligue reste sélectionnable après sa disparition de la liste courante. Aucune requête réseau supplémentaire au changement de sélection.
-- Le rattachement déjà enregistré de l'ancien historique à sa ligue reste conservé. Les dates manquantes et les limites de conservation existantes ne changent pas. Les valeurs archivées en exaltées sont conservées ; les conversions restent fondées sur les taux actuels du suivi, avec une indication explicite lorsqu'une autre ligue est consultée.
-- Aucun changement aux commandes en jeu ni à GameOffsets.dll, conservée à l'identique sans recompilation.
+- Tablettes / Recherche coffre : remplacement de la liste déroulante des types de tablettes par les mêmes boutons à icônes que dans Filtres et rangs, avec les mêmes libellés, couleurs de sélection et ordre.
+- La grille passe sur plusieurs lignes lorsque la fenêtre est étroite. Le composant existant est partagé entre les deux onglets ; les sélections restent indépendantes.
+- Le type déjà sélectionné, les modificateurs cochés pour chaque tablette, la langue, les recherches ET/OU et la copie de recherche sont conservés. Aucun changement aux règles de rang ou de surlignage, ni aux positions des fenêtres et barres.
+- Aucun ajout de requête réseau ni de commande au jeu. GameOffsets.dll conservée à l'identique, sans recompilation.
 
-Validation : compilation et fixtures isolées des périodes et des ligues ; sélection d'une ligue archivée, séparation du normal et du hardcore, homonymes de cartes et identifiants réutilisés, persistance du choix, absence de modification du suivi, des prix ou des archives, conservation du rattachement de l'ancien historique et des positions de la barre du coffre. Aperçus ImGui en largeurs compacte et normale. Aucun arrêt d'application ni entrée système pendant les tests ; validation réelle en jeu non effectuée.
+Validation : compilation et fixtures isolées de la recherche coffre, des huit types de tablette, des recherches ET/OU, de la copie dans un presse-papiers simulé et de la conservation des réglages. Aperçus ImGui en français et anglais, fenêtres large et étroite. Aucun arrêt d'application ni entrée système pendant les tests ; validation réelle en jeu non effectuée.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

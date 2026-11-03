@@ -1148,6 +1148,15 @@ namespace StashUtility
 
         private void DrawTabletTypeSelector()
         {
+            if (!DrawTabletTypeButtons(ref tabletFilterType)) return;
+            tabletSearchTerm = string.Empty;
+            tabletConfiguredOnly = false;
+            tabletAffixFilter = 0;
+        }
+
+        private bool DrawTabletTypeButtons(ref int selectedType)
+        {
+            bool changed = false;
             int[] order = { 4, 3, 1, 2, 0, 6, 7, 5 };
             string[] names = { "Breach", "Expedition", "Delirium", "Ritual", "Irradiated", "Boss", "Abyss", "Temple" };
             Vector4[] colors = { new(.8f,.35f,.9f,1), new(.9f,.7f,.3f,1), new(.65f,.68f,.74f,1), new(.62f,.43f,1,1),
@@ -1166,12 +1175,10 @@ namespace StashUtility
                 var pos = ImGui.GetCursorScreenPos();
                 if (ImGui.InvisibleButton("type", new Vector2(width, height)))
                 {
-                    tabletFilterType = i;
-                    tabletSearchTerm = string.Empty;
-                    tabletConfiguredOnly = false;
-                    tabletAffixFilter = 0;
+                    selectedType = i;
+                    changed = true;
                 }
-                bool active = tabletFilterType == i;
+                bool active = selectedType == i;
                 var dl = ImGui.GetWindowDrawList();
                 dl.AddRectFilled(pos, pos + new Vector2(width, height), ImGui.GetColorU32(active ? ImGuiCol.HeaderActive : ImGui.IsItemHovered() ? ImGuiCol.HeaderHovered : ImGuiCol.FrameBg), 5);
                 if (active) dl.AddRect(pos, pos + new Vector2(width, height), ImGuiHelper.Color(colors[i]), 5, ImDrawFlags.None, 1.5f);
@@ -1185,6 +1192,7 @@ namespace StashUtility
                 ImGui.PopID();
             }
             ImGui.EndChild();
+            return changed;
         }
 
         private string TabletTypeLabel(string type) => PluginText.T("stashutility.tablet.category." + type.Replace(" ", ""), type);

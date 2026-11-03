@@ -405,13 +405,38 @@ internal static class TabletRankingCheck
                 platform.Platform_SetClipboardTextFn = Marshal.GetFunctionPointerForDelegate(capture);
                 foreach (bool down in new[] { false, true, false })
                 {
-                    io.AddMousePosEvent(75, 326); io.AddMouseButtonEvent(0, down);
+                    float selectorHeightDelta = 44 + ImGuiNET.ImGui.GetTextLineHeight() + 8 - ImGuiNET.ImGui.GetFrameHeight();
+                    io.AddMousePosEvent(75, 326 + selectorHeightDelta); io.AddMouseButtonEvent(0, down);
                     ImGuiNET.ImGui.NewFrame(); ImGuiNET.ImGui.SetNextWindowPos(Vector2.Zero); ImGuiNET.ImGui.SetNextWindowSize(io.DisplaySize);
                     ImGuiNET.ImGui.Begin("Tablettes / Tablets"); draw.Invoke(plugin, null); ImGuiNET.ImGui.End(); ImGuiNET.ImGui.Render();
                 }
                 Check(copiedQuery == Query() && copiedQuery.Length > 0, "The Copy search button copies the exact generated query through an in-memory clipboard callback");
             }
             finally { platform.Platform_SetClipboardTextFn = clipboardBefore; GC.KeepAlive(capture); }
+            var rankTypeField = typeof(StashUtilityCore).GetField("tabletFilterType", flags);
+            object rankTypeBefore = rankTypeField.GetValue(plugin);
+            string checkedBefore = JsonConvert.SerializeObject(settings.TabletStashSearchMods), iconSettingsBefore = OriginalSettings();
+            var searchDraw = typeof(StashUtilityCore).GetMethod("DrawTabletStashSearch", flags);
+            Vector2 tabletButton = new(-100);
+            int[] tabletOrder = { 4, 3, 1, 2, 0, 6, 7, 5 };
+            for (int column = 0; column < tabletOrder.Length; column++)
+            {
+                for (int frame = 0; frame < 4; frame++)
+                {
+                    io.AddMousePosEvent(frame == 0 ? -100 : tabletButton.X, frame == 0 ? -100 : tabletButton.Y); io.AddMouseButtonEvent(0, frame == 2);
+                    ImGuiNET.ImGui.NewFrame(); ImGuiNET.ImGui.SetNextWindowPos(Vector2.Zero); ImGuiNET.ImGui.SetNextWindowSize(io.DisplaySize);
+                    ImGuiNET.ImGui.Begin("Tablet icon selection##stash-search");
+                    float gap = ImGuiNET.ImGui.GetStyle().ItemSpacing.X, available = ImGuiNET.ImGui.GetContentRegionAvail().X;
+                    float helpHeight = ImGuiNET.ImGui.CalcTextSize(localization.T("stashutility.tablet_search.help", ""), false, available).Y;
+                    tabletButton = ImGuiNET.ImGui.GetCursorScreenPos() + new Vector2((available - gap * 7) / 8 * (column + .5f) + gap * column,
+                        helpHeight + ImGuiNET.ImGui.GetStyle().ItemSpacing.Y + (44 + ImGuiNET.ImGui.GetTextLineHeight()) / 2);
+                    searchDraw.Invoke(plugin, null); ImGuiNET.ImGui.End(); ImGuiNET.ImGui.Render();
+                }
+                Check(settings.TabletStashSearchType == StashUtilitySettings.TabletTypes[tabletOrder[column]] && Query().Length > 0,
+                    "Every tablet icon selects its own stash-search family: " + tabletOrder[column]);
+            }
+            Check(Equals(rankTypeBefore, rankTypeField.GetValue(plugin)) && OriginalSettings() == iconSettingsBefore && JsonConvert.SerializeObject(settings.TabletStashSearchMods) == checkedBefore,
+                "Clicking tablet icons preserves the rank-selector choice, all checked modifiers and toolbar settings");
             var searchField = typeof(StashUtilityCore).GetField("tabletStashSearchTerm", flags);
             var drawSearch = typeof(StashUtilityCore).GetMethod("DrawTabletStashSearch", flags);
             uint searchColor = ExileCenter.Utils.ImGuiHelper.Color(new Vector4(.95f, .75f, .2f, .28f));
