@@ -21,16 +21,23 @@ namespace LootTracker
     // A completed map within a saved session.
     public sealed class SessionMap
     {
+        public string Hash = string.Empty;
+        public DateTime StartedUtc;
+        public string League = string.Empty;
         public string ParentHash = string.Empty;
         public string Name = string.Empty;
         public double ActiveSeconds;         // wall time spent inside the map
         public double ProfitEx;              // Σ line.Ex
         public List<SessionLootLine> Loot = new();
+        [JsonIgnore] public MapRun? LiveRun;
+        [JsonIgnore] public double? ArchivedDivineRate;
     }
 
     // A finished tracking session (everything between two "New session" presses).
     public sealed class SessionRecord
     {
+        public string League = string.Empty;
+        public bool HistoryIncomplete;
         public DateTime StartUtc;
         public DateTime EndUtc;
         public double DivineRate;            // Divine→Exalted rate at save time (0 = unknown)
@@ -68,6 +75,7 @@ namespace LootTracker
     // restore — unlike SessionRecord, which snapshots prices at archive time.
     public sealed class ActiveSessionState
     {
+        public bool HistoryIncomplete;
         public DateTime StartUtc;
         public List<MapRun> Completed = new();
     }
@@ -77,6 +85,9 @@ namespace LootTracker
         private string SessionsDir => Path.Join(this.DllDirectory, "config", "sessions");
         private string ActiveSessionPathname => Path.Join(this.DllDirectory, "config", "active.json");
         private DateTime nextAutoSaveUtc = DateTime.MinValue;
+        private bool trackingHistoryIncomplete, periodHistoryUnreadable;
+        private int periodExcludedMaps;
+        private DateTime? periodFirstKnownUtc;
 
         // Autosave the live session to active.json. Called on zone transitions, on a ~20s timer (to catch
         // mid-map loot), and on disable. The currently-active run gets its un-folded live leg + running
@@ -92,13 +103,15 @@ namespace LootTracker
                     return;
                 }
 
-                var state = new ActiveSessionState { StartUtc = this.sessionStartUtc };
+                var state = new ActiveSessionState { StartUtc = this.sessionStartUtc, HistoryIncomplete = this.trackingHistoryIncomplete };
                 foreach (var r in this.completed)
                 {
                     bool isActive = ReferenceEquals(r, this.current) && this.onMapArea;
                     state.Completed.Add(new MapRun
                     {
                         Name = r.Name,
+                        StartedUtc = r.StartedUtc,
+                        League = r.League,
                         Hash = r.Hash,
                         ParentHash = r.ParentHash,
                         ProcessId = r.ProcessId,
@@ -141,6 +154,7 @@ namespace LootTracker
 
                 this.completed.Clear();
                 this.completed.AddRange(state.Completed);
+                this.trackingHistoryIncomplete = state.HistoryIncomplete;
                 this.sessionStartUtc = state.StartUtc == default ? DateTime.UtcNow : state.StartUtc;
                 this.current = null;
                 this.runStartUtc = null;
@@ -201,6 +215,8 @@ namespace LootTracker
                 StartUtc = startUtc,
                 EndUtc = endUtc,
                 DivineRate = this.priceCache.DivineToExaltedRate,
+                HistoryIncomplete = this.trackingHistoryIncomplete,
+                League = this.completed.Select(r => r.League).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1 ? this.completed[0].League : string.Empty,
             };
 
             foreach (var r in this.completed)
@@ -213,9 +229,16 @@ namespace LootTracker
 
         // Price one run's net gains at the CURRENT rates into a SessionMap (loot lines sorted by value).
         // Shared by session archiving and the live "Active session" loot view in settings.
-        private SessionMap BuildSessionMap(MapRun r)
+        private SessionMap BuildSessionMap(MapRun r, bool includeLoot = true)
         {
-            var m = new SessionMap { Name = r.Name, ParentHash = r.ParentHash, ActiveSeconds = this.RunDisplayTime(r).TotalSeconds };
+            var m = new SessionMap { Name = r.Name, Hash = r.Hash, StartedUtc = r.StartedUtc, League = r.League,
+                ParentHash = r.ParentHash, ActiveSeconds = this.RunDisplayTime(r).TotalSeconds };
+            if (!includeLoot)
+            {
+                m.LiveRun = r;
+                m.ProfitEx = this.ValueOf(this.RunGained(r), out _, out _);
+                return m;
+            }
             double profit = 0;
             foreach (var kv in this.RunGained(r))
             {
@@ -239,6 +262,7 @@ namespace LootTracker
                 // Timestamp filename → lexical order == chronological order (used by the trim).
                 var name = $"session_{rec.StartUtc:yyyyMMdd_HHmmss_fff}.json";
                 File.WriteAllText(Path.Join(this.SessionsDir, name), JsonConvert.SerializeObject(rec, Formatting.Indented));
+                this.sessionCache = null;
             }
             catch
             {
@@ -271,6 +295,7 @@ namespace LootTracker
         private void LoadSessions()
         {
             var list = new List<SessionRecord>();
+            this.periodHistoryUnreadable = false;
             try
             {
                 if (Directory.Exists(this.SessionsDir))
@@ -288,6 +313,7 @@ namespace LootTracker
                         }
                         catch
                         {
+                            this.periodHistoryUnreadable = true;
                             // skip a corrupt file
                         }
                     }
@@ -295,6 +321,7 @@ namespace LootTracker
             }
             catch
             {
+                this.periodHistoryUnreadable = true;
                 // ignore
             }
 
@@ -317,6 +344,17 @@ namespace LootTracker
             }
 
             this.sessionCache?.Remove(rec);
+            // Only an explicit, complete clear is an accounting reset; a new session is not.
+            try
+            {
+                if (this.completed.Count == 0 && this.sessionCache?.Count == 0 &&
+                    (!Directory.Exists(this.SessionsDir) || !Directory.EnumerateFiles(this.SessionsDir, "session_*.json").Any()))
+                {
+                    this.Settings.TrackingResetUtc = DateTime.UtcNow;
+                    this.SaveSettings();
+                }
+            }
+            catch { /* Inaccessible history must not be treated as a complete reset. */ }
             if (ReferenceEquals(this.detailSession, rec))
             {
                 this.detailSession = null;
@@ -495,7 +533,7 @@ namespace LootTracker
             else
             {
                 m = this.lootMap;
-                rate = this.detailSession?.DivineRate ?? 0; // history → that session's saved rate
+                rate = m?.ArchivedDivineRate ?? this.detailSession?.DivineRate ?? 0; // history → that session's saved rate
             }
 
             if (m == null)
@@ -546,6 +584,89 @@ namespace LootTracker
             {
                 this.lootMap = null;
                 this.lootRun = null;
+            }
+        }
+
+        private static readonly string[] TrackingPeriods = { "session", "total", "three_months", "month", "week", "today" };
+
+        private static DateTime TrackingUtc(DateTime value) => value.Kind == DateTimeKind.Local ? value.ToUniversalTime() :
+            DateTime.SpecifyKind(value, DateTimeKind.Utc);
+
+        private static DateTime TrackingPeriodStart(int period, DateTime nowUtc, TimeZoneInfo zone, DateTime resetUtc)
+        {
+            var today = TimeZoneInfo.ConvertTimeFromUtc(TrackingUtc(nowUtc), zone).Date;
+            DateTime local = period switch
+            {
+                2 => today.AddMonths(-3),
+                3 => new DateTime(today.Year, today.Month, 1),
+                4 => today.AddDays(-(((int)today.DayOfWeek + 6) % 7)),
+                5 => today,
+                _ => DateTime.MinValue,
+            };
+            // Some local zones change clocks at midnight. Start at the first valid local minute.
+            if (local != DateTime.MinValue)
+                while (zone.IsInvalidTime(local)) local = local.AddMinutes(1);
+            var start = local == DateTime.MinValue ? DateTime.MinValue : TimeZoneInfo.ConvertTimeToUtc(local, zone);
+            return resetUtc != default && TrackingUtc(resetUtc) > start ? TrackingUtc(resetUtc) : start;
+        }
+
+        private SessionRecord BuildTrackingView(DateTime nowUtc, TimeZoneInfo zone)
+        {
+            int period = Math.Clamp(this.Settings.TrackingPeriod, 0, TrackingPeriods.Length - 1);
+            var start = TrackingPeriodStart(period, nowUtc, zone, this.Settings.TrackingResetUtc);
+            var view = new SessionRecord { StartUtc = start, EndUtc = nowUtc, DivineRate = this.priceCache.DivineToExaltedRate };
+            this.periodExcludedMaps = 0;
+            this.periodFirstKnownUtc = null;
+            var live = new SessionRecord { StartUtc = this.sessionStartUtc, EndUtc = nowUtc,
+                HistoryIncomplete = this.trackingHistoryIncomplete,
+                Maps = this.completed.Where(r => r.ParentHash.Length == 0).Reverse().SelectMany(this.RunFamily)
+                    .Select(r => this.BuildSessionMap(r, false)).ToList() };
+            if (period == 0) return live; // Original session scope, with live pricing/timers and no disk reads.
+            if (this.sessionCache == null) this.LoadSessions();
+            foreach (var session in new[] { live }.Concat((this.sessionCache ?? new List<SessionRecord>())
+                .Where(session => session.StartUtc != live.StartUtc).GroupBy(session => session.StartUtc)
+                .Select(group => group.OrderByDescending(session => session.EndUtc).First())))
+            {
+                if (session.Maps == null) { view.HistoryIncomplete = true; continue; }
+                view.HistoryIncomplete |= session.HistoryIncomplete;
+                foreach (var map in session.Maps.Where(m => m != null))
+                {
+                    var root = map.ParentHash.Length == 0 ? map : session.Maps.FirstOrDefault(m => m != null &&
+                        m.ParentHash.Length == 0 && m.Hash.Length > 0 && m.Hash == map.ParentHash) ?? map;
+                    string league = !string.IsNullOrEmpty(root.League) ? root.League : session.League;
+                    if (string.IsNullOrEmpty(league)) { if (map.ParentHash.Length == 0) this.periodExcludedMaps++; continue; }
+                    if (!string.Equals(league, this.Settings.League, StringComparison.OrdinalIgnoreCase)) continue;
+                    DateTime? date = root.StartedUtc == default ? null : TrackingUtc(root.StartedUtc);
+                    if (date.HasValue && date.Value >= TrackingUtc(this.Settings.TrackingResetUtc) && date.Value <= nowUtc &&
+                        (!this.periodFirstKnownUtc.HasValue || date.Value < this.periodFirstKnownUtc.Value))
+                        this.periodFirstKnownUtc = date;
+                    // Undated legacy maps may only be included if their ENTIRE known session fits.
+                    if (!date.HasValue && (session.StartUtc == default || session.EndUtc == default ||
+                        TrackingUtc(session.StartUtc) < start || TrackingUtc(session.EndUtc) > nowUtc))
+                    { if (map.ParentHash.Length == 0) this.periodExcludedMaps++; continue; }
+                    if (date.HasValue && (date.Value < start || date.Value > nowUtc)) continue;
+                    if (!double.IsFinite(map.ProfitEx) || !double.IsFinite(map.ActiveSeconds) || map.ActiveSeconds < 0)
+                    { view.HistoryIncomplete = true; continue; }
+                    view.Maps.Add(map.LiveRun != null ? map : new SessionMap { Name = map.Name, Hash = map.Hash,
+                        ParentHash = map.ParentHash, StartedUtc = map.StartedUtc, League = map.League,
+                        ActiveSeconds = map.ActiveSeconds, ProfitEx = map.ProfitEx, Loot = map.Loot,
+                        ArchivedDivineRate = session.DivineRate });
+                }
+            }
+            view.HistoryIncomplete |= this.periodHistoryUnreadable || this.periodExcludedMaps > 0;
+            return view;
+        }
+
+        private void DrawTrackingPeriodSelector()
+        {
+            int selected = Math.Clamp(this.Settings.TrackingPeriod, 0, TrackingPeriods.Length - 1);
+            ImGui.SetNextItemWidth(Math.Min(260f, ImGui.GetContentRegionAvail().X));
+            if (ImGui.BeginCombo("##tracking_period", this.L("lt.period." + TrackingPeriods[selected], TrackingPeriods[selected])))
+            {
+                for (int i = 0; i < TrackingPeriods.Length; i++)
+                    if (ImGui.Selectable(this.L("lt.period." + TrackingPeriods[i], TrackingPeriods[i]), i == selected))
+                    { this.Settings.TrackingPeriod = i; this.SaveSettings(); }
+                ImGui.EndCombo();
             }
         }
 

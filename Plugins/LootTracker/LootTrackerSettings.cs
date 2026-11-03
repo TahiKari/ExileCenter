@@ -94,5 +94,8 @@ namespace LootTracker
         // Profit units are a persisted selection; legacy settings start in Exalted.
         public int ProfitCurrencies = 1;
         public bool ShowProfitSummary = true;
+        public int TrackingPeriod = 0;
+        // Accounting boundary, independent of the display period and session clock.
+        public DateTime TrackingResetUtc = DateTime.MinValue;
     }
 }

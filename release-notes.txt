@@ -1,13 +1,14 @@
-﻿
-ExileCenter 1.20.2
+ExileCenter 1.21.0
 
-- Reprise de l'overlay : ajout d'une remise en état de sa propre fenêtre Windows au retour d'au moins une minute d'inactivité, au retour au jeu ou après une interruption prolongée du rendu. Elle cible le cas où deux appuis sur F11 rétablissaient l'affichage après une pause.
-- La remise en état réactive la présentation transparente et réaffirme l'affichage au premier plan de l'overlay uniquement lorsque le jeu est la fenêtre active. Elle n'ouvre pas le menu, n'active pas de fenêtre et ne déplace ni ne redimensionne les fenêtres, barres ou icônes.
-- Contrôle léger limité à une fois par seconde, reprise différée en arrière-plan ou pendant l'inactivité, et absence de réouverture forcée d'une fenêtre volontairement masquée ou réduite. Les styles d'entrée et de transparence sont conservés ; la restauration du style d'origine est tentée même si une opération échoue.
-- Les préférences, positions personnalisées, raccourcis et modes d'affichage indépendants sont conservés. Aucun envoi de touche ou de clic, aucune injection ni modification de PoE n'est ajouté.
-- GameOffsets.dll conservée à l'identique, sans recompilation.
+- Suivi du butin : ajout d'un sélecteur mémorisé proposant Session actuelle, Total, Trois derniers mois, Mois en cours, Semaine en cours et Aujourd'hui, dans la fenêtre existante et ses affichages indépendants.
+- La liste des cartes et les statistiques utilisent la même période : profits dans les sept devises existantes, profit horaire et moyen, nombre de cartes et temps moyen. Les sous-zones ne sont pas comptées deux fois. Les périodes vides restent à zéro.
+- Le Total cumule les sessions archivées et la session actuelle pour la ligue configurée. Nouvelle session continue d'archiver sans remettre le Total à zéro. Changer de période ne modifie ni les cartes ni les archives. La suppression explicite de tout l'historique, sans carte active, constitue une réinitialisation complète.
+- Dates locales, semaines commençant le lundi et trois mois calendaires glissants. Les cartes sont rattachées à leur date de début, sans répartir artificiellement leur butin à minuit. Les nouvelles données enregistrent cette date et la ligue dans le stockage existant.
+- Une indication d'historique limité précise les données disponibles et les cartes exclues. Les anciennes archives sans ligue fiable restent consultables dans l'historique, mais ne sont pas attribuées arbitrairement à la saison actuelle. Sans date de carte, seule une session entièrement comprise dans la période peut être incluse. Les limites de conservation existantes ne changent pas et les données déjà supprimées ne sont pas reconstituées.
+- Les valeurs en exaltées des archives restent celles enregistrées à leur clôture ; les conversions utilisent les taux actuels, comme les statistiques existantes. Aucune requête réseau n'est ajoutée pour sélectionner une période.
+- Réglages personnels et suivi en jeu conservés. GameOffsets.dll conservée à l'identique, sans recompilation.
 
-Validation : compilation du cœur ; contrôles de reprise sur activité synthétique, retour de focus, suspension, compteur Windows, limitation de fréquence et échecs natifs interceptés. Contrôles de conservation de la barre du coffre et d'affichage existant. Les tests ne créent pas de fenêtre et ne modifient ni le focus ni les entrées système. La disparition après AFK et la correction restent à confirmer après une véritable pause prolongée en jeu ; la réponse à F11 indique une piste de présentation Windows, sans démontrer la cause exacte.
+Validation : compilation et fixtures isolées pour les six périodes, les bornes locales, le lundi, les changements d'heure, les réinitialisations, les doublons, les anciennes archives, les devises, les valeurs nulles et la persistance. Aperçus ImGui vérifiés en largeurs compacte et normale. Aucune entrée système ni interaction avec le jeu pendant les tests ; validation réelle en jeu non effectuée.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

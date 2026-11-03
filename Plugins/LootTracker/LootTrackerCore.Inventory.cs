@@ -594,8 +594,11 @@ namespace LootTracker
         {
             ImGui.SetWindowFontScale(s);
             float width = ImGui.GetContentRegionAvail().X;
-            this.SessionTotals(out var totalActive, out var totalEx);
-            int maps = this.completed.Count(r => r.ParentHash.Length == 0);
+            this.DrawTrackingPeriodSelector();
+            var period = this.BuildTrackingView(DateTime.UtcNow, TimeZoneInfo.Local);
+            var totalActive = TimeSpan.FromSeconds(Math.Clamp(period.TotalActiveSeconds(), 0, TimeSpan.MaxValue.TotalSeconds - 1));
+            double totalEx = period.TotalEx();
+            int maps = period.Maps.Count(r => r.ParentHash.Length == 0);
             double perHour = totalActive.TotalHours > 0 ? totalEx / totalActive.TotalHours : 0;
             TimeSpan avgTime = maps > 0 ? totalActive / maps : TimeSpan.Zero;
             double avgProfit = maps > 0 ? totalEx / maps : 0;
@@ -622,6 +625,19 @@ namespace LootTracker
                         ImGui.TextDisabled(timer);
                     }
                     this.DrawProfitCurrencyControls();
+                    if (this.Settings.TrackingPeriod != 0)
+                    {
+                        ImGui.TextUnformatted(this.L("lt.period.coverage", "Limited history (?)"));
+                        if (ImGui.IsItemHovered())
+                        {
+                            ImGui.BeginTooltip(); ImGui.PushTextWrapPos(ImGui.GetFontSize() * 32);
+                            ImGui.TextUnformatted(this.L("lt.period.scope", "Retained history of the selected league only. Dated maps belong to their start date; undated maps require their whole session to fit. Archived Ex values use current conversion rates."));
+                            if (this.periodFirstKnownUtc.HasValue)
+                                ImGui.TextUnformatted(this.LF("lt.period.available", "Known dated history from {0}; earlier coverage is not guaranteed.", this.periodFirstKnownUtc.Value.ToLocalTime().ToString("d")));
+                            ImGui.TextUnformatted(this.LF("lt.period.incomplete", "{0} maps excluded because their date or league is unknown. Deleted or trimmed data cannot be reconstructed.", this.periodExcludedMaps));
+                            ImGui.PopTextWrapPos(); ImGui.EndTooltip();
+                        }
+                    }
                     string summary = this.L(this.Settings.ShowProfitSummary ? "lt.hide_summary" : "lt.show_summary",
                         this.Settings.ShowProfitSummary ? "Hide summary" : "Show summary");
                     ContinueTrackerRow(ImGui.CalcTextSize(summary).X + ImGui.GetStyle().FramePadding.X * 2);
@@ -669,7 +685,7 @@ namespace LootTracker
             }
             bool separateColumns = width >= 160 * s + 60 * s + units * profitWidth + (showLoot ? 64 * s : 0);
             float tableHeight = Math.Max(ImGui.GetTextLineHeightWithSpacing() * 2, ImGui.GetContentRegionAvail().Y);
-            MapRun? toOpen = null;
+            SessionMap? toOpen = null;
             if (ImGui.BeginTable($"compact_runs_{this.SelectedProfitUnits}_{separateColumns}_{showLoot}", (separateColumns ? 2 + units : 3) + (showLoot ? 1 : 0),
                     ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY |
                     ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.Resizable | ImGuiTableFlags.NoSavedSettings,
@@ -688,20 +704,22 @@ namespace LootTracker
                 if (showLoot) ImGui.TableSetupColumn(this.L("lt.loot", "Loot"), ImGuiTableColumnFlags.WidthFixed, 64 * s);
                 ImGui.TableSetupScrollFreeze(0, 1);
                 ImGui.TableHeadersRow();
-                if (this.completed.Count == 0)
+                if (period.Maps.Count == 0)
                 {
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
-                    ImGui.TextWrapped(this.L("lt.no_maps", "No completed maps in this session yet."));
+                    ImGui.TextWrapped(this.Settings.TrackingPeriod == 0 ? this.L("lt.no_maps", "No completed maps in this session yet.") :
+                        this.L("lt.period.empty", "No recorded maps for this period."));
                 }
-                foreach (var r in this.completed.Where(r => r.ParentHash.Length == 0).Reverse().SelectMany(this.RunFamily))
+                int row = 0;
+                foreach (var r in period.Maps)
                 {
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
                     ImGui.TextWrapped((r.ParentHash.Length == 0 ? "" : "    > ") + r.Name);
                     ImGui.TableNextColumn();
-                    ImGui.TextUnformatted(FormatDuration(this.RunDisplayTime(r)));
-                    double ex = this.ValueOf(this.RunGained(r), out _, out _);
+                    ImGui.TextUnformatted(FormatDuration(TimeSpan.FromSeconds(r.ActiveSeconds)));
+                    double ex = r.ProfitEx;
                     for (int unit = 0, value = 0; unit < ProfitUnits.Length; unit++)
                     {
                         if ((this.SelectedProfitUnits & (1 << unit)) == 0) continue;
@@ -712,15 +730,16 @@ namespace LootTracker
                     if (showLoot)
                     {
                         ImGui.TableNextColumn();
-                        if (ImGui.SmallButton($"{this.L("lt.loot", "Loot")}##a{r.ProcessId}_{r.Hash}")) toOpen = r;
+                        if (ImGui.SmallButton($"{this.L("lt.loot", "Loot")}##a{row}")) toOpen = r;
                     }
+                    row++;
                 }
                 ImGui.EndTable();
             }
             if (toOpen != null)
             {
-                this.lootMap = null;
-                this.lootRun = toOpen;
+                this.lootMap = toOpen.LiveRun == null ? toOpen : null;
+                this.lootRun = toOpen.LiveRun;
             }
         }
 

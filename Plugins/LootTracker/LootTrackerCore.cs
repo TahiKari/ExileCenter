@@ -18,6 +18,8 @@ namespace LootTracker
     {
         public string Name = string.Empty;   // localized area name (display only)
         public string Hash = string.Empty;    // instance id, or a Sekhema attempt/floor key
+        public DateTime StartedUtc;
+        public string League = string.Empty;
         public int AreaLevel;
         public string ParentHash = string.Empty;
         public uint ProcessId;
@@ -719,6 +721,7 @@ namespace LootTracker
             this.lastProcessedZoneHash = string.Empty;
             this.sessionStartUtc = DateTime.UtcNow;
             this.ResetKillTally();
+            this.trackingHistoryIncomplete = false;
             this.ClearPickupToasts();
             this.DeleteActiveState(); // archived to history above; the autosave mirror is now obsolete
         }
@@ -915,13 +918,16 @@ namespace LootTracker
                     this.FinishCurrentMap(now);
                     foreach (var previous in this.completed.Where(r => r.ParentHash.Length == 0 && r.Hash.StartsWith("sekhema:", StringComparison.Ordinal)))
                         foreach (var member in this.RunFamily(previous)) member.IsFinished = true;
-                    root = new MapRun { Hash = state.RunKey, Name = name, ProcessId = Core.Process.Pid, AreaLevel = area.CurrentAreaLevel };
+                    root = new MapRun { Hash = state.RunKey, Name = name, ProcessId = Core.Process.Pid, AreaLevel = area.CurrentAreaLevel,
+                        StartedUtc = now, League = this.Settings.League };
                     this.completed.Add(root);
                     for (int floor = 1; floor <= 4; floor++)
                         this.completed.Add(new MapRun { Hash = state.RunKey + "/" + floor, ParentHash = root.Hash,
-                            Name = floor + "/4", SekhemaFloor = floor, ProcessId = root.ProcessId, AreaLevel = root.AreaLevel });
+                            Name = floor + "/4", SekhemaFloor = floor, ProcessId = root.ProcessId, AreaLevel = root.AreaLevel, League = root.League });
                 }
                 this.current = state.Floor == 0 ? root : this.RunFamily(root).Single(r => r.SekhemaFloor == state.Floor);
+                if (this.current.StartedUtc == default && root.StartedUtc != default && this.current.SekhemaFloor > 0)
+                    this.current.StartedUtc = now;
                 if (state.Floor > 0) { root.AreaLevel = area.CurrentAreaLevel; this.current.AreaLevel = area.CurrentAreaLevel; }
                 if (!this.current.SekhemaAreaHashes.Contains(inst)) this.current.SekhemaAreaHashes.Add(inst);
                 this.TrimCompleted();
@@ -983,6 +989,8 @@ namespace LootTracker
                     this.current = new MapRun
                     {
                         Name = details.Name,
+                        StartedUtc = now,
+                        League = parent?.League ?? this.Settings.League,
                         Hash = inst,
                         ParentHash = parent?.Hash ?? string.Empty,
                         ProcessId = parent?.ProcessId ?? Core.Process.Pid,
@@ -1092,6 +1100,7 @@ namespace LootTracker
                 }
 
                 var family = this.RunFamily(this.completed[0]).ToList();
+                this.trackingHistoryIncomplete = true;
                 this.completed.RemoveAll(r => family.Contains(r));
             }
         }

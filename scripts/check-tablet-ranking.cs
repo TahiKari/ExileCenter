@@ -18,6 +18,131 @@ using Newtonsoft.Json;
 
 internal static class TabletRankingCheck
 {
+    private static void CheckLootPeriods(string root, string previews)
+    {
+        const BindingFlags flags=BindingFlags.Instance|BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic;
+        var assembly=Assembly.LoadFrom(Path.Combine(root,"Plugins","LootTracker","LootTracker.dll"));
+        var core=assembly.GetType("LootTracker.LootTrackerCore");var runType=assembly.GetType("LootTracker.MapRun");
+        var recordType=assembly.GetType("LootTracker.SessionRecord");var mapType=assembly.GetType("LootTracker.SessionMap");
+        dynamic plugin=Activator.CreateInstance(core);
+        var isolated=Path.Combine(Directory.GetCurrentDirectory(),"period-fixture-"+Guid.NewGuid().ToString("N"));
+        string sessions=Path.Combine(isolated,"config","sessions");Directory.CreateDirectory(sessions);Directory.CreateDirectory(Path.Combine(isolated,"Localization"));
+        foreach(string language in new[]{"fr-FR","en-US"})File.Copy(Path.Combine(root,"Plugins","LootTracker","Localization",language+".json"),Path.Combine(isolated,"Localization",language+".json"));
+        plugin.DllDirectory=isolated;plugin.Settings.League="Season A";plugin.Settings.MaxSessions=200;
+        object Call(string method,params object[] args)=>core.GetMethod(method,flags).Invoke((object)plugin,args);
+        void Set(string name,object value)=>core.GetField(name,flags).SetValue((object)plugin,value);
+        object Get(string name)=>core.GetField(name,flags).GetValue((object)plugin);
+        DateTime U(string value)=>DateTime.Parse(value,null,System.Globalization.DateTimeStyles.AdjustToUniversal|System.Globalization.DateTimeStyles.AssumeUniversal);
+        var now=U("2026-11-03T12:00:00Z");var zone=TimeZoneInfo.CreateCustomTimeZone("Fixture+02",TimeSpan.FromHours(2),"Fixture+02","Fixture+02");
+        var startMethod=core.GetMethod("TrackingPeriodStart",flags);
+        DateTime Start(int period,DateTime at,TimeZoneInfo tz,DateTime reset=default)=>(DateTime)startMethod.Invoke(null,new object[]{period,at,tz,reset});
+        Check(Start(5,now,zone)==U("2026-11-02T22:00:00Z"),"Today starts at local midnight rather than UTC midnight");
+        Check(Start(4,now,zone)==U("2026-11-01T22:00:00Z"),"The current week starts on Monday in local time");
+        Check(Start(3,now,zone)==U("2026-10-31T22:00:00Z")&&Start(2,now,zone)==U("2026-08-02T22:00:00Z"),"Month and rolling three-month periods use local calendar boundaries");
+        Check(Start(2,U("2024-05-31T12:00:00Z"),zone)==U("2024-02-28T22:00:00Z"),"Three calendar months handle February in a leap year");
+        Check(Start(4,U("2027-01-03T12:00:00Z"),zone)==U("2026-12-27T22:00:00Z"),"A Sunday in January belongs to the Monday of the preceding year");
+        var rule=TimeZoneInfo.AdjustmentRule.CreateAdjustmentRule(new DateTime(2026,1,1),new DateTime(2026,12,31),TimeSpan.FromHours(1),
+            TimeZoneInfo.TransitionTime.CreateFloatingDateRule(new DateTime(1,1,1,2,0,0),3,5,DayOfWeek.Sunday),
+            TimeZoneInfo.TransitionTime.CreateFloatingDateRule(new DateTime(1,1,1,3,0,0),10,5,DayOfWeek.Sunday));
+        var dst=TimeZoneInfo.CreateCustomTimeZone("FixtureDST",TimeSpan.FromHours(1),"FixtureDST","Winter","Summer",new[]{rule});
+        Check(Start(5,U("2026-03-30T12:00:00Z"),dst)-Start(5,U("2026-03-29T12:00:00Z"),dst)==TimeSpan.FromHours(23),"A spring DST day is not forced to 24 hours");
+        Check(Start(5,U("2026-10-26T12:00:00Z"),dst)-Start(5,U("2026-10-25T12:00:00Z"),dst)==TimeSpan.FromHours(25),"An autumn DST day is not forced to 24 hours");
+        dynamic Record(string date,double profit,double seconds,string league="Season A",bool dated=true,string end=null)
+        {
+            dynamic rec=Activator.CreateInstance(recordType);rec.StartUtc=U(date);rec.EndUtc=end==null?U(date).AddMinutes(10):U(end);rec.League=league;rec.DivineRate=50d;
+            dynamic map=Activator.CreateInstance(mapType);map.Name=date;map.Hash=date;map.League=league;map.StartedUtc=dated?U(date):default(DateTime);map.ProfitEx=profit;map.ActiveSeconds=seconds;rec.Maps.Add(map);return rec;
+        }
+        var records=new object[]{Record("2026-11-03T08:00:00Z",100,3600),Record("2026-11-02T08:00:00Z",5,300),
+            Record("2026-11-01T08:00:00Z",40,900),Record("2026-10-01T08:00:00Z",20,900),Record("2026-07-01T08:00:00Z",10,300),
+            Record("2026-11-02T22:00:00Z",8,600,dated:false,end:"2026-11-03T04:00:00Z"),
+            Record("2026-10-30T08:00:00Z",16,1200,dated:false,end:"2026-11-03T08:00:00Z"),
+            Record("2026-11-03T09:00:00Z",99998,100,league:""),Record("2026-11-03T11:00:00Z",99999,100,league:"Other season")};
+        for(int i=0;i<records.Length;i++)File.WriteAllText(Path.Combine(sessions,"session_"+i+".json"),JsonConvert.SerializeObject(records[i]));
+        string bad=Path.Combine(sessions,"session_bad.json");File.WriteAllText(bad,"{broken");
+        var prices=Path.Combine(isolated,"config","prices.json");
+        File.WriteAllText(prices,JsonConvert.SerializeObject(new{League="Season A",LastSyncUtc=DateTime.UtcNow,DivineToExaltedRate=100d,
+            Prices=new Dictionary<string,double>{{"chaosorb",2},{"greaterexaltedorb",3},{"perfectexaltedorb",4},{"greaterchaosorb",6},{"perfectchaosorb",7}},
+            ArtPrices=new Dictionary<string,double>{{"currencyaddmodtorare",1}}}));
+        dynamic priceCache=Get("priceCache");Check((bool)priceCache.TryLoadFromDisk(prices,60,"Season A"),"The period fixture uses existing offline price storage without networking");
+        var runs=(IList)Get("completed");
+        dynamic run=Activator.CreateInstance(runType);run.Name="Current map";run.Hash="current";run.StartedUtc=U("2026-11-03T10:00:00Z");run.League="Season A";run.ActiveTime=TimeSpan.FromSeconds(1200);run.Gained.Add("Metadata/Items/Currency/CurrencyAddModToRare",12L);runs.Add(run);
+        dynamic child=Activator.CreateInstance(runType);child.Name="Sub-area";child.Hash="child";child.ParentHash="current";child.StartedUtc=U("2026-11-03T11:00:00Z");child.League="Season A";child.ActiveTime=TimeSpan.FromSeconds(600);child.Gained.Add("Metadata/Items/Currency/CurrencyAddModToRare",3L);runs.Add(child);
+        Set("sessionStartUtc",U("2026-11-03T05:00:00Z"));
+        dynamic View(int period){plugin.Settings.TrackingPeriod=period;return Call("BuildTrackingView",now,zone);}
+        int Maps(dynamic view)=>((IEnumerable)view.Maps).Cast<object>().Count(m=>(string)mapType.GetField("ParentHash").GetValue(m)=="");
+        string before=JsonConvert.SerializeObject((object)runs);var files=Directory.GetFiles(sessions).ToDictionary(path=>path,File.ReadAllText);
+        var totals=new[]{15d,214d,204d,168d,128d,123d};var counts=new[]{1,8,7,5,4,3};var times=new[]{1800d,9600d,9300d,7200d,6300d,6000d};
+        for(int period=0;period<6;period++)
+        {
+            dynamic view=View(period);
+            Check(Maps(view)==counts[period]&&(double)view.TotalEx()==totals[period],"The selected list and profit totals share the same period and season: "+period+" maps="+Maps(view)+" profit="+view.TotalEx());
+            Check((double)view.TotalActiveSeconds()==times[period]&&Math.Abs((double)view.PerHourEx()-totals[period]*3600/times[period])<1e-8,"Active time and hourly profit exclude duplicate sub-area totals: "+period);
+            Check(Math.Abs((double)view.TotalEx()/Maps(view)-totals[period]/counts[period])<1e-8,"Average profit uses only root maps: "+period);
+        }
+        Check((bool)Get("periodHistoryUnreadable"),"An unreadable archive is signalled rather than overwritten or treated as complete history");
+        Check((int)Get("periodExcludedMaps")==2,"A boundary-crossing undated session and an unknown league are explicitly excluded");
+        Check(JsonConvert.SerializeObject((object)runs)==before&&files.All(pair=>File.ReadAllText(pair.Key)==pair.Value),"Selecting all periods leaves live state and every historical file unchanged");
+        var initialCache=(IList)Get("sessionCache");initialCache.Add(initialCache[0]);
+        initialCache.Add(Record("2026-11-03T05:00:00Z",10000,100));
+        Check((double)View(1).TotalEx()==214d,"Repeated archives and an archived mirror of the active session do not double-count maps or profits");
+        initialCache.RemoveAt(initialCache.Count-1);initialCache.RemoveAt(initialCache.Count-1);
+        dynamic midnight=Record("2026-11-02T22:00:00Z",7,60);midnight.StartUtc=U("2026-11-02T21:00:00Z");
+        initialCache.Add(midnight);initialCache.Add(Record("2026-11-02T21:59:59Z",11,60));
+        Check((double)View(5).TotalEx()==130d,"A map exactly at local midnight is included while one second before it is excluded");
+        initialCache.RemoveAt(initialCache.Count-1);initialCache.RemoveAt(initialCache.Count-1);
+        plugin.Settings.TrackingResetUtc=U("2026-11-03T09:30:00Z");
+        for(int period=1;period<6;period++)Check((double)View(period).TotalEx()==15d,"The last explicit reset bounds every historical period: "+period);
+        plugin.Settings.TrackingResetUtc=DateTime.MinValue;
+        plugin.Settings.League="Absent season";
+        dynamic empty=View(5);Check(Maps(empty)==0&&(double)empty.TotalEx()==0&&(double)empty.PerHourEx()==0,"An empty period has zero maps and zero safe hourly profit");plugin.Settings.League="Season A";
+        dynamic zero=Record("2026-11-03T07:00:00Z",5,0);Check((double)zero.PerHourEx()==0,"Zero-duration archived maps never divide by zero");
+        for(int unit=0;unit<7;unit++)Check(!((string)Call("FormatProfitCurrency",123d,unit)).StartsWith("—"),"Period totals use the existing conversion for currency "+unit);
+        plugin.Settings.TrackingPeriod=5;Set("trackingHistoryIncomplete",true);Call("SaveSettings");Call("SaveActiveState");
+        string activePath=Path.Combine(isolated,"config","active.json");string savedActive=File.ReadAllText(activePath);
+        Check(savedActive.Contains("StartedUtc")&&savedActive.Contains("Season A"),"New map dates and league metadata survive the existing active-session autosave");
+        dynamic reloaded=Activator.CreateInstance(core);reloaded.DllDirectory=isolated;
+        core.GetField("Settings").SetValue((object)reloaded,JsonConvert.DeserializeObject(File.ReadAllText(Path.Combine(isolated,"config","settings.txt")),core.GetField("Settings").FieldType));
+        core.GetMethod("LoadActiveState",flags).Invoke((object)reloaded,null);
+        Check((int)reloaded.Settings.TrackingPeriod==5&&((IList)core.GetField("completed",flags).GetValue((object)reloaded)).Count==2,"The selected period and existing runs survive reopening without resetting tracking");
+        Check((bool)core.GetField("trackingHistoryIncomplete",flags).GetValue((object)reloaded),"Retention gaps remain known after reopening the active session");
+        dynamic legacy=JsonConvert.DeserializeObject("{\"Name\":\"legacy\"}",runType);
+        Check((DateTime)legacy.StartedUtc==default&&(string)legacy.League=="","Legacy runs keep unknown date/league instead of receiving invented metadata");
+        if(previews!=null)
+        {
+            Directory.CreateDirectory(previews);var previous=ImGuiNET.ImGui.GetCurrentContext();var context=ImGuiNET.ImGui.CreateContext();
+            var language=ExileCenter.Core.GHSettings.UiLanguage;ExileCenter.Core.GHSettings.UiLanguage=ExileCenter.Localization.OverlayLanguage.French;
+            try
+            {
+                var io=ImGuiNET.ImGui.GetIO();io.DisplaySize=new Vector2(1200,900);io.DeltaTime=1f/60;unsafe{io.NativePtr->IniFilename=null;}
+                io.Fonts.AddFontDefault();io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels,out int aw,out int ah,out int bpp);io.Fonts.SetTexID((IntPtr)1);
+                var atlas=new byte[aw*ah*bpp];Marshal.Copy(pixels,atlas,0,atlas.Length);
+                foreach(int width in new[]{320,460,820})foreach(int period in new[]{0,1,5})foreach(int currencies in new[]{1,127})
+                {
+                    plugin.Settings.TrackingPeriod=period;plugin.Settings.ProfitCurrencies=currencies;
+                    for(int frame=0;frame<2;frame++)
+                    {
+                        io.AddMousePosEvent(-100,-100);ImGuiNET.ImGui.NewFrame();ImGuiNET.ImGui.SetNextWindowPos(new Vector2(10));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width,500));
+                        ImGuiNET.ImGui.Begin("Suivi du butin##period-fixture",ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                        using(var theme=ExileCenter.Ui.ImGuiTheme.UsePluginTheme("LootTracker"))Call("DrawTrackerContents",500f,1f,true);
+                        Check(ImGuiNET.ImGui.GetScrollMaxX()==0,"Period controls and statistics fit the panel horizontally: "+width+"/"+period+"/"+currencies);
+                        ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();
+                    }
+                    if(currencies==1)SaveUiPreview(Path.Combine(previews,$"loot-period-{width}-{period}.png"),atlas,aw,ah);
+                }
+            }
+            finally{ImGuiNET.ImGui.DestroyContext(context);ImGuiNET.ImGui.SetCurrentContext(previous);ExileCenter.Core.GHSettings.UiLanguage=language;}
+        }
+        plugin.Settings.TrackingPeriod=1;plugin.Settings.ProfitCurrencies=1;
+        Call("ResetSession");Check(runs.Count==0&&(DateTime)plugin.Settings.TrackingResetUtc==DateTime.MinValue,"New session archives data without resetting Total's accounting boundary");
+        Call("LoadSessions");var cache=(IList)Get("sessionCache");
+        Check(cache.Count==records.Length+1&&File.Exists(activePath)==false,"The completed live session joins existing archives through the original storage mechanism");
+        foreach(var rec in cache.Cast<object>().ToArray())Call("DeleteSession",rec);
+        Check((DateTime)plugin.Settings.TrackingResetUtc==DateTime.MinValue,"An unreadable file still present prevents claiming a complete reset");
+        dynamic broken=Activator.CreateInstance(recordType);broken.FilePath=bad;Call("DeleteSession",(object)broken);
+        Check((DateTime)plugin.Settings.TrackingResetUtc!=DateTime.MinValue,"Only explicitly emptying every archive with no active maps records a full reset");
+        Console.WriteLine(checks+" loot period checks passed; isolated history and ImGui, no network, game process or OS input.");
+    }
+
     private static void CheckOverlayRecovery()
     {
         const BindingFlags flags=BindingFlags.Instance|BindingFlags.Static|BindingFlags.NonPublic;
@@ -2010,6 +2135,11 @@ internal static class TabletRankingCheck
             if (args.Length > 1 && args[1] == "--overlay-recovery-only")
             {
                 CheckOverlayRecovery();
+                return 0;
+            }
+            if (args.Length > 1 && args[1] == "--loot-periods-only")
+            {
+                CheckLootPeriods(root,args.Length>2?args[2]:null);
                 return 0;
             }
             if (args.Length > 1 && args[1] == "--atlas-labels-only")
