@@ -143,6 +143,81 @@ internal static class TabletRankingCheck
         Console.WriteLine(checks+" loot period checks passed; isolated history and ImGui, no network, game process or OS input.");
     }
 
+    private static void CheckLegacyLootPeriods(string root, string sourceConfig, string previews)
+    {
+        const BindingFlags flags=BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic;
+        var assembly=Assembly.LoadFrom(Path.Combine(root,"Plugins","LootTracker","LootTracker.dll"));var core=assembly.GetType("LootTracker.LootTrackerCore");
+        dynamic plugin=Activator.CreateInstance(core);var isolated=Path.Combine(Directory.GetCurrentDirectory(),"legacy-period-fixture-"+Guid.NewGuid().ToString("N"));
+        string config=Path.Combine(isolated,"config"),sessions=Path.Combine(config,"sessions");Directory.CreateDirectory(sessions);Directory.CreateDirectory(Path.Combine(isolated,"Localization"));
+        foreach(string language in new[]{"fr-FR","en-US"})File.Copy(Path.Combine(root,"Plugins","LootTracker","Localization",language+".json"),Path.Combine(isolated,"Localization",language+".json"));
+        DateTime U(string value)=>DateTime.Parse(value,null,System.Globalization.DateTimeStyles.AdjustToUniversal|System.Globalization.DateTimeStyles.AssumeUniversal);
+        var now=sourceConfig==null?U("2026-11-03T12:00:00Z"):DateTime.UtcNow;
+        if(sourceConfig==null)
+        {
+            plugin.Settings.League="Season A";
+            var starts=new[]{"2026-06-29T12:00:00Z","2026-07-01T12:00:00Z","2026-08-04T12:00:00Z","2026-08-08T12:00:00Z","2026-08-21T12:00:00Z","2026-09-05T12:00:00Z"};
+            for(int i=0;i<5;i++)File.WriteAllText(Path.Combine(sessions,"session_"+i+".json"),JsonConvert.SerializeObject(new{StartUtc=U(starts[i]),EndUtc=U(starts[i+1]),Maps=Enumerable.Range(0,50).Select(m=>new{Name="Legacy map "+m,ProfitEx=1d,ActiveSeconds=60d})}));
+            File.WriteAllText(Path.Combine(config,"active.json"),JsonConvert.SerializeObject(new{StartUtc=U(starts[5]),Completed=Enumerable.Range(0,50).Select(m=>new{Name="Legacy live map "+m,Hash="legacy"+m,ActiveTime=TimeSpan.FromMinutes(1)})}));
+        }
+        else
+        {
+            foreach(string name in new[]{"settings.txt","active.json","prices.json"})if(File.Exists(Path.Combine(sourceConfig,name)))File.Copy(Path.Combine(sourceConfig,name),Path.Combine(config,name));
+            foreach(string file in Directory.GetFiles(Path.Combine(sourceConfig,"sessions"),"session_*.json"))File.Copy(file,Path.Combine(sessions,Path.GetFileName(file)));
+            core.GetField("Settings").SetValue((object)plugin,JsonConvert.DeserializeObject(File.ReadAllText(Path.Combine(config,"settings.txt")),core.GetField("Settings").FieldType));
+        }
+        plugin.DllDirectory=isolated;
+        object Call(string method,params object[] args)=>core.GetMethod(method,flags).Invoke((object)plugin,args);
+        object Get(string name)=>core.GetField(name,flags).GetValue((object)plugin);
+        var files=Directory.GetFiles(sessions).Append(Path.Combine(config,"active.json")).ToDictionary(file=>file,File.ReadAllText);
+        Call("LoadActiveState");Call("LoadSessions");
+        if(File.Exists(Path.Combine(config,"prices.json")))
+        {dynamic prices=Get("priceCache");prices.TryLoadFromDisk(Path.Combine(config,"prices.json"),int.MaxValue,(string)plugin.Settings.League);}
+        dynamic View(int period){plugin.Settings.TrackingPeriod=period;return Call("BuildTrackingView",now,TimeZoneInfo.Local);}
+        int Maps(dynamic view)=>((IEnumerable)view.Maps).Cast<dynamic>().Count(m=>(string)m.ParentHash=="");
+        dynamic live=View(0);var archives=((IEnumerable)Get("sessionCache")).Cast<dynamic>().ToArray();
+        int expectedMaps=Maps(live)+archives.Sum(rec=>Maps(rec));double expectedEx=(double)live.TotalEx()+archives.Sum(rec=>(double)rec.TotalEx());
+        Check(sourceConfig==null?Maps(View(1))==0:Maps(View(1))<expectedMaps,"Legacy maps are absent from Total before association; newer dated maps remain visible: "+(sourceConfig==null?"synthetic":"copied history"));
+        string league=plugin.Settings.League;Call("BindLegacyTrackingHistory",league);
+        dynamic total=View(1);
+        Check(Maps(live)==50&&expectedMaps==300&&Maps(total)==expectedMaps,"Recover all 50 restored and 250 archived maps without duplicating sub-areas");
+        Check(Math.Abs((double)total.TotalEx()-expectedEx)<1e-6&&double.IsFinite((double)total.PerHourEx()),"Recovered legacy profits and hourly statistics match current-session and archive values");
+        Check((string)plugin.Settings.LegacyHistoryLeague==league&&Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(config,"settings.txt"))).Value<string>("LegacyHistoryLeague")==league,"The confirmed legacy league is persisted in the existing settings file");
+        Check(files.All(pair=>File.ReadAllText(pair.Key)==pair.Value),"Legacy association does not rewrite active data, archived values or map dates");
+        plugin.Settings.League="Future fixture season";Call("BindLegacyTrackingHistory","Future fixture season");
+        Check(Maps(View(1))==0&&(string)plugin.Settings.LegacyHistoryLeague==league,"Changing the configured league never transfers the old history into the next season");plugin.Settings.League=league;
+        var liveRoots=((IEnumerable)live.Maps).Cast<dynamic>().Where(m=>(string)m.ParentHash=="").ToArray();
+        int undated=liveRoots.Count(m=>(DateTime)m.StartedUtc==default);
+        var periodStart=core.GetMethod("TrackingPeriodStart",flags|BindingFlags.Static);
+        for(int period=3;period<=5;period++)
+        {
+            var boundary=(DateTime)periodStart.Invoke(null,new object[]{period,now,TimeZoneInfo.Local,DateTime.MinValue});
+            int known=liveRoots.Count(m=>(DateTime)m.StartedUtc>=boundary&&(DateTime)m.StartedUtc<=now);
+            Check(Maps(View(period))==known&&(int)Get("periodExcludedMaps")==undated,"New dated maps stay in recent periods while the old boundary-crossing maps are signalled: "+period);
+        }
+        Check(Maps(View(2))==200,"Three-month history includes only complete legacy sessions inside the period");
+        plugin.Settings.TrackingResetUtc=now.AddDays(-1);Check(Maps(View(1))==liveRoots.Count(m=>(DateTime)m.StartedUtc>=now.AddDays(-1)),"An explicit reset excludes undated legacy maps and preserves newer dated maps");plugin.Settings.TrackingResetUtc=DateTime.MinValue;
+        Call("ResetSession");now=DateTime.UtcNow;Check(Maps(View(1))==300,"Archiving the restored legacy session preserves the recovered Total");
+        Check(files.Where(pair=>Path.GetFileName(pair.Key).StartsWith("session_")).All(pair=>File.ReadAllText(pair.Key)==pair.Value),"New session leaves every pre-existing legacy archive unchanged");
+        if(previews!=null&&sourceConfig==null)
+        {
+            Directory.CreateDirectory(previews);var previous=ImGuiNET.ImGui.GetCurrentContext();var context=ImGuiNET.ImGui.CreateContext();var language=ExileCenter.Core.GHSettings.UiLanguage;ExileCenter.Core.GHSettings.UiLanguage=ExileCenter.Localization.OverlayLanguage.French;
+            try
+            {
+                var io=ImGuiNET.ImGui.GetIO();io.DisplaySize=new Vector2(1200,900);io.DeltaTime=1f/60;unsafe{io.NativePtr->IniFilename=null;}io.Fonts.AddFontDefault();io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels,out int aw,out int ah,out int bpp);io.Fonts.SetTexID((IntPtr)1);var atlas=new byte[aw*ah*bpp];Marshal.Copy(pixels,atlas,0,atlas.Length);
+                // Restore the pre-archive session for the missing-date message.
+                File.WriteAllText(Path.Combine(config,"active.json"),files[Path.Combine(config,"active.json")]);Call("LoadActiveState");core.GetField("sessionCache",flags).SetValue((object)plugin,null);
+                foreach(int width in new[]{320,820})foreach(int period in new[]{1,5})for(int frame=0;frame<2;frame++)
+                {
+                    plugin.Settings.TrackingPeriod=period;io.AddMousePosEvent(-100,-100);ImGuiNET.ImGui.NewFrame();ImGuiNET.ImGui.SetNextWindowPos(new Vector2(10));ImGuiNET.ImGui.SetNextWindowSize(new Vector2(width,500));ImGuiNET.ImGui.Begin("Suivi du butin##legacy-fixture",ImGuiNET.ImGuiWindowFlags.NoSavedSettings);
+                    using(var theme=ExileCenter.Ui.ImGuiTheme.UsePluginTheme("LootTracker"))Call("DrawTrackerContents",500f,1f,true);
+                    Check(ImGuiNET.ImGui.GetScrollMaxX()==0,"Recovered Total and missing-date message fit the existing panel: "+width+"/"+period);ImGuiNET.ImGui.End();ImGuiNET.ImGui.Render();if(frame==1)SaveUiPreview(Path.Combine(previews,$"loot-legacy-{width}-{period}.png"),atlas,aw,ah);
+                }
+            }
+            finally{ImGuiNET.ImGui.DestroyContext(context);ImGuiNET.ImGui.SetCurrentContext(previous);ExileCenter.Core.GHSettings.UiLanguage=language;}
+        }
+        Console.WriteLine(checks+" cumulative loot-period checks passed; legacy history tested in isolation ("+(sourceConfig==null?"synthetic":"copied data")+").");
+    }
+
     private static void CheckOverlayRecovery()
     {
         const BindingFlags flags=BindingFlags.Instance|BindingFlags.Static|BindingFlags.NonPublic;
@@ -2140,6 +2215,8 @@ internal static class TabletRankingCheck
             if (args.Length > 1 && args[1] == "--loot-periods-only")
             {
                 CheckLootPeriods(root,args.Length>2?args[2]:null);
+                CheckLegacyLootPeriods(root,null,args.Length>2?args[2]:null);
+                if(args.Length>3)CheckLegacyLootPeriods(root,args[3],null);
                 return 0;
             }
             if (args.Length > 1 && args[1] == "--atlas-labels-only")

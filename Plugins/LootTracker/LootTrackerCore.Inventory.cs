@@ -632,6 +632,8 @@ namespace LootTracker
                         {
                             ImGui.BeginTooltip(); ImGui.PushTextWrapPos(ImGui.GetFontSize() * 32);
                             ImGui.TextUnformatted(this.L("lt.period.scope", "Retained history of the selected league only. Dated maps belong to their start date; undated maps require their whole session to fit. Archived Ex values use current conversion rates."));
+                            if (!string.IsNullOrEmpty(this.Settings.LegacyHistoryLeague))
+                                ImGui.TextUnformatted(this.LF("lt.period.legacy", "Legacy history is associated with {0}; missing map dates remain unknown.", this.Settings.LegacyHistoryLeague));
                             if (this.periodFirstKnownUtc.HasValue)
                                 ImGui.TextUnformatted(this.LF("lt.period.available", "Known dated history from {0}; earlier coverage is not guaranteed.", this.periodFirstKnownUtc.Value.ToLocalTime().ToString("d")));
                             ImGui.TextUnformatted(this.LF("lt.period.incomplete", "{0} maps excluded because their date or league is unknown. Deleted or trimmed data cannot be reconstructed.", this.periodExcludedMaps));
@@ -673,6 +675,13 @@ namespace LootTracker
                 ImGui.EndChild();
                 ImGui.PopStyleVar(3);
             }
+            if (period.Maps.Count == 0)
+            {
+                ImGui.TextWrapped(this.Settings.TrackingPeriod == 0 ? this.L("lt.no_maps", "No completed maps in this session yet.") :
+                    this.periodExcludedMaps > 0 ? this.L("lt.period.empty_undated", "Some older maps cannot be dated for this period. See Total and session history.") :
+                    this.L("lt.period.empty", "No recorded maps for this period."));
+                return;
+            }
             width = ImGui.GetContentRegionAvail().X;
 
             int units = 0;
@@ -704,13 +713,7 @@ namespace LootTracker
                 if (showLoot) ImGui.TableSetupColumn(this.L("lt.loot", "Loot"), ImGuiTableColumnFlags.WidthFixed, 64 * s);
                 ImGui.TableSetupScrollFreeze(0, 1);
                 ImGui.TableHeadersRow();
-                if (period.Maps.Count == 0)
-                {
-                    ImGui.TableNextRow();
-                    ImGui.TableNextColumn();
-                    ImGui.TextWrapped(this.Settings.TrackingPeriod == 0 ? this.L("lt.no_maps", "No completed maps in this session yet.") :
-                        this.L("lt.period.empty", "No recorded maps for this period."));
-                }
+
                 int row = 0;
                 foreach (var r in period.Maps)
                 {

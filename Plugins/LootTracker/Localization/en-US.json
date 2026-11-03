@@ -10,6 +10,8 @@
     "lt.period.scope": "Retained history of the selected league only. Dated maps belong to their start date; undated maps require their whole session to fit. Archived Ex values use current conversion rates.",
     "lt.period.available": "Known dated history from {0}; earlier coverage is not guaranteed.",
     "lt.period.incomplete": "{0} maps excluded because their date or league is unknown. Deleted or trimmed data cannot be reconstructed.",
+    "lt.period.legacy": "Legacy history is associated with {0}; missing map dates remain unknown.",
+    "lt.period.empty_undated": "Some older maps cannot be dated for this period. See Total and session history.",
     "lt.settings":  "Settings",
     "lt.disable_tracking":  "Disable tracking",
     "lt.enable_tracking":  "Reactivate tracking",

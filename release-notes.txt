@@ -1,14 +1,13 @@
-ExileCenter 1.21.0
+ExileCenter 1.21.1
 
-- Suivi du butin : ajout d'un sélecteur mémorisé proposant Session actuelle, Total, Trois derniers mois, Mois en cours, Semaine en cours et Aujourd'hui, dans la fenêtre existante et ses affichages indépendants.
-- La liste des cartes et les statistiques utilisent la même période : profits dans les sept devises existantes, profit horaire et moyen, nombre de cartes et temps moyen. Les sous-zones ne sont pas comptées deux fois. Les périodes vides restent à zéro.
-- Le Total cumule les sessions archivées et la session actuelle pour la ligue configurée. Nouvelle session continue d'archiver sans remettre le Total à zéro. Changer de période ne modifie ni les cartes ni les archives. La suppression explicite de tout l'historique, sans carte active, constitue une réinitialisation complète.
-- Dates locales, semaines commençant le lundi et trois mois calendaires glissants. Les cartes sont rattachées à leur date de début, sans répartir artificiellement leur butin à minuit. Les nouvelles données enregistrent cette date et la ligue dans le stockage existant.
-- Une indication d'historique limité précise les données disponibles et les cartes exclues. Les anciennes archives sans ligue fiable restent consultables dans l'historique, mais ne sont pas attribuées arbitrairement à la saison actuelle. Sans date de carte, seule une session entièrement comprise dans la période peut être incluse. Les limites de conservation existantes ne changent pas et les données déjà supprimées ne sont pas reconstituées.
-- Les valeurs en exaltées des archives restent celles enregistrées à leur clôture ; les conversions utilisent les taux actuels, comme les statistiques existantes. Aucune requête réseau n'est ajoutée pour sélectionner une période.
-- Réglages personnels et suivi en jeu conservés. GameOffsets.dll conservée à l'identique, sans recompilation.
+- Suivi du butin : correction du Total vide après la mise à jour lorsque les cartes restaurées et les archives anciennes ne contenaient pas de ligue.
+- Au premier lancement de cette correction, l'ancien historique sans ligue est rattaché à la ligue déjà configurée. Ce rattachement est mémorisé séparément et reste associé à cette ligue après un changement de saison. Une ligue explicitement enregistrée dans une carte ou une session reste prioritaire.
+- Le Total retrouve les cartes de la session restaurée et des sessions archivées sans réécrire les fichiers de cartes ni inventer leur date. Nouvelle session continue de cumuler les archives, sans réinitialiser le Total.
+- Pour les périodes courtes, une ancienne session non datée par carte n'est incluse que si elle entre entièrement dans la période. Une session traversant une limite reste exclue, avec un message explicite. Les sessions entièrement antérieures ne sont plus présentées comme des cartes impossibles à dater dans la période.
+- Le rattachement de l'ancien historique est indiqué dans l'infobulle Historique limité. Les dates manquantes et les données déjà supprimées ne peuvent pas être reconstituées.
+- Aucun changement aux positions des fenêtres, barres ou icônes. Aucune nouvelle requête réseau ni interaction avec PoE. GameOffsets.dll conservée à l'identique, sans recompilation.
 
-Validation : compilation et fixtures isolées pour les six périodes, les bornes locales, le lundi, les changements d'heure, les réinitialisations, les doublons, les anciennes archives, les devises, les valeurs nulles et la persistance. Aperçus ImGui vérifiés en largeurs compacte et normale. Aucune entrée système ni interaction avec le jeu pendant les tests ; validation réelle en jeu non effectuée.
+Validation : compilation et contrôles isolés des six périodes, du rattachement des anciennes données, de sa persistance après changement de ligue, des réinitialisations, de la conservation des archives et du suivi en cours. Reproduction du cas de 50 cartes restaurées et de 250 cartes archivées ; contrôle sur une copie locale de l'historique concerné. Aperçus ImGui en tailles compacte et normale. Aucun arrêt d'application ni entrée système pendant les tests ; validation réelle en jeu non effectuée.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

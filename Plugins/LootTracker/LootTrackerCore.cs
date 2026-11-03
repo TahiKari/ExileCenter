@@ -273,6 +273,7 @@ namespace LootTracker
             }
 
             this.sessionStartUtc = DateTime.UtcNow;
+            string legacyHistoryLeague = this.Settings.League;
             this.LoadMetaArtMap();
             this.mapPortalGeneration = Core.States.InGameStateObject.CurrentAreaInstance.MapPortalGeneration;
             this.LoadIcons();
@@ -291,6 +292,7 @@ namespace LootTracker
                 this.PriceCachePathname, this.Settings.CacheTtlMinutes, this.Settings.League);
             if (!fresh)
                 this.priceCache.StartRefresh(this.Settings.League, this.PriceCachePathname);
+            this.BindLegacyTrackingHistory(legacyHistoryLeague);
         }
 
         public override void OnDisable()

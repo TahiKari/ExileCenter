@@ -95,6 +95,8 @@ namespace LootTracker
         public int ProfitCurrencies = 1;
         public bool ShowProfitSummary = true;
         public int TrackingPeriod = 0;
+        // Keep the confirmed legacy-history association when the configured league changes.
+        public string LegacyHistoryLeague = string.Empty;
         // Accounting boundary, independent of the display period and session clock.
         public DateTime TrackingResetUtc = DateTime.MinValue;
     }

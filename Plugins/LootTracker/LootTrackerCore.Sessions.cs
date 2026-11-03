@@ -610,6 +610,16 @@ namespace LootTracker
             return resetUtc != default && TrackingUtc(resetUtc) > start ? TrackingUtc(resetUtc) : start;
         }
 
+        // Legacy records did not store a league. Bind them once to the configured league;
+        // preserve that association through later league changes without rewriting history.
+        private void BindLegacyTrackingHistory(string league)
+        {
+            if (!string.IsNullOrWhiteSpace(this.Settings.LegacyHistoryLeague) || string.IsNullOrWhiteSpace(league)) return;
+            this.Settings.LegacyHistoryLeague = league;
+            try { this.SaveSettings(); }
+            catch { /* Normal settings saves can retry; historical data remains untouched. */ }
+        }
+
         private SessionRecord BuildTrackingView(DateTime nowUtc, TimeZoneInfo zone)
         {
             int period = Math.Clamp(this.Settings.TrackingPeriod, 0, TrackingPeriods.Length - 1);
@@ -634,6 +644,7 @@ namespace LootTracker
                     var root = map.ParentHash.Length == 0 ? map : session.Maps.FirstOrDefault(m => m != null &&
                         m.ParentHash.Length == 0 && m.Hash.Length > 0 && m.Hash == map.ParentHash) ?? map;
                     string league = !string.IsNullOrEmpty(root.League) ? root.League : session.League;
+                    if (string.IsNullOrEmpty(league)) league = this.Settings.LegacyHistoryLeague;
                     if (string.IsNullOrEmpty(league)) { if (map.ParentHash.Length == 0) this.periodExcludedMaps++; continue; }
                     if (!string.Equals(league, this.Settings.League, StringComparison.OrdinalIgnoreCase)) continue;
                     DateTime? date = root.StartedUtc == default ? null : TrackingUtc(root.StartedUtc);
@@ -641,9 +652,14 @@ namespace LootTracker
                         (!this.periodFirstKnownUtc.HasValue || date.Value < this.periodFirstKnownUtc.Value))
                         this.periodFirstKnownUtc = date;
                     // Undated legacy maps may only be included if their ENTIRE known session fits.
-                    if (!date.HasValue && (session.StartUtc == default || session.EndUtc == default ||
-                        TrackingUtc(session.StartUtc) < start || TrackingUtc(session.EndUtc) > nowUtc))
-                    { if (map.ParentHash.Length == 0) this.periodExcludedMaps++; continue; }
+                    if (!date.HasValue)
+                    {
+                        if (session.EndUtc != default && TrackingUtc(session.EndUtc) < start ||
+                            session.StartUtc != default && TrackingUtc(session.StartUtc) > nowUtc) continue;
+                        if (session.StartUtc == default || session.EndUtc == default || session.StartUtc > session.EndUtc ||
+                            TrackingUtc(session.StartUtc) < start || TrackingUtc(session.EndUtc) > nowUtc)
+                        { if (map.ParentHash.Length == 0) this.periodExcludedMaps++; continue; }
+                    }
                     if (date.HasValue && (date.Value < start || date.Value > nowUtc)) continue;
                     if (!double.IsFinite(map.ProfitEx) || !double.IsFinite(map.ActiveSeconds) || map.ActiveSeconds < 0)
                     { view.HistoryIncomplete = true; continue; }
