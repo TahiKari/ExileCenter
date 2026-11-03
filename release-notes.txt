@@ -1,15 +1,13 @@
 ﻿
-ExileCenter 1.20.1
+ExileCenter 1.20.2
 
-- Premier scan du craft : la grille est liée une fois à son inventaire natif, puis l'ensemble des adresses et positions est relu et comparé après chaque copie. Le parcours complet de tous les widgets et inventaires n'est plus répété pour trouver chaque position. Ctrl reste maintenu entre les copies de ce premier passage et est relâché à la fin ou à l'arrêt ; les scans suivants conservent leur gestion précédente.
-- Les routes des emplacements déjà trouvés sont réutilisées uniquement après vérification du pointeur d'objet affiché, de sa visibilité, de son identité et de la page cible. Une route devenue invalide repasse par la recherche complète. Les descendants décoratifs d'un emplacement d'objet validé ne sont plus parcourus en Mode rapide.
-- Le Mode rapide enchaîne jusqu'à quatre changements d'étape par image lorsqu'aucune attente n'est nécessaire, avec un budget de 8 ms entre les étapes. Il rend la main dès qu'une étape reste en attente, qu'un délai d'entrée n'est pas écoulé ou que le craft s'arrête. La fin d'un clic de sélection de monnaie ne consomme plus une image vide lorsqu'aucune touche n'est à relâcher.
-- Rangement des résultats T14/T16 : dans leurs destinations respectives, remplissage de la colonne de gauche de haut en bas, puis de chaque colonne suivante vers la droite. Les trous plus à gauche sont prioritaires ; aucun objet déjà rangé n'est déplacé.
-- Les confirmations des monnaies et du résultat Vaal, les contrôles de destination, les limites de dépenses et l'arrêt au mouvement de souris restent obligatoires. Les délais manuels, les préférences et les positions de la barre du coffre sont conservés.
-- Aucun ajout d'injection, de hook ou d'écriture dans le processus de PoE. Les règles de GGG continuent de s'appliquer à l'automatisation ; l'absence d'injection ne vaut pas autorisation de GGG.
+- Reprise de l'overlay : ajout d'une remise en état de sa propre fenêtre Windows au retour d'au moins une minute d'inactivité, au retour au jeu ou après une interruption prolongée du rendu. Elle cible le cas où deux appuis sur F11 rétablissaient l'affichage après une pause.
+- La remise en état réactive la présentation transparente et réaffirme l'affichage au premier plan de l'overlay uniquement lorsque le jeu est la fenêtre active. Elle n'ouvre pas le menu, n'active pas de fenêtre et ne déplace ni ne redimensionne les fenêtres, barres ou icônes.
+- Contrôle léger limité à une fois par seconde, reprise différée en arrière-plan ou pendant l'inactivité, et absence de réouverture forcée d'une fenêtre volontairement masquée ou réduite. Les styles d'entrée et de transparence sont conservés ; la restauration du style d'origine est tentée même si une opération échoue.
+- Les préférences, positions personnalisées, raccourcis et modes d'affichage indépendants sont conservés. Aucun envoi de touche ou de clic, aucune injection ni modification de PoE n'est ajouté.
 - GameOffsets.dll conservée à l'identique, sans recompilation.
 
-Validation : compilation du cœur et de StashUtility ; 11 938 contrôles de craft hors jeu incluant les 96 positions successives de rangement par colonnes, les routes périmées, la grille native liée, les copies avec Ctrl maintenu et relâché, les confirmations de monnaies, la navigation T14/T16 et la conservation de la barre verrouillée. Entrées interceptées : aucun fichier du jeu réel modifié et aucune entrée système envoyée pendant les tests. Le rythme réel après correction reste à mesurer en partie ; les confirmations réseau restent nécessaires et aucun multiplicateur de vitesse n'est garanti.
+Validation : compilation du cœur ; contrôles de reprise sur activité synthétique, retour de focus, suspension, compteur Windows, limitation de fréquence et échecs natifs interceptés. Contrôles de conservation de la barre du coffre et d'affichage existant. Les tests ne créent pas de fenêtre et ne modifient ni le focus ni les entrées système. La disparition après AFK et la correction restent à confirmer après une véritable pause prolongée en jeu ; la réponse à F11 indique une piste de présentation Windows, sans démontrer la cause exacte.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

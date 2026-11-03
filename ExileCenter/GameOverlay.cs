@@ -31,6 +31,8 @@ namespace ExileCenter
     {
         private SettingsDisplay? settingsDisplay;
         private volatile bool closeRequested;
+        private long overlayNextCheck, overlayLastCheck;
+        private bool overlayWasIdle, overlayWasForeground, overlayRecoveryPending;
         internal string? SettingsDisplayError { get; private set; }
         internal void ResetSettingsDisplay() => this.settingsDisplay?.ResetPosition();
         internal void MinimizeSettingsDisplay() => this.settingsDisplay?.RequestWindowState(6);
@@ -115,6 +117,7 @@ namespace ExileCenter
             LocalUpdates.Render();
 
             this.RenderSettingsDisplay();
+            this.MaintainOverlayVisibility();
 
             if (this.closeRequested || !Core.GHSettings.IsOverlayRunning)
             {
@@ -123,6 +126,78 @@ namespace ExileCenter
                 base.Close();
             }
         }
+
+        // Repair only our own native presentation, never game input or ImGui layout.
+        private void MaintainOverlayVisibility()
+        {
+            long now = Environment.TickCount64;
+            if (now < this.overlayNextCheck || this.closeRequested) return;
+            try
+            {
+                var input = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
+                bool idle = GetLastInputInfo(ref input) && OverlayInputIsIdle((uint)Environment.TickCount64, input.Time);
+                var game = Core.Process.Information?.MainWindowHandle ?? IntPtr.Zero;
+                bool foreground = game != IntPtr.Zero && GetForegroundWindow() == game;
+                if (!this.ObserveOverlayActivity(now, foreground, idle)) return;
+                var handle = this.window.Handle;
+                if (!IsWindowVisible(handle) || IsIconic(handle)) { this.overlayRecoveryPending = true; return; }
+                long style = GetWindowLongPtr(handle, -20).ToInt64(); // GWL_EXSTYLE
+                if (!RefreshOverlayPresentation(style, value => SetOverlayStyle(handle, value),
+                    () => SetWindowPos(handle, new IntPtr(-1), 0, 0, 0, 0, 0x233))) // TOPMOST; no move, resize, activation or owner change.
+                    this.overlayRecoveryPending = true;
+            }
+            catch (Exception ex)
+            {
+                this.overlayNextCheck = now + 1000;
+                this.overlayRecoveryPending = true;
+                Console.WriteLine($"[GameOverlay.Recovery] {ex.Message}");
+            }
+        }
+
+        private bool ObserveOverlayActivity(long now, bool foreground, bool idle)
+        {
+            if (now < this.overlayNextCheck) return false;
+            if (this.overlayNextCheck != 0 && (this.overlayWasIdle && !idle ||
+                !this.overlayWasForeground && foreground || now - this.overlayLastCheck >= 5000))
+                this.overlayRecoveryPending = true;
+            this.overlayLastCheck = now;
+            this.overlayNextCheck = now + 1000;
+            this.overlayWasIdle = idle;
+            this.overlayWasForeground = foreground;
+            if (!this.overlayRecoveryPending || !foreground || idle) return false;
+            this.overlayRecoveryPending = false;
+            return true;
+        }
+
+        private static bool OverlayInputIsIdle(uint now, uint lastInput) => unchecked((int)(now - lastInput)) >= 60000;
+
+        private static bool RefreshOverlayPresentation(long style, Func<long, bool> applyStyle, Func<bool> restack)
+        {
+            const long layered = 0x80000;
+            if ((style & layered) != 0)
+            {
+                bool cleared, restored;
+                try { cleared = applyStyle(style & ~layered); }
+                finally { restored = applyStyle(style); } // Preserve click-through and all other styles, including on failure.
+                if (!cleared || !restored) return false;
+            }
+            return restack();
+        }
+
+        private static bool SetOverlayStyle(IntPtr handle, long style)
+        {
+            Marshal.SetLastPInvokeError(0);
+            return SetWindowLongPtr(handle, -20, new IntPtr(style)) != IntPtr.Zero || Marshal.GetLastPInvokeError() == 0;
+        }
+
+        [StructLayout(LayoutKind.Sequential)] private struct LastInputInfo { public uint Size, Time; }
+        [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LastInputInfo info);
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr handle);
+        [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr handle);
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)] private static extern IntPtr GetWindowLongPtr(IntPtr handle, int index);
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)] private static extern IntPtr SetWindowLongPtr(IntPtr handle, int index, IntPtr value);
+        [DllImport("user32.dll", SetLastError = true)] private static extern bool SetWindowPos(IntPtr handle, IntPtr after, int x, int y, int width, int height, uint flags);
 
         private void RenderSettingsDisplay()
         {

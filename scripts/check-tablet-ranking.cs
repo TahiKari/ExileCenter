@@ -18,6 +18,54 @@ using Newtonsoft.Json;
 
 internal static class TabletRankingCheck
 {
+    private static void CheckOverlayRecovery()
+    {
+        const BindingFlags flags=BindingFlags.Instance|BindingFlags.Static|BindingFlags.NonPublic;
+        object NewOverlay()=>System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(ExileCenter.GameOverlay));
+        var observe=typeof(ExileCenter.GameOverlay).GetMethod("ObserveOverlayActivity",flags);
+        var idleCheck=typeof(ExileCenter.GameOverlay).GetMethod("OverlayInputIsIdle",flags);
+        bool Idle(uint now,uint last)=>(bool)idleCheck.Invoke(null,new object[]{now,last});
+        Check(!Idle(59999,0)&&Idle(60000,0),"Native inactivity reaches its threshold at sixty seconds");
+        Check(!Idle(1000,1001),"A future last-input timestamp cannot trigger a spurious idle recovery");
+        Check(Idle(60000,uint.MaxValue-1000)&&!Idle(1000,uint.MaxValue-1000),"The Windows 32-bit tick rollover preserves idle detection");
+        bool Observe(object overlay,long time,bool foreground,bool idle)=>(bool)observe.Invoke(overlay,new object[]{time,foreground,idle});
+        var overlay=NewOverlay();
+        Check(!Observe(overlay,1000,true,false),"Normal startup does not reset the native overlay surface");
+        for(long time=2000;time<=62000;time+=1000)Check(!Observe(overlay,time,true,true),"Remaining AFK does not repeatedly refresh the surface: "+time);
+        Check(Observe(overlay,63000,true,false),"Returning from AFK in the same foreground game requests one native refresh");
+        Check(!Observe(overlay,63001,true,false)&&!Observe(overlay,64000,true,false),"Ordinary activity and repeated frames do not repeat the recovery");
+        Check(!Observe(overlay,65000,false,false)&&Observe(overlay,66000,true,false),"Returning from another screen or application recovers without a menu toggle");
+        Check(!Observe(overlay,67000,false,true)&&!Observe(overlay,68000,false,false),"An idle return on another application defers recovery");
+        Check(Observe(overlay,69000,true,false),"Deferred recovery runs when the user returns to the game");
+        Check(Observe(overlay,80000,true,false),"A suspended render loop requests recovery after its long frame gap");
+        Check(!Observe(overlay,81000,true,false),"One successful resume does not start a permanent recovery loop");
+        typeof(ExileCenter.GameOverlay).GetField("overlayRecoveryPending",flags).SetValue(overlay,true);
+        Check(!Observe(overlay,81001,true,false)&&Observe(overlay,82000,true,false),"A failed native recovery is retried at the next bounded check rather than every frame");
+        var waiting=NewOverlay();Observe(waiting,1000,true,true);
+        Check(!Observe(waiting,11000,false,true)&&!Observe(waiting,12000,true,true),"A wake-up while still idle waits for actual activity");
+        Check(Observe(waiting,13000,true,false),"Activity completes the deferred wake-up recovery");
+        var refresh=typeof(ExileCenter.GameOverlay).GetMethod("RefreshOverlayPresentation",flags);
+        var styles=new List<long>();int restacks=0;
+        bool Refresh(long style,Func<long,bool> setter=null,Func<bool> restack=null)=>(bool)refresh.Invoke(null,new object[]{style,
+            setter??(Func<long,bool>)(value=>{styles.Add(value);return true;}),restack??(Func<bool>)(()=>{restacks++;return true;})});
+        const long transparentStyle=0x80038;
+        Check(Refresh(transparentStyle)&&styles.SequenceEqual(new long[]{0x38,transparentStyle})&&restacks==1,
+            "Native recovery cycles only the layered bit, preserves click-through styles and reasserts stacking once");
+        styles.Clear();restacks=0;
+        Check(Refresh(0x18)&&styles.Count==0&&restacks==1,"A currently interactive overlay keeps its input styles intact");
+        styles.Clear();restacks=0;
+        Check(!Refresh(transparentStyle,value=>{styles.Add(value);return value==transparentStyle;})&&styles.Last()==transparentStyle&&restacks==0,
+            "A failed style clear still restores the original style and does not report successful recovery");
+        styles.Clear();bool threw=false;
+        try{Refresh(transparentStyle,value=>{styles.Add(value);if(value!=transparentStyle)throw new InvalidOperationException("simulated native failure");return true;});}
+        catch(TargetInvocationException error)when(error.InnerException is InvalidOperationException){threw=true;}
+        Check(threw&&styles.Last()==transparentStyle,"A native callback exception cannot skip restoration of click-through styles");
+        styles.Clear();restacks=0;
+        Check(!Refresh(transparentStyle,value=>{styles.Add(value);return value!=transparentStyle;})&&restacks==0,"A failed original-style restore is never counted as successful");
+        Check(!Refresh(transparentStyle,null,()=>false),"A failed native restack remains a failed recovery");
+        Console.WriteLine(checks+" overlay recovery checks passed; synthetic activity and intercepted native calls, no windows, focus or OS input changed.");
+    }
+
     private static int checks;
     private static SixLabors.ImageSharp.PixelFormats.Rgba32[] framePreviewPixels;
     private static int framePreviewWidth, framePreviewHeight;
@@ -1957,6 +2005,11 @@ internal static class TabletRankingCheck
             if (args.Length > 1 && args[1] == "--toolbar-only")
             {
                 CheckStashToolbarPosition(root);
+                return 0;
+            }
+            if (args.Length > 1 && args[1] == "--overlay-recovery-only")
+            {
+                CheckOverlayRecovery();
                 return 0;
             }
             if (args.Length > 1 && args[1] == "--atlas-labels-only")
