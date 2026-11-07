@@ -11,6 +11,7 @@ namespace ExileCenter.RemoteObjects.States.InGameStateObjects
     using System.Linq;
     using System.Numerics;
     using System.Reflection;
+    using System.Runtime.InteropServices;
     using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
@@ -30,6 +31,19 @@ namespace ExileCenter.RemoteObjects.States.InGameStateObjects
     /// </summary>
     public class AreaInstance : RemoteObjectBase
     {
+        // PoE2 0.5.5f: the area header grew by 8 bytes, then the player section
+        // grew by another 0x20 bytes. Keep the validated GameOffsets.dll unchanged.
+        [StructLayout(LayoutKind.Explicit, Pack = 1)]
+        private struct CurrentAreaInstanceOffsets
+        {
+            [FieldOffset(0x0C4)] public byte CurrentAreaLevel;
+            [FieldOffset(0x11C)] public uint CurrentAreaHash;
+            [FieldOffset(0x4C8)] public StdVector Environments;
+            [FieldOffset(0x5B8)] public LocalPlayerStruct PlayerInfo;
+            [FieldOffset(0x718)] public EntityListStruct Entities;
+            [FieldOffset(0x8F8)] public TerrainStruct TerrainMetadata;
+        }
+
         // Large composite areas such as the Trial of the Sekhemas foyer legitimately exceed the
         // old 50-million-cell ceiling (222 x 493 tiles requires 57,896,934 cells).
         // The exact TileDetails vector-shape check below remains the
@@ -262,7 +276,7 @@ namespace ExileCenter.RemoteObjects.States.InGameStateObjects
         protected override void UpdateData(bool hasAddressChanged)
         {
             var reader = Core.Process.Handle;
-            var data = reader.ReadMemory<AreaInstanceOffsets>(this.Address);
+            var data = reader.ReadMemory<CurrentAreaInstanceOffsets>(this.Address);
 
             if (hasAddressChanged)
             {

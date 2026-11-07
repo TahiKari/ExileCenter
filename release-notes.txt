@@ -1,11 +1,11 @@
-ExileCenter 1.22.1
+ExileCenter 1.22.2
 
-- Tablettes / Recherche coffre : remplacement de la liste déroulante des types de tablettes par les mêmes boutons à icônes que dans Filtres et rangs, avec les mêmes libellés, couleurs de sélection et ordre.
-- La grille passe sur plusieurs lignes lorsque la fenêtre est étroite. Le composant existant est partagé entre les deux onglets ; les sélections restent indépendantes.
-- Le type déjà sélectionné, les modificateurs cochés pour chaque tablette, la langue, les recherches ET/OU et la copie de recherche sont conservés. Aucun changement aux règles de rang ou de surlignage, ni aux positions des fenêtres et barres.
-- Aucun ajout de requête réseau ni de commande au jeu. GameOffsets.dll conservée à l'identique, sans recompilation.
+- Compatibilité PoE2 0.5.5f : correction de la lecture commune des données de zone, dont la structure a changé après la mise à jour du jeu.
+- Rétablissement des adresses du joueur et des entités ainsi que des données de terrain utilisées par Radar, les repères d'Expédition et les plugins qui suivent le personnage, dont AutoPot.
+- Aucune injection de code ou de DLL, aucun hook ni écriture dans la mémoire du jeu. GameOffsets.dll conservée à l'identique, sans recompilation. Cette méthode ne constitue pas une approbation par GGG.
+- Réglages personnels, positions et ancrages des fenêtres, barres et icônes conservés.
 
-Validation : compilation et fixtures isolées de la recherche coffre, des huit types de tablette, des recherches ET/OU, de la copie dans un presse-papiers simulé et de la conservation des réglages. Aperçus ImGui en français et anglais, fenêtres large et étroite. Aucun arrêt d'application ni entrée système pendant les tests ; validation réelle en jeu non effectuée.
+Validation : compilation du cœur avec le binaire GameOffsets validé ; 60 contrôles isolés en lecture seule sur PoE2 0.5.5f. L'ancien agencement reproduit le rejet du terrain ; le nouvel agencement fournit une grille valide, le joueur dans l'arbre d'entités et son composant de vie avec des ressources cohérentes. Les contrôles de rejet des terrains invalides restent actifs. Aucun arrêt d'application ni entrée système pendant les tests. Affichage final des plugins, repères d'Expédition et déclenchement des flacons à confirmer en utilisation réelle après installation.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.
