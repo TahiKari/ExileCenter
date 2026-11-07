@@ -120,7 +120,7 @@ namespace ExileCenter.RemoteObjects.States.InGameStateObjects
         /// <summary>
         ///     Gets the number of badge UiElements under Atlas node child path [0][0].
         /// </summary>
-        public int BadgeCount => this.BadgeAddresses.Count;
+        public int BadgeCount => this.BadgeAddresses.Count > 0 ? this.BadgeAddresses.Count : this.BadgeContentIds.Count;
 
         /// <summary>
         ///     Gets the raw per-node content tokens (class-1 content: the StdVector&lt;u32&gt; living

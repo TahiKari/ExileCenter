@@ -294,6 +294,7 @@ namespace Atlas
         private int cacheFrameCounter = int.MaxValue;   // force refresh on first frame
         private int cachedAtlasCount = -1;
         private const int CacheRefreshFrames = 20;       // rebuild static data ~3×/sec at 60fps
+        private Dictionary<StdTuple2D<int>, List<StdTuple2D<int>>> cachedConnectionGraph;
         private readonly AtlasZoomController atlasZoom = new();
         private bool atlasZoomExitSubscribed;
 
@@ -1281,7 +1282,7 @@ namespace Atlas
                         if (nd.State == AtlasNodeState.AccessibleNow)
                             accessibleSet.Add(nd.GridPosition);
                     }
-                    routeGraph = BuildConnectionGraph(atlasPanelAddr);
+                    routeGraph = cachedConnectionGraph ??= BuildConnectionGraph(atlasPanelAddr);
 
                     // Routes start from the accessible frontier (nodes you can run now), NOT from the
                     // player: one multi-source BFS from all accessible nodes gives, for every target,
@@ -1338,7 +1339,7 @@ namespace Atlas
                 // routing edge-graph + centers when a route is also being computed this frame.
                 if (Settings.ShowAtlasGraph && !ritualShowAll)
                 {
-                    var gGraph = routeGraph ?? BuildConnectionGraph(atlasPanelAddr);
+                    var gGraph = routeGraph ?? (cachedConnectionGraph ??= BuildConnectionGraph(atlasPanelAddr));
                     var gCenters = routeCenters;
                     if (gCenters == null)
                     {
@@ -1385,7 +1386,7 @@ namespace Atlas
 
                 if (Settings.ShowUnchartedLeylines && shipCache.Count > 0 && !ritualShowAll)
                     DrawUnchartedLeylines(drawList, in panelRect, uiScale, mousePos,
-                        routeGraph ?? BuildConnectionGraph(atlasPanelAddr));
+                        routeGraph ?? (cachedConnectionGraph ??= BuildConnectionGraph(atlasPanelAddr)));
 
                 var pendingRoutes = new List<(List<StdTuple2D<int>> path, uint color, float thickness)>();
                 // Off-screen Target-farming targets collected during the node pass, drawn as edge
@@ -1821,6 +1822,7 @@ namespace Atlas
 
         private void RefreshNodeCache(UiElement atlasUi, int atlasCount)
         {
+            cachedConnectionGraph = null;
             if (this.TryRefreshNodeCacheFromCore(atlasCount))
                 this.AppendMistNodesMissedByCore(atlasUi, atlasCount);
             else
@@ -2120,9 +2122,14 @@ namespace Atlas
             if (!TryVectorCount<AtlasConnectionEdge>(vec, out int count, maxCount: 40000))
                 return graph;
 
-            for (int i = 0; i < count; i++)
+            var edges = new AtlasConnectionEdge[count];
+            if (!ProcessMemoryUtilities.Managed.NativeWrapper.ReadProcessMemoryArray(
+                    Handle, vec.First, edges, out var bytesRead) ||
+                bytesRead.ToInt64() < (long)count * Marshal.SizeOf<AtlasConnectionEdge>())
+                return graph;
+
+            foreach (var e in edges)
             {
-                var e = ReadVectorAt<AtlasConnectionEdge>(vec, i);
                 if (e.Source.Equals(e.Target))
                     continue;
                 AddEdge(graph, e.Source, e.Target);
@@ -5227,10 +5234,11 @@ namespace Atlas
         // only the count is surfaced here. See docs/re-findings.md §2.7.
         public static int GetContentCount(UiElement nodeUi)
         {
+            var address = nodeUi.UiElementBase.Self;
             nodeUi = nodeUi.GetChild(0);   // node[0]
             nodeUi = nodeUi.GetChild(0);   // node[0][0] = content container
             var len = nodeUi.Length;
-            return len > 0 ? len : 0;
+            return len > 0 ? len : GetRawBadgeContentIds(address).Length;
         }
 
         // Per-node content token → content name. A token is a u32 = (weight<<6)<<16 | LOW16-id, where
@@ -5351,8 +5359,8 @@ namespace Atlas
         // UiElement at element+0x350 (begin) / +0x358 (end). Stable per content type (two
         // PowerfulMapBoss nodes give the identical vector). NOTE: populated only for VISIBLE
         // (rendered) nodes — culled/hidden nodes carry no tokens. See docs/re-findings.md §2.10.
-        private const int ContentVecBeginOffset = 0x350;
-        private const int ContentVecEndOffset = 0x358;
+        private const int ContentVecBeginOffset = 0x360;
+        private const int ContentVecEndOffset = 0x368;
         private const int MaxContentTokens = 32;   // sanity cap (content lists are tiny)
         public static uint[] GetContentTokens(IntPtr nodeAddr)
         {
@@ -5483,8 +5491,8 @@ namespace Atlas
         // Powerful Map Boss. Note: token-vector content (+0x350: Breach/Ritual/Vaal Beacons/…) is NOT
         // here and is genuinely not sent for fog cells. See obsidian poe2/Atlas.md "Two content stores"
         // + Ghidra AtlasMapNodeWidget_ctor 140b143b0 / AtlasNode_badgeVec_insert 140b345a0.
-        private const int BadgeVecBeginOffset = 0x368;
-        private const int BadgeVecEndOffset = 0x370;
+        private const int BadgeVecBeginOffset = 0x378;
+        private const int BadgeVecEndOffset = 0x380;
         private const int BadgeRowToContentId = 100;   // EndgameMapContent row → mapcontent.json id
         public static uint[] GetRawBadgeContentIds(IntPtr nodeAddr)
         {
