@@ -1560,9 +1560,9 @@ namespace Atlas
                             }
                         }
 
-                        // Straight-line fallback only when node-routing isn't active (toggle off /
-                        // no accessible nodes) — never the player-anchored fan when routing is on.
-                        if (!drewRoute && !routeReady)
+                        // Straight lines are an explicit mode. Missing accessible nodes or graph
+                        // data must not substitute a player-anchored fan for requested node routes.
+                        if (!drewRoute && !Settings.RouteLinesThroughNodes)
                         {
                             var intersectionPoint = GetLineRectangleIntersection(playerLocation, rectCenter, bgPos, bgPos + bgSize);
 
@@ -2116,7 +2116,8 @@ namespace Atlas
                 return graph;
 
             var vec = Read<StdVector>(atlasPanelAddr + AtlasConnectionsVectorOffset);
-            if (!TryVectorCount<AtlasConnectionEdge>(vec, out int count))
+            // A large atlas can have more connections than the 10,000-node limit.
+            if (!TryVectorCount<AtlasConnectionEdge>(vec, out int count, maxCount: 40000))
                 return graph;
 
             for (int i = 0; i < count; i++)
@@ -3563,7 +3564,7 @@ namespace Atlas
             return result;
         }
 
-        private static bool TryVectorCount<T>(in StdVector vector, out int count)
+        private static bool TryVectorCount<T>(in StdVector vector, out int count, int maxCount = 10000)
             where T : unmanaged
         {
             count = 0;
@@ -3579,7 +3580,7 @@ namespace Atlas
                 return false;
 
             long c = bytes / stride;
-            if (c <= 0 || c > 10000)
+            if (c <= 0 || c > maxCount)
                 return false;
 
             count = (int)c;

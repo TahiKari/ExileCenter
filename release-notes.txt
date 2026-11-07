@@ -1,12 +1,14 @@
-ExileCenter 1.22.4
+ExileCenter 1.22.5
 
 - Atlas / PoE2 0.5.5f : correction de trois lectures devenues incorrectes après la mise à jour du jeu : coordonnées de grille, état accessible/terminé et biome des cartes.
 - L'ancien agencement plaçait les cartes en (0,0) et les classait toutes comme inaccessibles. Les itinéraires ne correspondaient plus au graphe et le tracé de secours produisait un éventail de lignes depuis le joueur.
 - Les positions et états corrigés rétablissent la correspondance avec les connexions de l'Atlas et les départs d'itinéraire depuis les cartes accessibles. Aucun changement de l'algorithme de parcours, des filtres, des cibles, des couleurs ou des épaisseurs choisis par l'utilisateur.
+- En mode itinéraires par les cartes, l'absence de départ accessible ou de connexion ne déclenche plus un éventail de traits depuis le joueur. Le mode de lignes directes reste disponible lorsqu'il est explicitement sélectionné.
+- Grands Atlas : le nombre de connexions peut dépasser le nombre de cartes sans provoquer le rejet du graphe. La lecture garde une limite bornée ; les limites des autres listes ne sont pas augmentées.
 - Les corrections 1.22.2 et 1.22.3 du terrain, du joueur et de l'identité de zone pour LootTracker sont conservées. GameOffsets.dll reste identique, sans recompilation. Cette correction repose sur des lectures ; elle n'ajoute aucune injection, aucun hook ni écriture dans le jeu et ne constitue pas une approbation par GGG.
 - Réglages personnels, positions et ancrages des fenêtres, barres et icônes conservés.
 
-Validation : compilation du cœur et du plugin Atlas sans reconstruire GameOffsets. Fixture isolée en lecture seule, Atlas ouvert : 567 coordonnées distinctes correspondant aux 567 nœuds du graphe, 69 cartes accessibles, 83 terminées et biomes dans les limites du catalogue. L'algorithme réel du plugin reconstruit 567 itinéraires ; leurs 2 063 segments suivent tous les connexions existantes, avec au plus 13 sauts. Aucun arrêt d'application, mouvement de souris ni entrée dans le jeu pendant les contrôles. Rendu final de la superposition à confirmer après installation ; la vérification des données ne remplace pas cette validation visuelle.
+Validation : compilation du cœur et du plugin Atlas sans reconstruire GameOffsets. Fixtures isolées, lectures du jeu uniquement : coordonnées, états, biomes et connexions contrôlés sur l'Atlas ouvert, puis sur une vue étendue de 5 407 cartes. L'algorithme réel reconstruit 1 696 itinéraires dont les 50 022 segments suivent des connexions du graphe ; les cartes sans connexion sont distinguées des erreurs de coordonnées. Un graphe synthétique de 10 001 connexions sur 5 001 cartes est accepté et un vecteur de 40 001 connexions est rejeté ; cette mémoire synthétique appartient uniquement au processus de test. Aucun arrêt d'application, mouvement de souris ni entrée dans le jeu pendant les contrôles. Rendu final de la superposition à confirmer après installation ; la vérification des données ne remplace pas cette validation visuelle.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.
