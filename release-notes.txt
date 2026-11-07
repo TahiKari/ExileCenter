@@ -1,11 +1,12 @@
-ExileCenter 1.22.2
+ExileCenter 1.22.3
 
-- Compatibilité PoE2 0.5.5f : correction de la lecture commune des données de zone, dont la structure a changé après la mise à jour du jeu.
-- Rétablissement des adresses du joueur et des entités ainsi que des données de terrain utilisées par Radar, les repères d'Expédition et les plugins qui suivent le personnage, dont AutoPot.
+- LootTracker / PoE2 0.5.5f : correction d'un second décalage dans la lecture de l'identité de zone. Le nom de zone vide empêchait le suivi de reconnaître les nouvelles cartes et d'initialiser leur inventaire de référence.
+- La lecture corrigée restitue l'identifiant et le nom de la carte, y compris les journaux d'Expédition. LootTracker peut à nouveau créer la carte et démarrer son chronomètre et le suivi de l'inventaire.
+- La correction 1.22.2 des adresses du joueur, des entités et du terrain est conservée. Aucun changement aux calculs de gains, aux prix, au tri de l'historique ni aux règles de pause en ville ou au repaire.
 - Aucune injection de code ou de DLL, aucun hook ni écriture dans la mémoire du jeu. GameOffsets.dll conservée à l'identique, sans recompilation. Cette méthode ne constitue pas une approbation par GGG.
 - Réglages personnels, positions et ancrages des fenêtres, barres et icônes conservés.
 
-Validation : compilation du cœur avec le binaire GameOffsets validé ; 60 contrôles isolés en lecture seule sur PoE2 0.5.5f. L'ancien agencement reproduit le rejet du terrain ; le nouvel agencement fournit une grille valide, le joueur dans l'arbre d'entités et son composant de vie avec des ressources cohérentes. Les contrôles de rejet des terrains invalides restent actifs. Aucun arrêt d'application ni entrée système pendant les tests. Affichage final des plugins, repères d'Expédition et déclenchement des flacons à confirmer en utilisation réelle après installation.
+Validation : compilation du cœur avec le binaire GameOffsets validé ; 28 contrôles isolés utilisant le véritable plugin LootTracker. Lecture seule de PoE2 : identité de la zone Prairie pâturée et inventaire de 21 objets distincts. Dans une copie isolée de l'historique : création de carte, inventaire de référence, chronomètre actif, absence de doublon, cumul et sauvegarde d'un gain simulé, conservation des anciennes cartes et valorisation avec le cache de prix existant sans requête réseau. Aucun arrêt d'application ni entrée système pendant les tests. Affichage final et comptabilisation d'un ramassage réel à confirmer après installation ; les gains manqués pendant la panne ne sont pas reconstruits automatiquement.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

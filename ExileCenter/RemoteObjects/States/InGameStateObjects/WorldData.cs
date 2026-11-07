@@ -167,8 +167,9 @@ namespace ExileCenter.RemoteObjects.States.InGameStateObjects
             var data = reader.ReadMemory<WorldDataOffset>(this.Address);
             if (this.areaDetailsPtrCache != data.WorldAreaDetailsPtr)
             {
-                var areaInfo = reader.ReadMemory<WorldAreaDetailsStruct>(data.WorldAreaDetailsPtr);
-                this.AreaDetails.Address = areaInfo.WorldAreaDetailsRowPtr;
+                // PoE2 0.5.5f moved the WorldAreas row pointer by 8 bytes.
+                // Read it here without changing the validated GameOffsets.dll.
+                this.AreaDetails.Address = reader.ReadMemory<IntPtr>(data.WorldAreaDetailsPtr + 0xA0);
                 this.areaDetailsPtrCache = data.WorldAreaDetailsPtr;
             }
 
