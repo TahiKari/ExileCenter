@@ -3115,7 +3115,11 @@ internal static class TabletRankingCheck
                 new[]{("TowerExpeditionBuriedStrongboxes",1f,"S","Expeditions contain 1 buried Strongbox in Map"),
                     ("TowerExpeditionChanceForVerisiumRemnant",39f,"A","Expeditions have +39% Surpassing chance to contain an additional Verisium Remnant"),
                     ("TowerRarePackIncrease",35f,"A","35% d'Augmentation du nombre de Monstres Rares dans la Carte"),
-                    ("TowerMonsterRarityIncrease",19f,"B","19% d'Augmentation de la Rareté des Monstres dans la Carte")}};
+                    ("TowerMonsterRarityIncrease",19f,"B","19% d'Augmentation de la Rareté des Monstres dans la Carte")},
+                new[]{("TowerExpeditionIncreasedMonsterRarity",23f,"C","23% d'Augmentation de la Rareté des Monstres d'Expédition dans la Carte"),
+                    ("TowerExpedition2RunicModPassoverChance",31f,"S","Dans la Carte, les Vestiges de Vérisium ont +31% de chances d'ajouter un Modificateur\nRunique supplémentaire"),
+                    ("TowerExperienceGainIncrease",17f,"D","17% d'Augmentation du Gain d'Expérience dans la Carte"),
+                    ("TowerMonsterRarityIncrease",17f,"A","17% d'Augmentation de la Rareté des Monstres dans la Carte")}};
             for(int capture=0;capture<screenshotCases.Length;capture++)
             foreach(bool grouped in new[]{false,true})
             {
@@ -3125,16 +3129,18 @@ internal static class TabletRankingCheck
                 var shotObservation=observe.Invoke(null,new object[]{"Expedition Tablet",shotMods});
                 labels.Clear();covers.Clear();panelField.SetValue(plugin,(new Vector2(8,16),new Vector2(930,328)));
                 labels.Add((new Vector2(300,24),new Vector2(320,48),"Tablette d'Expédition"));
-                if(grouped)labels.Add((new Vector2(8,168),new Vector2(930,88),string.Join("\n",sample.Select(m=>m.Item4))));
-                else for(int i=0;i<4;i++)labels.Add((new Vector2(8,168+22*i),new Vector2(930,22),sample[i].Item4));
+                var lineCounts=sample.Select(m=>m.Item4.Count(c=>c=='\n')+1).ToArray();
+                var rowTops=Enumerable.Range(0,4).Select(i=>168+22*lineCounts.Take(i).Sum()).ToArray();
+                if(grouped)labels.Add((new Vector2(8,168),new Vector2(930,22*lineCounts.Sum()),string.Join("\n",sample.Select(m=>m.Item4))));
+                else for(int i=0;i<4;i++)labels.Add((new Vector2(8,rowTops[i]),new Vector2(930,22*lineCounts[i]),sample[i].Item4));
                 ImGuiNET.ImGui.NewFrame();
                 var background=ImGuiNET.ImGui.GetBackgroundDrawList();background.AddRectFilled(new Vector2(8,16),new Vector2(938,344),0xff151515);
-                background.AddText(new Vector2(300,24),0xffdddddd,capture==0?"LITURGIE DU PHENIX":"INCITATION EMPYREENNE");
-                for(int i=0;i<4;i++)background.AddText(new Vector2(18,168+22*i),0xffdd9999,sample[i].Item4);
+                background.AddText(new Vector2(300,24),0xffdddddd,capture==0?"LITURGIE DU PHENIX":capture==1?"INCITATION EMPYREENNE":"INVOCATION TRANSCENDANTALE");
+                for(int i=0;i<4;i++)background.AddText(new Vector2(18,rowTops[i]),0xffdd9999,sample[i].Item4);
                 draw.Invoke(plugin,new[]{shotObservation,shotProfile,shotMods});var vertices=background.VtxBuffer;
                 var gradeColors=(Vector4[])typeof(StashUtilityCore).GetField("TabletModRankColors",flags).GetValue(null);
                 for(int i=0;i<4;i++)Check(Enumerable.Range(0,vertices.Size).Any(v=>vertices[v].pos.X>880&&vertices[v].pos.X<938&&
-                    Math.Abs(vertices[v].pos.Y-(179+22*i))<10&&vertices[v].col==ExileCenter.Utils.ImGuiHelper.Color(gradeColors["SABCDEF".IndexOf(sample[i].Item3)])),
+                    Math.Abs(vertices[v].pos.Y-(rowTops[i]+11*lineCounts[i]))<10&&vertices[v].col==ExileCenter.Utils.ImGuiHelper.Color(gradeColors["SABCDEF".IndexOf(sample[i].Item3)])),
                     "User screenshot displays the configured rank for every modifier: capture "+capture+", row "+i+", grouped "+grouped);
                 Check(JsonConvert.SerializeObject(shotProfile)==savedShotProfile,"User screenshot rendering preserves configured priorities");
                 ImGuiNET.ImGui.Render();
