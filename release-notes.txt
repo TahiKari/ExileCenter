@@ -1,10 +1,11 @@
-ExileCenter 1.22.7
+ExileCenter 1.22.8
 
-- Tablettes d'Expédition : rétablissement du rang S à côté du modificateur « Dans la Carte, les Vestiges de Vérisium ont +31% de chances d'ajouter un Modificateur runique supplémentaire ». Le libellé français correspond désormais à celui du jeu, y compris lorsque la ligne est coupée en deux. Les rangs personnalisés restent prioritaires.
-- Ajout d'une icône ExileCenter EC dorée à l'exécutable, disponible de 16 à 256 pixels pour son affichage dans Windows et les raccourcis.
-- Conservation des réglages personnels, rangs personnalisés, positions, tailles et ancrages des barres, fenêtres et icônes. GameOffsets.dll reste strictement identique, sans recompilation.
+- Tablettes d'Expédition : rétablissement des cinq notations absentes sur les captures fournies : Sentinelle de Vérisium supplémentaire, Relique vaal, Coffre-fort enfoui, premier Monstre runique exhumé Rare et chances cumulatives de Dupliquer les Monstres runiques.
+- Les libellés français correspondent à ceux du jeu. Le premier Monstre runique est reconnu avec sa formulation au singulier ; les textes sur plusieurs lignes restent associés à une seule notation.
+- Les rangs personnalisés sont conservés. Sur les cinq configurations fournies, les notations rétablies sont respectivement B, C, B, C et A. Les compositions BCDE, ACD2, BDE2, AC2D et A2BC restent identiques.
+- Icône EC de la version 1.22.7 conservée. Aucun changement des positions, tailles, ancrages ou réglages des fenêtres, barres et icônes. GameOffsets.dll strictement identique, sans recompilation.
 
-Validation : compilation du cœur et de StashUtility ; 5 062 contrôles isolés des infobulles, dont la tablette de la capture avec rangs C / S / D / A, texte sur deux lignes et conservation des priorités personnalisées. Icône extraite de l'exécutable compilé et vérifiée. Aucun arrêt d'application ni interaction avec le jeu. Rendu dans l'installation en cours non vérifié ; contrôle à effectuer après installation de la mise à jour.
+Validation : compilation du cœur et de StashUtility ; 5 112 contrôles d'infobulles isolés, dont les cinq nouvelles captures avec quatre notations chacune, libellés distincts ou regroupés, texte sur deux lignes et conservation des rangs personnalisés. Aperçus hors jeu des cinq tablettes inspectés. Aucun arrêt d'application ni interaction avec le jeu. Rendu de l'installation en cours à vérifier après mise à jour.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

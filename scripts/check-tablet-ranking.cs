@@ -3119,7 +3119,27 @@ internal static class TabletRankingCheck
                 new[]{("TowerExpeditionIncreasedMonsterRarity",23f,"C","23% d'Augmentation de la Rareté des Monstres d'Expédition dans la Carte"),
                     ("TowerExpedition2RunicModPassoverChance",31f,"S","Dans la Carte, les Vestiges de Vérisium ont +31% de chances d'ajouter un Modificateur\nRunique supplémentaire"),
                     ("TowerExperienceGainIncrease",17f,"D","17% d'Augmentation du Gain d'Expérience dans la Carte"),
-                    ("TowerMonsterRarityIncrease",17f,"A","17% d'Augmentation de la Rareté des Monstres dans la Carte")}};
+                    ("TowerMonsterRarityIncrease",17f,"A","17% d'Augmentation de la Rareté des Monstres dans la Carte")},
+                new[]{("TowerPackSizeIncrease",7f,"C","7% d'Augmentation de la taille des Groupes dans la Carte"),
+                    ("TowerExpeditionExplosionRadius",6f,"E","6% d'Augmentation de la Zone d'effet des Explosifs d'Expédition dans la Carte"),
+                    ("TowerExpeditionAdditionalSentinels",1f,"B","Dans la Carte, les Expéditions contiennent 1 Sentinelle de Vérisium supplémentaire"),
+                    ("TowerExperienceGainIncrease",18f,"D","18% d'Augmentation du Gain d'Expérience dans la Carte")},
+                new[]{("TowerExpeditionVaalRemnants",1f,"C","Dans la Carte, les Expéditions contiennent 1 Relique vaal"),
+                    ("TowerMagicPackIncrease",38f,"D","38% d'Augmentation du nombre de Monstres Magiques dans la Carte"),
+                    ("TowerMonsterRarityIncrease",16f,"A","16% d'Augmentation de la Rareté des Monstres dans la Carte"),
+                    ("TowerAdditionalShrineChance",91f,"D","La Carte a 91% d'Augmentation de chances de contenir des Autels")},
+                new[]{("TowerRareChestCount",2f,"E","La Carte contient 2 Coffres Rares supplémentaires"),
+                    ("TowerExpeditionBuriedStrongboxes",1f,"B","Dans la Carte, les Expéditions contiennent 1 Coffre-fort enfoui"),
+                    ("TowerExperienceGainIncrease",18f,"D","18% d'Augmentation du Gain d'Expérience dans la Carte"),
+                    ("TowerAdditionalEssenceChance",93f,"E","La Carte a 93% d'Augmentation de chances de contenir des Essences")},
+                new[]{("TowerPackSizeIncrease",6f,"C","6% d'Augmentation de la taille des Groupes dans la Carte"),
+                    ("TowerExpeditionUnearthedRares",1f,"C","Dans la Carte, le premier Monstre runique exhumé sera un Monstre Rare"),
+                    ("TowerMonsterEffectiveness",13f,"A","Les Monstres ont 13% d'Augmentation d'Efficacité"),
+                    ("TowerAdditionalExileChance",96f,"D","La Carte a 96% d'Augmentation de chances de contenir des Exilés renégats")},
+                new[]{("TowerPackSizeIncrease",5f,"C","5% d'Augmentation de la taille des Groupes dans la Carte"),
+                    ("TowerExpeditionRunicMonsters",21f,"B","La Carte a 21% d'Augmentation du nombre de Marqueurs de Monstres Runiques"),
+                    ("TowerExpeditionChanceForTwinnedElites",35f,"A","Dans la Carte, les Expéditions ont 35% de Chances cumulatives de Dupliquer les Monstres\nruniques"),
+                    ("TowerMonsterRarityIncrease",16f,"A","16% d'Augmentation de la Rareté des Monstres dans la Carte")}};
             for(int capture=0;capture<screenshotCases.Length;capture++)
             foreach(bool grouped in new[]{false,true})
             {
@@ -3135,7 +3155,9 @@ internal static class TabletRankingCheck
                 else for(int i=0;i<4;i++)labels.Add((new Vector2(8,rowTops[i]),new Vector2(930,22*lineCounts[i]),sample[i].Item4));
                 ImGuiNET.ImGui.NewFrame();
                 var background=ImGuiNET.ImGui.GetBackgroundDrawList();background.AddRectFilled(new Vector2(8,16),new Vector2(938,344),0xff151515);
-                background.AddText(new Vector2(300,24),0xffdddddd,capture==0?"LITURGIE DU PHENIX":capture==1?"INCITATION EMPYREENNE":"INVOCATION TRANSCENDANTALE");
+                string[] screenshotTitles={"LITURGIE DU PHENIX","INCITATION EMPYREENNE","INVOCATION TRANSCENDANTALE",
+                    "PRECEPTE LEGENDAIRE","INJONCTION CELESTE","DEFI PLANAIRE","LITURGIE MYTHIQUE","ABIME FABULEUX"};
+                background.AddText(new Vector2(300,24),0xffdddddd,screenshotTitles[capture]);
                 for(int i=0;i<4;i++)background.AddText(new Vector2(18,rowTops[i]),0xffdd9999,sample[i].Item4);
                 draw.Invoke(plugin,new[]{shotObservation,shotProfile,shotMods});var vertices=background.VtxBuffer;
                 var gradeColors=(Vector4[])typeof(StashUtilityCore).GetField("TabletModRankColors",flags).GetValue(null);

@@ -806,7 +806,10 @@ namespace StashUtility
             var primaryLines = localized.Contains('\n') ? localized.Split('\n').Where(line =>
                 line.StartsWith("La Carte contient ", StringComparison.OrdinalIgnoreCase) ||
                 line.StartsWith("La Carte est habitée par ", StringComparison.OrdinalIgnoreCase)) : Array.Empty<string>();
-            var templates = new[] { definition.Name, primaryLines.Any() ? "" : localized, modifier.EnglishText, modifier.FrenchText }.Concat(primaryLines)
+            // This count-dependent native sentence changes its articles and verb at one monster.
+            string singular = definition.Id == "TowerExpeditionUnearthedRares"
+                ? "Dans la Carte, le premier Monstre runique exhumé sera un Monstre Rare" : "";
+            var templates = new[] { definition.Name, primaryLines.Any() ? "" : localized, modifier.EnglishText, modifier.FrenchText, singular }.Concat(primaryLines)
                 .Select(TabletTooltipTextKey).Where(s => s.Length >= 12).Distinct().ToArray();
             var lines = text.Replace("\r", "").Split('\n');
             (int Start, int Count)? match = null;
