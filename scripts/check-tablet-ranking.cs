@@ -3139,7 +3139,15 @@ internal static class TabletRankingCheck
                 new[]{("TowerPackSizeIncrease",5f,"C","5% d'Augmentation de la taille des Groupes dans la Carte"),
                     ("TowerExpeditionRunicMonsters",21f,"B","La Carte a 21% d'Augmentation du nombre de Marqueurs de Monstres Runiques"),
                     ("TowerExpeditionChanceForTwinnedElites",35f,"A","Dans la Carte, les Expéditions ont 35% de Chances cumulatives de Dupliquer les Monstres\nruniques"),
-                    ("TowerMonsterRarityIncrease",16f,"A","16% d'Augmentation de la Rareté des Monstres dans la Carte")}};
+                    ("TowerMonsterRarityIncrease",16f,"A","16% d'Augmentation de la Rareté des Monstres dans la Carte")},
+                new[]{("TowerPackSizeIncrease",5f,"C","5% d'Augmentation de la taille des Groupes dans la Carte"),
+                    ("TowerExpeditionFrozenBosses",1f,"D","Dans la Carte, les Expéditions contiennent 1 Boss supplémentaire piégé dans la glace"),
+                    ("TowerMapDroppedMapsIncrease",38f,"D","38% d'Augmentation de la Quantité de Pierres de téléportation trouvées dans la Carte"),
+                    ("TowerMagicPackIncrease",38f,"D","38% d'Augmentation du nombre de Monstres Magiques dans la Carte")},
+                new[]{("TowerDroppedItemRarityIncrease",8f,"C","8% d'Augmentation de la Rareté des Objets trouvés dans la Carte"),
+                    ("TowerExpeditionIncreasedMonsterRarity",23f,"C","23% d'Augmentation de la Rareté des Monstres d'Expédition dans la Carte"),
+                    ("TowerExpeditionChanceForVerisiumRemnant",37f,"S","Les Expéditions ont +37% de Chances cumulatives de contenir un Vestige de Vérisium\nsupplémentaire"),
+                    ("TowerMonsterEffectiveness",11f,"A","Les Monstres ont 11% d'Augmentation d'Efficacité")}};
             for(int capture=0;capture<screenshotCases.Length;capture++)
             foreach(bool grouped in new[]{false,true})
             {
@@ -3156,7 +3164,8 @@ internal static class TabletRankingCheck
                 ImGuiNET.ImGui.NewFrame();
                 var background=ImGuiNET.ImGui.GetBackgroundDrawList();background.AddRectFilled(new Vector2(8,16),new Vector2(938,344),0xff151515);
                 string[] screenshotTitles={"LITURGIE DU PHENIX","INCITATION EMPYREENNE","INVOCATION TRANSCENDANTALE",
-                    "PRECEPTE LEGENDAIRE","INJONCTION CELESTE","DEFI PLANAIRE","LITURGIE MYTHIQUE","ABIME FABULEUX"};
+                    "PRECEPTE LEGENDAIRE","INJONCTION CELESTE","DEFI PLANAIRE","LITURGIE MYTHIQUE","ABIME FABULEUX",
+                    "INJONCTION TRANSCENDANTALE","INCITATION CELESTE"};
                 background.AddText(new Vector2(300,24),0xffdddddd,screenshotTitles[capture]);
                 for(int i=0;i<4;i++)background.AddText(new Vector2(18,rowTops[i]),0xffdd9999,sample[i].Item4);
                 draw.Invoke(plugin,new[]{shotObservation,shotProfile,shotMods});var vertices=background.VtxBuffer;

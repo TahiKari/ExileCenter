@@ -1,11 +1,11 @@
-ExileCenter 1.22.8
+ExileCenter 1.22.9
 
-- Tablettes d'Expédition : rétablissement des cinq notations absentes sur les captures fournies : Sentinelle de Vérisium supplémentaire, Relique vaal, Coffre-fort enfoui, premier Monstre runique exhumé Rare et chances cumulatives de Dupliquer les Monstres runiques.
-- Les libellés français correspondent à ceux du jeu. Le premier Monstre runique est reconnu avec sa formulation au singulier ; les textes sur plusieurs lignes restent associés à une seule notation.
-- Les rangs personnalisés sont conservés. Sur les cinq configurations fournies, les notations rétablies sont respectivement B, C, B, C et A. Les compositions BCDE, ACD2, BDE2, AC2D et A2BC restent identiques.
-- Icône EC de la version 1.22.7 conservée. Aucun changement des positions, tailles, ancrages ou réglages des fenêtres, barres et icônes. GameOffsets.dll strictement identique, sans recompilation.
+- Tablettes d'Expédition : correction de la notation absente pour le Boss supplémentaire piégé dans la glace. Le libellé français remplace la phrase anglaise encore utilisée pour reconnaître cette ligne.
+- Tablettes d'Expédition : correction de la notation absente sur les chances cumulatives de contenir un Vestige de Vérisium supplémentaire, y compris lorsque le texte occupe deux lignes. Le libellé actuel du jeu remplace « chances Surpassantes ».
+- Sur les deux configurations des captures, les notations manquantes sont D et S ; les compositions CD3 et SAC2 restent identiques. Les rangs personnalisés restent prioritaires.
+- Corrections des précédentes versions et icône EC conservées. Aucun changement des positions, tailles, ancrages ou réglages des fenêtres, barres et icônes. GameOffsets.dll reste strictement identique, sans recompilation.
 
-Validation : compilation du cœur et de StashUtility ; 5 112 contrôles d'infobulles isolés, dont les cinq nouvelles captures avec quatre notations chacune, libellés distincts ou regroupés, texte sur deux lignes et conservation des rangs personnalisés. Aperçus hors jeu des cinq tablettes inspectés. Aucun arrêt d'application ni interaction avec le jeu. Rendu de l'installation en cours à vérifier après mise à jour.
+Validation : compilation du cœur et de StashUtility ; 5 132 contrôles isolés des infobulles réussis. Les tests incluent les deux nouvelles captures avec quatre notations chacune, textes séparés ou regroupés, texte sur deux lignes et conservation des priorités personnalisées. Aperçus hors jeu des deux nouvelles tablettes inspectés. Les contrôles basés sur les libellés du catalogue ne garantissent pas la reconnaissance de toutes les formulations réelles du jeu. Aucun arrêt d'application ni interaction avec le jeu. Rendu dans l'installation en cours à vérifier après mise à jour.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.
