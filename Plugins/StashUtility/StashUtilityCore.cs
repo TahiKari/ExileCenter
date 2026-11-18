@@ -2124,13 +2124,14 @@ namespace StashUtility
         private Func<int, bool> craftKeyDown;
         private Func<AffinityInput[], uint> craftSendInputs;
         private bool craftMouseHeld;
+        private bool craftControlScanCode;
         private bool CraftKeyDown(int key) => craftKeyDown?.Invoke(key) ?? (AffinityGetAsyncKeyState(key) & 0x8000) != 0;
         private uint CraftSendInputs(AffinityInput[] inputs)
         {
             uint sent = craftSendInputs?.Invoke(inputs) ?? AffinitySendInput((uint)inputs.Length, inputs, Marshal.SizeOf<AffinityInput>());
-            if (Settings.WaystoneCraftDiagnostic)
+            if (Settings.WaystoneCraftDiagnostic || tabletReforge != null)
                 CraftLog("SendInput " + string.Join(", ", inputs.Select(input => input.Type == 1 ?
-                    $"key {input.Data.Key.Key:X2} {(input.Data.Key.Flags == 2 ? "UP" : "DOWN")}" : $"mouse {input.Data.Mouse.Flags:X4}")) + $" : {sent}/{inputs.Length}");
+                    $"key {input.Data.Key.Key:X2} {((input.Data.Key.Flags & 2) != 0 ? "UP" : "DOWN")} scan={input.Data.Key.Scan:X2} flags={input.Data.Key.Flags:X2}" : $"mouse {input.Data.Mouse.Flags:X4}")) + $" : {sent}/{inputs.Length}");
             return sent;
         }
 
@@ -2142,7 +2143,8 @@ namespace StashUtility
         private void CraftReleaseInput(bool endSession = false)
         {
             CraftReleaseHeldMouse();
-            if (affinityCtrlHeld && CraftSendInputs(new[] { AffinityKeyInput(2) }) == 1) affinityCtrlHeld = false;
+            if (affinityCtrlHeld && CraftSendInputs(new[] { AffinityKeyInput(2, scanCode: craftControlScanCode) }) == 1)
+            { affinityCtrlHeld = false; craftControlScanCode = false; }
             if (endSession && affinityShiftHeld && CraftSendInputs(new[] { AffinityKeyInput(2, 0x10) }) == 1) affinityShiftHeld = false;
             craftInputPhase = 0;
         }
@@ -3448,7 +3450,13 @@ namespace StashUtility
                 if (copy && affinityShiftHeld) throw CraftFailure("input_failed", "End the currency session before copying an item.");
                 if (control && !affinityCtrlHeld || shift && !affinityShiftHeld)
                 {
-                    if (control && !affinityCtrlHeld && CraftSendInputs(new[] { AffinityKeyInput(0) }) != 1) throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
+                    if (control && !affinityCtrlHeld)
+                    {
+                        // The reforge transfer uses a physical left-Ctrl scan code.
+                        if (CraftSendInputs(new[] { AffinityKeyInput(0, scanCode: holdMouse) }) != 1)
+                            throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
+                        craftControlScanCode = holdMouse;
+                    }
                     affinityCtrlHeld = control;
                     if (shift && !affinityShiftHeld)
                     {
@@ -3466,6 +3474,11 @@ namespace StashUtility
                 if (affinityShiftHeld && !CraftKeyDown(0x10)) throw CraftFailure("shift_lost", "Shift was released unexpectedly. Crafting stopped.");
                 if (control && (!affinityCtrlHeld || !CraftKeyDown(0x11)) || shift && !affinityShiftHeld || copy && !control)
                     throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
+                if (tabletReforge != null && craftSendInputs == null)
+                {
+                    AffinityGetWindowThreadProcessId(CraftWindowFromPoint(affinityCursor), out var targetPid);
+                    CraftLog($"REFORGE INPUT targetPid={targetPid} gamePid={Core.Process.Pid} ctrl={CraftKeyDown(0x11)} leftCtrl={CraftKeyDown(0xA2)} captureMouse={ImGui.GetIO().WantCaptureMouse}");
+                }
                 var inputs = holdMouse ? new[] { AffinityMouseInput(0x0002) } :
                     copy ? new[] { AffinityKeyInput(0, 0x43), AffinityKeyInput(2, 0x43) } :
                     new[] { AffinityMouseInput(right ? 0x0008u : 0x0002u), AffinityMouseInput(right ? 0x0010u : 0x0004u) };
@@ -6259,8 +6272,9 @@ namespace StashUtility
             if (affinityShiftHeld && AffinitySendInput(1, new[] { AffinityKeyInput(0x0002, 0x10) }, Marshal.SizeOf<AffinityInput>()) == 1)
                 affinityShiftHeld = false;
             if (!affinityCtrlHeld) return;
-            var keyUp = new[] { AffinityKeyInput(0x0002) };
-            if (AffinitySendInput(1, keyUp, Marshal.SizeOf<AffinityInput>()) == 1) affinityCtrlHeld = false;
+            var keyUp = new[] { AffinityKeyInput(0x0002, scanCode: craftControlScanCode) };
+            if (AffinitySendInput(1, keyUp, Marshal.SizeOf<AffinityInput>()) == 1)
+            { affinityCtrlHeld = false; craftControlScanCode = false; }
         }
 
         [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
@@ -6272,11 +6286,13 @@ namespace StashUtility
             [FieldOffset(0)] public AffinityKey Key;
         }
         [StructLayout(LayoutKind.Sequential)] private struct AffinityInput { public uint Type; public AffinityInputData Data; }
-        private static AffinityInput AffinityKeyInput(uint flags, ushort key = 0x11) => new() { Type = 1,
-            Data = new AffinityInputData { Key = new AffinityKey { Key = key, Flags = flags } } };
+        private static AffinityInput AffinityKeyInput(uint flags, ushort key = 0x11, bool scanCode = false) => new() { Type = 1,
+            Data = new AffinityInputData { Key = new AffinityKey { Key = scanCode ? (ushort)0 : key,
+                Scan = scanCode ? (ushort)0x1D : (ushort)0, Flags = flags | (scanCode ? 0x0008u : 0) } } };
         private static AffinityInput AffinityMouseInput(uint flags) => new() {
             Data = new AffinityInputData { Mouse = new AffinityMouse { Flags = flags } } };
         [DllImport("user32.dll", EntryPoint = "SendInput")] private static extern uint AffinitySendInput(uint count, AffinityInput[] inputs, int size);
+        [DllImport("user32.dll", EntryPoint = "WindowFromPoint")] private static extern IntPtr CraftWindowFromPoint(NativePoint point);
         [DllImport("user32.dll", EntryPoint = "SetCursorPos")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool AffinitySetCursorPos(int x, int y);
         [DllImport("user32.dll", EntryPoint = "GetCursorPos")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool AffinityGetCursorPos(out NativePoint point);
         [DllImport("user32.dll", EntryPoint = "GetAsyncKeyState")] private static extern short AffinityGetAsyncKeyState(int key);

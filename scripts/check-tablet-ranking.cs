@@ -78,6 +78,7 @@ internal static class TabletRankingCheck
         Check(Field(Call("FindTabletReforgeControls", panel), "Item1") == null, "Another crafting bench cannot be used as a reforging bench");
 
         var events = new List<string>(); var pressed = new HashSet<int>();
+        var keyEvents = new List<(ushort Key, ushort Scan, uint Flags)>();
         bool rejectMouseUp = false;
         Set("craftKeyDown", (Func<int, bool>)(key => pressed.Contains(key)));
         var dispatch = core.GetField("craftSendInputs", flags);
@@ -89,7 +90,9 @@ internal static class TabletRankingCheck
                 var data = Field(input, "Data");
                 if ((uint)Field(input, "Type") == 1)
                 {
-                    var key = Field(data, "Key"); int code = (ushort)Field(key, "Key"); bool up = ((uint)Field(key, "Flags") & 2) != 0;
+                    var key = Field(data, "Key"); ushort virtualKey = (ushort)Field(key,"Key"), scan = (ushort)Field(key,"Scan");
+                    uint keyFlags = (uint)Field(key,"Flags"); keyEvents.Add((virtualKey,scan,keyFlags));
+                    int code = (keyFlags & 8) != 0 && scan == 0x1D ? 0x11 : virtualKey; bool up = (keyFlags & 2) != 0;
                     if (up) pressed.Remove(code); else pressed.Add(code);
                     events.Add(code.ToString("X") + (up ? "_UP" : "_DOWN"));
                 }
@@ -112,6 +115,8 @@ internal static class TabletRankingCheck
             Call("CraftReleaseInput", true);
             Check(events.SequenceEqual(new[] { "11_DOWN", "2", "4", "11_UP" }), direction + " uses exactly one Ctrl+left-click and releases Ctrl");
         }
+        Check(keyEvents.All(key => key.Scan == 0 && key.Key == 0x11 && (key.Flags == 0 || key.Flags == 2)),
+            "Default craft transfers retain their original virtual-key input format");
         events.Clear(); Check((bool)Call("CraftInput", false, false, false, false, false), "Default input uses a plain left click"); Call("CraftReleaseInput", true);
         Check(events.SequenceEqual(new[] { "2", "4" }), "The reforge button receives neither Ctrl nor an extra click");
         events.Clear(); Call("CraftInput", true, false, false, false, false); pressed.Remove(0x11);
@@ -122,9 +127,10 @@ internal static class TabletRankingCheck
         Call("CraftReleaseInput", true);
         foreach (string direction in new[] { "inventory to bench", "bench output to inventory" })
         {
-            events.Clear();
+            events.Clear(); keyEvents.Clear();
             Check(!(bool)Call("CraftInput", true, false, false, false, true) && (bool)Call("CraftInput", true, false, false, false, true),
                 direction + " settles Ctrl before its separate mouse-down");
+            Check(keyEvents.SequenceEqual(new[]{((ushort)0,(ushort)0x1D,8u)}), direction + " sends physical left-Ctrl with KEYEVENTF_SCANCODE");
             Check(events.SequenceEqual(new[] { "11_DOWN", "2" }) && pressed.Contains(1) && pressed.Contains(0x11) &&
                 (DateTime)core.GetField("affinityNextAction",flags).GetValue(plugin) > DateTime.UtcNow.AddMilliseconds(40),
                 direction + " leaves mouse-down visible for at least 60 ms with Ctrl held");
@@ -136,6 +142,8 @@ internal static class TabletRankingCheck
                 "Mouse-up occurs separately while Ctrl remains held until verification");
             Call("CraftReleaseInput", true);
             Check(events.SequenceEqual(new[] { "11_DOWN", "2", "4", "11_UP" }), direction + " finishes with one mouse-up before releasing Ctrl");
+            Check(keyEvents.SequenceEqual(new[]{((ushort)0,(ushort)0x1D,8u),((ushort)0,(ushort)0x1D,10u)}) &&
+                !(bool)core.GetField("craftControlScanCode",flags).GetValue(plugin), "Ctrl release uses the same physical scan code and clears the pending format");
         }
         events.Clear();
         Check((bool)Call("CraftInput", false, false, false, false, true) && events.SequenceEqual(new[]{"2"}),
@@ -160,10 +168,20 @@ internal static class TabletRankingCheck
         Call("BeginGridSort", false, false); Call("BeginAffinityTransfer"); Call("RequestWaystoneCraft", true); Call("BeginStashScan", false);
         Check(events.Count == 0, "Other automation entry points are blocked during tablet reforging without any native input");
         string settingsBefore = JsonConvert.SerializeObject(plugin.Settings);
+        var reforgeLogDirectory = Path.Combine(Directory.GetCurrentDirectory(),"reforge-log-fixture-"+Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(reforgeLogDirectory,"config"));
+        string existingCraftLog = Path.Combine(reforgeLogDirectory,"config","craft-journal.txt");
+        File.WriteAllText(existingCraftLog,"Previous waystone diagnostic");
+        plugin.DllDirectory = reforgeLogDirectory;
         Call("CraftInput", true, false, false, false, true); Call("CraftInput", true, false, false, false, true); Call("StopTabletReforge", "Fixture stop: 100% · échec");
         Check(events.SequenceEqual(new[] { "11_DOWN", "2", "4", "11_UP" }) && !pressed.Contains(0x11) && !pressed.Contains(1),
             "Stopping a held transfer releases mouse-up before Ctrl without another click");
         Check(JsonConvert.SerializeObject(plugin.Settings) == settingsBefore, "Stopping reforge preserves toolbar offsets, locks, protected cells and every saved setting");
+        string reforgeLog = File.ReadAllText(Path.Combine(reforgeLogDirectory,"config","reforge-journal.txt"));
+        Check(reforgeLog.Contains("scan=1D flags=08") && reforgeLog.Contains("scan=1D flags=0A") &&
+            reforgeLog.Contains("mouse 0002") && reforgeLog.Contains("mouse 0004") && reforgeLog.Contains("100% · échec"),
+            "The local journal retains accepted keyboard/mouse events, matching key-up and literal failure text");
+        Check(File.ReadAllText(existingCraftLog) == "Previous waystone diagnostic", "Reforge diagnostics preserve the existing waystone journal");
         var timedOut = Activator.CreateInstance(sessionType); Put(timedOut,"Moving",Item(1,0,2));
         var timeoutMessages = new HashSet<string>();
         foreach(int phase in new[]{0,1,3,5})

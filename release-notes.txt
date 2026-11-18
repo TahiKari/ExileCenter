@@ -1,4 +1,7 @@
-ExileCenter 1.23.3
+ExileCenter 1.23.4
+
+- Reforge : les transferts utilisent maintenant le scan code matériel de Ctrl gauche (1D, KEYEVENTF_SCANCODE), à l’appui comme au relâchement, au lieu du seul code de touche virtuel. Ce changement est limité à la reforge ; les autres automatisations gardent leur format précédent.
+- Un journal de reforge est enregistré dans Plugins/StashUtility/config/reforge-journal.txt : étape d’arrêt, case ciblée, état de Ctrl, processus sous la souris et événements acceptés par Windows. Il permet de distinguer un transfert non confirmé d’un clic intercepté. Le journal de l’auto-craft existant est conservé.
 
 - Reforge : l’appui et le relâchement du clic gauche sont maintenant envoyés dans deux mises à jour distinctes, avec au moins 60 ms d’appui. Cela concerne le transfert Ctrl + clic vers l’établi, le bouton Reforger et le retour du résultat. Les autres automatisations conservent leur séquence de clic précédente.
 - Le bouton gauche est relâché avant Ctrl et avant la vérification du transfert. Échap, le déplacement de la souris, la perte de focus et les autres arrêts libèrent aussi le clic maintenu. Aucun second appui n’est envoyé tant que le premier n’est pas terminé.
@@ -17,7 +20,7 @@ ExileCenter 1.23.3
 - Échap, un mouvement de la souris, une perte de focus, un changement de fenêtre ou une opération non confirmée arrêtent le cycle. Aucun clic n’est répété après un délai dépassé. Aucune injection, aucun hook ni écriture dans la mémoire du jeu n’est ajouté.
 - Corrections des précédentes versions et icône EC conservées. Aucun changement des positions, tailles, ancrages ou réglages des fenêtres, barres et icônes. GameOffsets.dll reste strictement identique, sans recompilation.
 
-Validation : 11 989 contrôles isolés réussis (39 reforge, 11 944 auto-craft et navigation, 6 conservation de la barre du coffre). Ils vérifient notamment l’appui séparé du relâchement, Ctrl maintenu jusqu’au relâchement du clic, l’interdiction d’un second appui et la libération à l’arrêt. Précontrôle en lecture seule sur l’établi réellement ouvert : les coordonnées des trois premières tablettes correspondent aux cases affichées, l’établi et le curseur sont lus vides. L’utilisateur a reproduit l’échec avec la version 1.23.2 et confirmé que le Ctrl + clic manuel fonctionne après réouverture de l’établi. La nouvelle séquence de clic et le cycle complet restent à confirmer en jeu après installation ; les fixtures ne constituent pas une validation par GGG ni une garantie contre une sanction. GameOffsets.dll reste identique.
+Validation : 11 996 contrôles isolés réussis (46 reforge, 11 944 auto-craft et navigation, 6 conservation de la barre du coffre). Ils vérifient notamment les scan codes identiques à l’appui et au relâchement de Ctrl, le maintien du format précédent pour les autres automatisations, les libérations à l’arrêt et le journal local sans écraser celui de l’auto-craft. Lecture seule sur l’établi réel avec la DLL publiée : une tablette placée en bas est reconnue, le résultat est vide et l’inventaire contient 59 objets. L’échec du premier Ctrl + clic en 1.23.3 est confirmé ; l’origine exacte n’est pas encore démontrée. Le nouveau format de Ctrl et le cycle complet restent à confirmer en jeu après installation ; les fixtures ne constituent pas une validation par GGG ni une garantie contre une sanction. GameOffsets.dll reste identique.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

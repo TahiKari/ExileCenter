@@ -257,6 +257,8 @@ namespace StashUtility
                 ReleaseAffinityControl();
                 if (craftMouseHeld || affinityCtrlHeld || affinityShiftHeld || new[] { 0x10, 0x11, 0x12, 0x5B, 0x5C, 0x01, 0x02 }.Any(CraftKeyDown))
                     throw ReforgeFailure("keys", "Release the mouse buttons and modifier keys before starting.");
+                craftJournal.Clear();
+                CraftLog($"REFORGE START sources={plan.Count} window={Core.Process.WindowArea}");
                 tabletReforge = new() { Bench = bench, Inventory = inventory, Deadline = DateTime.UtcNow.AddSeconds(5),
                     InventoryRoot = ResolvePath(Core.States.InGameStateObject.GameUi.RightPanel.Address, new[] { 5, 36 }) };
                 affinityInventoryRoot = tabletReforge.InventoryRoot;
@@ -274,10 +276,21 @@ namespace StashUtility
         {
             int done = tabletReforge?.Done ?? 0;
             bool running = tabletReforge != null;
-            tabletReforge = null;
+            if (running) CraftLog($"REFORGE STOP phase={tabletReforge.Phase} done={done}");
             if (running) CraftReleaseInput(endSession: true);
+            tabletReforge = null;
             tabletReforgeStatus = string.Format(RT("summary", "Reforged and returned: {0}."), done) + "\n" +
                 (reason ?? RT("stopped", "Reforging stopped. Items still in the bench are left in place."));
+            if (running && !string.IsNullOrEmpty(DllDirectory))
+            {
+                CraftLog(tabletReforgeStatus);
+                try
+                {
+                    var directory = Path.Combine(DllDirectory, "config"); Directory.CreateDirectory(directory);
+                    File.WriteAllLines(Path.Combine(directory, "reforge-journal.txt"), craftJournal);
+                }
+                catch (Exception ex) { tabletReforgeStatus += "\n" + ex.Message; }
+            }
             affinityTransferStatus = tabletReforgeStatus;
             affinityCompletionSummary = "";
             affinityFeedbackUntil = DateTime.UtcNow.AddSeconds(10);
@@ -399,7 +412,9 @@ namespace StashUtility
                             throw ReforgeFailure("changed", "The bench or inventory changed. Reforging stopped.");
                         var slots = CraftVisibleSlots(session.InventoryRoot);
                         if (!slots.TryGetValue(source.Address, out var slot)) throw ReforgeFailure("changed", "The bench or inventory changed. Reforging stopped.");
-                        if (!CraftPosition(slot, source.Address) || !CraftInput(control: true, holdMouse: true)) return;
+                        if (!CraftPosition(slot, source.Address)) return;
+                        if (craftInputPhase == 0) CraftLog($"REFORGE LOAD column={source.X + 1} row={source.Y + 1} cursor={affinityCursor.X},{affinityCursor.Y}");
+                        if (!CraftInput(control: true, holdMouse: true)) return;
                         session.Phase = 1; session.Deadline = now.AddSeconds(5); return;
                     }
                     if (session.Output != null) session.Phase = 4;
