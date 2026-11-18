@@ -217,6 +217,7 @@ namespace StashUtility
 
         public override void OnDisable()
         {
+            tabletReforgeShortcutBench = null;
             if (tabletReforge != null) StopTabletReforge();
             CloseFilterDisplay();
             craftSelectionOpen = false;
@@ -6955,6 +6956,7 @@ namespace StashUtility
             UpdateAffinityTransfer();
             UpdateWaystoneCraft();
             UpdateTabletReforge();
+            DrawTabletReforgeShortcut();
             DrawInventoryTransferButton();
             DrawStashSortButton();
             DrawWaystoneCraftSelection();

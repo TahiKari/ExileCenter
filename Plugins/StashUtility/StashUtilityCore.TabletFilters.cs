@@ -46,7 +46,7 @@ namespace StashUtility
 
         private sealed class TabletReforgeBench
         {
-            public IntPtr Panel, Button;
+            public IntPtr Panel, Button, Title;
             public Vector2 Position, Size;
             public readonly List<SortItem> Inputs = new();
             public SortItem Output;
@@ -66,6 +66,8 @@ namespace StashUtility
         }
 
         private TabletReforgeSession tabletReforge;
+        private TabletReforgeBench tabletReforgeShortcutBench;
+        private DateTime tabletReforgeShortcutScanAt;
         private string tabletReforgeStatus = "";
         private string RT(string key, string fallback) => PluginText.T("stashutility.reforge." + key, fallback);
         private InvalidOperationException ReforgeFailure(string key, string fallback) => new(RT(key, fallback));
@@ -78,6 +80,47 @@ namespace StashUtility
             ImGui.EndDisabled();
             if (tabletReforge != null && ImGui.Button(RT("stop", "Stop reforging"))) StopTabletReforge();
             ImGuiHelper.WrappedText(tabletReforgeStatus);
+        }
+
+        private void DrawTabletReforgeShortcut()
+        {
+            if (Core.IsSettingsMenuOpen || Core.States.GameCurrentState != GameStateTypes.InGameState ||
+                Core.GHSettings.EnableControllerMode || !InventoryToolbarHasFocus())
+            { tabletReforgeShortcutBench = null; return; }
+            TabletReforgeBench bench;
+            try
+            {
+                if (handleObj == null && !InitReflection()) return;
+                if (tabletReforge == null && DateTime.UtcNow >= tabletReforgeShortcutScanAt)
+                {
+                    tabletReforgeShortcutScanAt = DateTime.UtcNow.AddMilliseconds(500);
+                    tabletReforgeShortcutBench = ReadTabletReforgeBench(readItems: false);
+                }
+                bench = tabletReforge?.Bench ?? tabletReforgeShortcutBench;
+                if (bench == null || !IsElementVisible(bench.Panel) || !IsElementVisible(bench.Button) ||
+                    !IsElementVisible(bench.Title) || !TryReadUiString(bench.Title, 0x360, out var title) || !IsTabletReforgeTitle(title))
+                { tabletReforgeShortcutBench = null; return; }
+            }
+            catch (Exception) { tabletReforgeShortcutBench = null; return; }
+
+            var viewport = ImGui.GetMainViewport();
+            string label = RT("title", "Tablet reforging");
+            var size = new Vector2(Math.Max(180, ImGui.CalcTextSize(label).X + 24), 36);
+            var position = viewport.Pos + bench.Position + new Vector2((bench.Size.X - size.X) / 2, -size.Y - 4);
+            position = Vector2.Clamp(position, viewport.Pos, viewport.Pos + Vector2.Max(Vector2.Zero, viewport.Size - size));
+            ImGui.SetNextWindowPos(position, ImGuiCond.Always);
+            ImGui.SetNextWindowSize(size, ImGuiCond.Always);
+            ImGui.SetNextWindowBgAlpha(.9f);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(4));
+            if (ExileCenter.Ui.ImGuiTheme.BeginWindow("##tabletReforgeShortcut", ImGuiWindowFlags.NoDecoration |
+                ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing))
+            {
+                ImGui.BeginDisabled(tabletReforge != null || waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0);
+                if (ImGui.Button(label, new Vector2(-1, 28))) StartTabletReforge();
+                ImGui.EndDisabled();
+            }
+            ImGui.End();
+            ImGui.PopStyleVar();
         }
 
         private static List<SortItem> PlanTabletReforge(List<SortItem> items, HashSet<int> protectedCells)
@@ -99,10 +142,13 @@ namespace StashUtility
             return -1;
         }
 
+        private static bool IsTabletReforgeTitle(string text) =>
+            NormalizeModSearch(text) is "etabli de reforgeage" or "etabli de reforge" or "reforging bench";
+
         private static (StashUiNode Panel, StashUiNode Button, StashUiNode Title) FindTabletReforgeControls(StashUiNode root)
         {
             var nodes = StashUiNodes(root).ToList();
-            var titles = nodes.Where(node => NormalizeModSearch(node.Text) is "etabli de reforgeage" or "etabli de reforge" or "reforging bench").ToList();
+            var titles = nodes.Where(node => IsTabletReforgeTitle(node.Text)).ToList();
             var labels = nodes.Where(node => NormalizeModSearch(node.Text) is "reforger" or "reforge").ToList();
             if (titles.Count != 1 || labels.Count != 1) return default;
             var button = labels[0];
@@ -113,7 +159,7 @@ namespace StashUtility
             return default;
         }
 
-        private TabletReforgeBench ReadTabletReforgeBench()
+        private TabletReforgeBench ReadTabletReforgeBench(bool readItems = true)
         {
             var ui = Core.States.InGameStateObject.GameUi;
             if (ui == null || !IsElementVisible(ui.LeftPanel.Address) || !IsElementVisible(ui.RightPanel.Address))
@@ -131,7 +177,8 @@ namespace StashUtility
                 buttonPos.X < pos.X || buttonPos.Y < pos.Y || buttonPos.X + buttonSize.X > pos.X + size.X + 3 ||
                 buttonPos.Y + buttonSize.Y > pos.Y + size.Y + 3)
                 throw ReforgeFailure("unidentified", "The reforging bench could not be identified safely. No click was sent.");
-            var result = new TabletReforgeBench { Panel = controls.Panel.Address, Button = controls.Button.Address, Position = pos, Size = size };
+            var result = new TabletReforgeBench { Panel = controls.Panel.Address, Button = controls.Button.Address, Title = controls.Title.Address, Position = pos, Size = size };
+            if (!readItems) return result;
             var seen = new HashSet<IntPtr>();
             foreach (var node in StashUiNodes(controls.Panel))
             {
