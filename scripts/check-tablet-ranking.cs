@@ -970,6 +970,60 @@ internal static class TabletRankingCheck
         object Call(string name,params object[] args)=>typeof(StashUtilityCore).GetMethod(name,flags).Invoke(plugin,args);
         try
         {
+            var hiddenPanels = Enumerable.Range(0,8).Select(panelIndex =>
+            {
+                var hidden = Node(Enumerable.Range(0,512).Select(nodeIndex => Node()).ToArray());
+                Visible(hidden,false); return hidden;
+            }).ToArray();
+            var reforgeButton = Node(Label("Reforger")); Text(reforgeButton,0x98,"reforge_button");
+            var reforgePanel = Node(Label("Établi de reforgeage"),reforgeButton);
+            var reforgeRoot = Node(hiddenPanels.Append(reforgePanel).ToArray());
+            var readBranch = typeof(StashUtilityCore).GetMethod("ReadStashUiBranch",flags);
+            var branch = typeof(StashUtilityCore).GetMethod("ReadTabletReforgeUi",flags) != null ? Call("ReadTabletReforgeUi",reforgeRoot) :
+                readBranch.GetParameters().Length == 1 ? Call("ReadStashUiBranch",reforgeRoot) : Call("ReadStashUiBranch",reforgeRoot,true);
+            var reforgeControls = Call("FindTabletReforgeControls",branch);
+            Check(reforgeControls.GetType().GetField("Item1").GetValue(reforgeControls) != null,
+                "The visible reforging bench remains discoverable after more than 4096 hidden UI nodes");
+            void Box(IntPtr address,float x,float y,float width,float height)
+            {
+                var data=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(address);
+                data.RelativePosition=new(x,y);data.UnscaledSize=new(width,height);Marshal.StructureToPtr(data,address,false);
+            }
+            var nativeTitle=Node();Text(nativeTitle,0x360,"  Établi de reforgeage  ");Box(nativeTitle,60,-30,400,40);
+            var nativeAction=Node();Text(nativeAction,0x360,"reforger");Box(nativeAction,55,10,140,28);
+            var nativeButton=Node(nativeAction);Box(nativeButton,275,700,250,58);
+            var nativeWindow=Node(nativeTitle,nativeButton);Box(nativeWindow,100,100,800,700);
+            var worldNameplate=Node();Text(worldNameplate,0x98,"Metadata/MiscellaneousObjects/Hideout/ReforgingBench");
+            Text(worldNameplate,0x360,"Établi de reforgeage");
+            var hiddenStash=Node();Visible(hiddenStash,false);var rightPanel=Node();
+            var manager=Node(hiddenStash,rightPanel,worldNameplate,nativeWindow);
+            var liveUi=ExileCenter.Core.States.InGameStateObject.GameUi;
+            var rawAddress=typeof(ExileCenter.RemoteObjects.RemoteObjectBase).GetField("address",flags);
+            var previousUi=liveUi.Address;var previousLeft=liveUi.LeftPanel.Address;var previousRight=liveUi.RightPanel.Address;
+            var shortcutCache=typeof(StashUtilityCore).GetField("tabletReforgeShortcutBench",flags);var previousShortcut=shortcutCache.GetValue(plugin);
+            try
+            {
+                rawAddress.SetValue(liveUi,manager);rawAddress.SetValue(liveUi.LeftPanel,hiddenStash);rawAddress.SetValue(liveUi.RightPanel,rightPanel);
+                var bench=Call("ReadTabletReforgeBench",true);var benchType=bench.GetType();
+                Check((IntPtr)benchType.GetField("Panel").GetValue(bench)==nativeWindow,
+                    "Reforge is found in its own visible window even when the unrelated stash panel is hidden");
+                Check((IntPtr)benchType.GetField("Title").GetValue(bench)==nativeTitle&&(IntPtr)benchType.GetField("Button").GetValue(bench)==nativeAction,
+                    "Unlabelled native captions identify the real reforge window despite an identical world nameplate");
+                Check(((Vector2)benchType.GetField("Size").GetValue(bench)).Y>700,
+                    "The native footer below its declared panel rectangle is included without rejecting the bench");
+                shortcutCache.SetValue(plugin,bench);var cachedBench=Call("ReadTabletReforgeBench",false);
+                Check(((IList)benchType.GetField("Inputs").GetValue(bench)).Count==0&&benchType.GetField("Output").GetValue(bench)==null&&
+                    (IntPtr)benchType.GetField("Panel").GetValue(cachedBench)==nativeWindow,
+                    "The cached native bench is revalidated without creating inputs or consuming tablets");
+                Visible(nativeWindow,false);bool hiddenRejected=false;
+                try{Call("ReadTabletReforgeBench",false);}catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){hiddenRejected=true;}
+                Check(hiddenRejected,"A remaining world nameplate cannot keep a closed reforging bench or its shortcut available");
+            }
+            finally
+            {
+                rawAddress.SetValue(liveUi,previousUi);rawAddress.SetValue(liveUi.LeftPanel,previousLeft);rawAddress.SetValue(liveUi.RightPanel,previousRight);
+                shortcutCache.SetValue(plugin,previousShortcut);
+            }
             var emptyGrid=Node();var emptyMapPage=Node(emptyGrid);
             var gridData=Marshal.PtrToStructure<GameOffsets.Objects.UiElement.UiElementBaseOffset>(emptyGrid);
             gridData.UnscaledSize=new GameOffsets.Natives.StdTuple2D<float>(864,576);Marshal.StructureToPtr(gridData,emptyGrid,false);

@@ -143,40 +143,67 @@ namespace StashUtility
         }
 
         private static bool IsTabletReforgeTitle(string text) =>
-            NormalizeModSearch(text) is "etabli de reforgeage" or "etabli de reforge" or "reforging bench";
+            NormalizeCraftText(text) is "etabli de reforgeage" or "etabli de reforge" or "reforging bench";
+
+        private static bool IsTabletReforgeAction(string text) => NormalizeCraftText(text) is "reforger" or "reforge";
+
+        private StashUiNode ReadTabletReforgeUi(IntPtr root)
+        {
+            var tree = ReadStashUiBranch(root, visibleOnly: true);
+            foreach (var node in StashUiNodes(tree))
+            {
+                // The native reforge window's title and action label have no string ID.
+                // Read only the two expected captions; leave other UI text untouched.
+                if (IsElementVisible(node.Address) && TryReadUiString(node.Address, 0x360, out var text) &&
+                    (IsTabletReforgeTitle(text) || IsTabletReforgeAction(text))) node.Text = text;
+            }
+            return tree;
+        }
 
         private static (StashUiNode Panel, StashUiNode Button, StashUiNode Title) FindTabletReforgeControls(StashUiNode root)
         {
             var nodes = StashUiNodes(root).ToList();
             var titles = nodes.Where(node => IsTabletReforgeTitle(node.Text)).ToList();
-            var labels = nodes.Where(node => NormalizeModSearch(node.Text) is "reforger" or "reforge").ToList();
-            if (titles.Count != 1 || labels.Count != 1) return default;
-            var button = labels[0];
-            while (button != null && !button.Id.Contains("button", StringComparison.OrdinalIgnoreCase)) button = button.Parent;
-            if (button == null) return default;
-            for (var panel = titles[0].Parent; panel != null; panel = panel.Parent)
-                if (StashUiNodes(panel).Contains(button)) return (panel, button, titles[0]);
-            return default;
+            var labels = nodes.Where(node => IsTabletReforgeAction(node.Text)).ToList();
+            var matches = new List<(StashUiNode Panel, StashUiNode Button, StashUiNode Title)>();
+            foreach (var label in labels)
+            {
+                var button = label;
+                for (var parent = label.Parent; parent != null; parent = parent.Parent)
+                    if (parent.Id.Contains("button", StringComparison.OrdinalIgnoreCase)) { button = parent; break; }
+                // Select the window containing both captions, excluding the separate world nameplate.
+                for (var panel = label.Parent; panel != null; panel = panel.Parent)
+                {
+                    var contained = titles.Where(title => StashUiNodes(panel).Contains(title)).ToList();
+                    if (contained.Count == 0) continue;
+                    if (contained.Count == 1) matches.Add((panel, button, contained[0]));
+                    break;
+                }
+            }
+            return matches.Count == 1 ? matches[0] : default;
         }
 
         private TabletReforgeBench ReadTabletReforgeBench(bool readItems = true)
         {
             var ui = Core.States.InGameStateObject.GameUi;
-            if (ui == null || !IsElementVisible(ui.LeftPanel.Address) || !IsElementVisible(ui.RightPanel.Address))
+            if (ui == null || !IsElementVisible(ui.RightPanel.Address))
                 throw ReforgeFailure("open", "Open the reforging bench and inventory in keyboard/mouse mode.");
-            var tree = ReadStashUiBranch(ui.LeftPanel.Address);
-            // Hidden panels may retain old labels and item references. They are never click targets.
-            foreach (var node in StashUiNodes(tree))
-                if (!IsElementVisible(node.Address)) node.Text = "";
+            var known = tabletReforge?.Bench ?? tabletReforgeShortcutBench;
+            var root = known != null && IsElementVisible(known.Panel) && IsElementVisible(known.Title) && IsElementVisible(known.Button)
+                ? known.Panel : ui.Address;
+            var tree = ReadTabletReforgeUi(root);
             var controls = FindTabletReforgeControls(tree);
-            if (controls.Panel == null || !IsElementVisible(controls.Button.Address) ||
+            if (controls.Panel == null || controls.Panel.Address == ui.Address || !IsElementVisible(controls.Button.Address) ||
                 !PluginUiElementReflection.TryGetAbsoluteRect(controls.Panel.Address, out var pos, out var size) ||
-                !PluginUiElementReflection.TryGetAbsoluteRect(controls.Title.Address, out var titlePos, out _) ||
+                !PluginUiElementReflection.TryGetAbsoluteRect(controls.Title.Address, out var titlePos, out var titleSize) ||
                 !PluginUiElementReflection.TryGetAbsoluteRect(controls.Button.Address, out var buttonPos, out var buttonSize) ||
                 size.X < 150 || size.Y < 250 || buttonPos.Y <= titlePos.Y + size.Y / 2 ||
-                buttonPos.X < pos.X || buttonPos.Y < pos.Y || buttonPos.X + buttonSize.X > pos.X + size.X + 3 ||
-                buttonPos.Y + buttonSize.Y > pos.Y + size.Y + 3)
+                buttonPos.X < pos.X || buttonPos.Y < pos.Y || buttonPos.X + buttonSize.X > pos.X + size.X + 3)
                 throw ReforgeFailure("unidentified", "The reforging bench could not be identified safely. No click was sent.");
+            // Native footer controls extend below the panel's declared rectangle.
+            var end = Vector2.Max(pos + size, Vector2.Max(titlePos + titleSize, buttonPos + buttonSize));
+            pos = Vector2.Min(pos, Vector2.Min(titlePos, buttonPos));
+            size = end - pos;
             var result = new TabletReforgeBench { Panel = controls.Panel.Address, Button = controls.Button.Address, Title = controls.Title.Address, Position = pos, Size = size };
             if (!readItems) return result;
             var seen = new HashSet<IntPtr>();

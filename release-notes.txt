@@ -1,4 +1,8 @@
-ExileCenter 1.23.1
+ExileCenter 1.23.2
+
+- Reforge : correction du message demandant d’ouvrir l’établi et l’inventaire alors qu’ils sont déjà ouverts. La détection cherche maintenant la fenêtre propre à l’établi et ne dépend plus du panneau du coffre, qui est masqué pendant la reforge.
+- Meilleure reconnaissance du titre de la fenêtre et du bouton Reforger, y compris lorsque le nom de l’établi est aussi affiché dans le monde. Le bouton situé sous le cadre est correctement repéré.
+- Les panneaux cachés ne saturent plus la limite de recherche avant l’établi visible. Le bouton direct et le lancement depuis les réglages utilisent la même détection corrigée.
 
 - Accès direct : un bouton « Reforge des tablettes » s’affiche au-dessus de l’établi de reforgeage lorsqu’il est ouvert avec l’inventaire. Il lance le même cycle que l’onglet des réglages, sans devoir ouvrir les menus. Le bouton est désactivé pendant une automatisation et disparaît lorsque l’établi est fermé ou qu’une autre fenêtre prend le focus.
 - Les barres et icônes existantes conservent leurs positions, dimensions, ancrages et verrouillages. Aucun nouveau réglage personnel n’est enregistré pour ce raccourci.
@@ -9,7 +13,7 @@ ExileCenter 1.23.1
 - Échap, un mouvement de la souris, une perte de focus, un changement de fenêtre ou une opération non confirmée arrêtent le cycle. Aucun clic n’est répété après un délai dépassé. Aucune injection, aucun hook ni écriture dans la mémoire du jeu n’est ajouté.
 - Corrections des précédentes versions et icône EC conservées. Aucun changement des positions, tailles, ancrages ou réglages des fenêtres, barres et icônes. GameOffsets.dll reste strictement identique, sans recompilation.
 
-Validation : compilation et contrôles isolés de sélection, d’ordre par colonne, de protection des cases, d’identification des libellés français/anglais et des événements Ctrl + clic. Régressions de l’auto-craft existant et de la position verrouillée de la barre du coffre vérifiées hors jeu. Aucun arrêt d’application ni interaction avec PoE. L’affichage réel du raccourci, la reconnaissance de l’établi, les transferts, le cycle complet et l’ordre de rangement automatique restent à vérifier en jeu : la compilation et les fixtures ne les confirment pas. L’absence d’injection ne constitue pas une validation par GGG ni une garantie contre une sanction.
+Validation : défaut reproduit avec la DLL publiée, puis 11 975 contrôles isolés réussis après correction, dont la fenêtre native sans identifiant, le coffre masqué, le nom d’objet identique dans le monde et le bouton sous le cadre. Précontrôle effectué en lecture seule sur l’établi réellement ouvert : fenêtre, bouton Reforger, emplacements vides, curseur vide et tablettes à quatre mods reconnus. Aucun clic, déplacement de souris, injection, écriture ou suspension du jeu pendant le diagnostic. Régressions de l’auto-craft et de la position verrouillée de la barre du coffre vérifiées hors jeu. Le cycle automatisé complet et son affichage après installation restent à confirmer par l’utilisateur ; le précontrôle et les fixtures ne constituent pas une validation par GGG ni une garantie contre une sanction.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

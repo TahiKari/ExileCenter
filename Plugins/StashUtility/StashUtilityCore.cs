@@ -5323,13 +5323,16 @@ namespace StashUtility
             public readonly List<StashUiNode> Children = new();
         }
 
-        private StashUiNode ReadStashUiBranch(IntPtr root)
+        private StashUiNode ReadStashUiBranch(IntPtr root, bool visibleOnly = false)
         {
             var visited = new HashSet<IntPtr>();
             return Read(root, null, 0);
             StashUiNode Read(IntPtr address, StashUiNode parent, int depth)
             {
-                if (address == IntPtr.Zero || depth > 18 || visited.Count >= 4096 || !visited.Add(address) ||
+                // Reforge discovery starts at the whole left panel. Hidden inventories
+                // must not consume the node budget before the visible bench is reached.
+                if (address == IntPtr.Zero || depth > 18 || visibleOnly && !IsElementVisible(address) ||
+                    visited.Count >= 4096 || !visited.Add(address) ||
                     !TryReadMemory<UiElementBaseOffset>(address, out var data)) return null;
                 var node = new StashUiNode { Address = address, Parent = parent };
                 if (TryReadUiString(address, 0x98, out var id)) node.Id = id;
