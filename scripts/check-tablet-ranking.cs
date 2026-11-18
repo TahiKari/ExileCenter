@@ -78,6 +78,7 @@ internal static class TabletRankingCheck
         Check(Field(Call("FindTabletReforgeControls", panel), "Item1") == null, "Another crafting bench cannot be used as a reforging bench");
 
         var events = new List<string>(); var pressed = new HashSet<int>();
+        bool rejectMouseUp = false;
         Set("craftKeyDown", (Func<int, bool>)(key => pressed.Contains(key)));
         var dispatch = core.GetField("craftSendInputs", flags);
         var parameter = Expression.Parameter(dispatch.FieldType.GetGenericArguments()[0], "inputs");
@@ -92,7 +93,14 @@ internal static class TabletRankingCheck
                     if (up) pressed.Remove(code); else pressed.Add(code);
                     events.Add(code.ToString("X") + (up ? "_UP" : "_DOWN"));
                 }
-                else events.Add(((uint)Field(Field(data, "Mouse"), "Flags")).ToString("X"));
+                else
+                {
+                    uint mouseFlags = (uint)Field(Field(data, "Mouse"), "Flags");
+                    if (mouseFlags == 4 && rejectMouseUp) return 0;
+                    if (mouseFlags == 2) pressed.Add(1);
+                    if (mouseFlags == 4) pressed.Remove(1);
+                    events.Add(mouseFlags.ToString("X"));
+                }
             }
             return (uint)inputs.Length;
         };
@@ -100,18 +108,42 @@ internal static class TabletRankingCheck
         foreach (string direction in new[] { "inventory to bench", "bench output to inventory" })
         {
             events.Clear();
-            Check(!(bool)Call("CraftInput", true, false, false, false) && (bool)Call("CraftInput", true, false, false, false), direction + " settles Ctrl before clicking");
+            Check(!(bool)Call("CraftInput", true, false, false, false, false) && (bool)Call("CraftInput", true, false, false, false, false), direction + " settles Ctrl before clicking");
             Call("CraftReleaseInput", true);
             Check(events.SequenceEqual(new[] { "11_DOWN", "2", "4", "11_UP" }), direction + " uses exactly one Ctrl+left-click and releases Ctrl");
         }
-        events.Clear(); Check((bool)Call("CraftInput", false, false, false, false), "Reforge uses a plain left click"); Call("CraftReleaseInput", true);
+        events.Clear(); Check((bool)Call("CraftInput", false, false, false, false, false), "Default input uses a plain left click"); Call("CraftReleaseInput", true);
         Check(events.SequenceEqual(new[] { "2", "4" }), "The reforge button receives neither Ctrl nor an extra click");
-        events.Clear(); Call("CraftInput", true, false, false, false); pressed.Remove(0x11);
+        events.Clear(); Call("CraftInput", true, false, false, false, false); pressed.Remove(0x11);
         bool lostControl = false;
-        try { Call("CraftInput", true, false, false, false); }
+        try { Call("CraftInput", true, false, false, false, false); }
         catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException) { lostControl = true; }
         Check(lostControl && events.SequenceEqual(new[] { "11_DOWN" }), "A lost Ctrl blocks the transfer before a plain left click can be sent");
         Call("CraftReleaseInput", true);
+        foreach (string direction in new[] { "inventory to bench", "bench output to inventory" })
+        {
+            events.Clear();
+            Check(!(bool)Call("CraftInput", true, false, false, false, true) && (bool)Call("CraftInput", true, false, false, false, true),
+                direction + " settles Ctrl before its separate mouse-down");
+            Check(events.SequenceEqual(new[] { "11_DOWN", "2" }) && pressed.Contains(1) && pressed.Contains(0x11) &&
+                (DateTime)core.GetField("affinityNextAction",flags).GetValue(plugin) > DateTime.UtcNow.AddMilliseconds(40),
+                direction + " leaves mouse-down visible for at least 60 ms with Ctrl held");
+            int beforeDuplicate = events.Count; bool duplicateStopped = false;
+            try { Call("CraftInput", true, false, false, false, true); }
+            catch(TargetInvocationException ex) when(ex.InnerException is InvalidOperationException) { duplicateStopped = true; }
+            Check(duplicateStopped && events.Count == beforeDuplicate, "A held transfer cannot send a second mouse-down");
+            Check((bool)Call("CraftReleaseHeldMouse") && !pressed.Contains(1) && pressed.Contains(0x11),
+                "Mouse-up occurs separately while Ctrl remains held until verification");
+            Call("CraftReleaseInput", true);
+            Check(events.SequenceEqual(new[] { "11_DOWN", "2", "4", "11_UP" }), direction + " finishes with one mouse-up before releasing Ctrl");
+        }
+        events.Clear();
+        Check((bool)Call("CraftInput", false, false, false, false, true) && events.SequenceEqual(new[]{"2"}),
+            "The reforge button also uses a separate plain mouse-down");
+        rejectMouseUp = true;
+        Check(!(bool)Call("CraftReleaseHeldMouse") && pressed.Contains(1), "An unaccepted mouse-up remains pending instead of allowing another click");
+        rejectMouseUp = false; Call("CraftReleaseInput", true);
+        Check(events.SequenceEqual(new[]{"2","4"}) && !pressed.Contains(1), "Cleanup releases a pending plain click without another mouse-down");
         var pointType = core.GetNestedType("NativePoint", flags);
         var expectedCursor = Activator.CreateInstance(pointType); Put(expectedCursor, "X", 100); Put(expectedCursor, "Y", 200);
         var movedCursor = Activator.CreateInstance(pointType); Put(movedCursor, "X", 110); Put(movedCursor, "Y", 200);
@@ -128,9 +160,17 @@ internal static class TabletRankingCheck
         Call("BeginGridSort", false, false); Call("BeginAffinityTransfer"); Call("RequestWaystoneCraft", true); Call("BeginStashScan", false);
         Check(events.Count == 0, "Other automation entry points are blocked during tablet reforging without any native input");
         string settingsBefore = JsonConvert.SerializeObject(plugin.Settings);
-        Call("CraftInput", true, false, false, false); Call("StopTabletReforge", "Fixture stop: 100% · échec");
-        Check(events.SequenceEqual(new[] { "11_DOWN", "11_UP" }) && !pressed.Contains(0x11), "Stopping a pending transfer releases Ctrl without another click");
+        Call("CraftInput", true, false, false, false, true); Call("CraftInput", true, false, false, false, true); Call("StopTabletReforge", "Fixture stop: 100% · échec");
+        Check(events.SequenceEqual(new[] { "11_DOWN", "2", "4", "11_UP" }) && !pressed.Contains(0x11) && !pressed.Contains(1),
+            "Stopping a held transfer releases mouse-up before Ctrl without another click");
         Check(JsonConvert.SerializeObject(plugin.Settings) == settingsBefore, "Stopping reforge preserves toolbar offsets, locks, protected cells and every saved setting");
+        var timedOut = Activator.CreateInstance(sessionType); Put(timedOut,"Moving",Item(1,0,2));
+        var timeoutMessages = new HashSet<string>();
+        foreach(int phase in new[]{0,1,3,5})
+        {
+            Put(timedOut,"Phase",phase); timeoutMessages.Add((string)Call("TabletReforgeTimeout",timedOut));
+        }
+        Check(timeoutMessages.Count == 4, "Preparation, loading, reforging and return failures identify distinct stages");
         Console.WriteLine(checks + " tablet reforge checks passed; no game process or OS input.");
     }
 
@@ -1081,11 +1121,11 @@ internal static class TabletRankingCheck
             SetCraft("waystoneCraftRunning",false);SetCraft("affinityCtrlHeld",false);SetCraft("affinityShiftHeld",false);
             SetCraft("craftInputPhase",1);
             bool blockedCopy=false;
-            try{Call("CraftInput",true,false,true,false);}catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){blockedCopy=true;}
+            try{Call("CraftInput",true,false,true,false,false);}catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){blockedCopy=true;}
             Check(blockedCopy,"A lost Ctrl modifier blocks C before any keyboard input is sent");
             SetCraft("craftInputPhase",1);
             bool blockedShiftClick=false;
-            try{Call("CraftInput",false,true,false,false);}catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){blockedShiftClick=true;}
+            try{Call("CraftInput",false,true,false,false,false);}catch(TargetInvocationException ex)when(ex.InnerException is InvalidOperationException){blockedShiftClick=true;}
             Check(blockedShiftClick,"A lost Shift modifier blocks a currency application before any mouse input is sent");
             SetCraft("craftInputPhase",0);
             var presetSource=Tab("PTP",waystone);var presetMoney=Tab("Currencies",other);
@@ -1481,7 +1521,7 @@ internal static class TabletRankingCheck
             return (uint)inputs.Length;
         };
         Set("craftSendInputs",Expression.Lambda(sendField.FieldType,Expression.Invoke(Expression.Constant(record),Expression.Convert(inputParameter,typeof(Array))),inputParameter).Compile());
-        bool Input(bool right=false)=>(bool)Call("CraftInput",false,true,false,right);
+        bool Input(bool right=false)=>(bool)Call("CraftInput",false,true,false,right,false);
         void Release(bool end=false)=>Call("CraftReleaseInput",end);
         Check(!Input(true)&&events.SequenceEqual(new[]{"SHIFT_DOWN"}),"Currency selection sends Shift DOWN before its right click");
         Check(Input(true),"The selected currency receives one completed right click while Shift remains held");
@@ -1517,7 +1557,7 @@ internal static class TabletRankingCheck
         pressed.Remove(0x10);
         Check(!NavigationAllowed()&&events.Count==navigationEventCount,"Both stash-navigation guards reject a lost Shift without emitting any input");
         Set("affinityShiftHeld",false);Set("waystoneCraftRunning",false);
-        bool Copy()=>(bool)Call("CraftInput",true,false,true,false);
+        bool Copy()=>(bool)Call("CraftInput",true,false,true,false,false);
         bool RejectedCopy()
         {
             try{Copy();return false;}catch(TargetInvocationException error)when(error.InnerException is InvalidOperationException){return true;}

@@ -2123,6 +2123,7 @@ namespace StashUtility
         // Fixtures replace only these dispatchers; production always uses Win32.
         private Func<int, bool> craftKeyDown;
         private Func<AffinityInput[], uint> craftSendInputs;
+        private bool craftMouseHeld;
         private bool CraftKeyDown(int key) => craftKeyDown?.Invoke(key) ?? (AffinityGetAsyncKeyState(key) & 0x8000) != 0;
         private uint CraftSendInputs(AffinityInput[] inputs)
         {
@@ -2140,9 +2141,16 @@ namespace StashUtility
 
         private void CraftReleaseInput(bool endSession = false)
         {
+            CraftReleaseHeldMouse();
             if (affinityCtrlHeld && CraftSendInputs(new[] { AffinityKeyInput(2) }) == 1) affinityCtrlHeld = false;
             if (endSession && affinityShiftHeld && CraftSendInputs(new[] { AffinityKeyInput(2, 0x10) }) == 1) affinityShiftHeld = false;
             craftInputPhase = 0;
+        }
+
+        private bool CraftReleaseHeldMouse()
+        {
+            if (craftMouseHeld && CraftSendInputs(new[] { AffinityMouseInput(0x0004) }) == 1) craftMouseHeld = false;
+            return !craftMouseHeld;
         }
 
         private bool CraftFinishInput(bool freshCopy)
@@ -3428,8 +3436,10 @@ namespace StashUtility
             return true;
         }
 
-        private bool CraftInput(bool control = false, bool shift = false, bool copy = false, bool right = false)
+        private bool CraftInput(bool control = false, bool shift = false, bool copy = false, bool right = false, bool holdMouse = false)
         {
+            if (craftMouseHeld || holdMouse && (copy || right))
+                throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
             if (craftInputPhase == 0)
             {
                 if (new[] { 0x10, 0x11, 0x12, 0x5B, 0x5C, 0x01, 0x02 }.Any(key =>
@@ -3456,14 +3466,16 @@ namespace StashUtility
                 if (affinityShiftHeld && !CraftKeyDown(0x10)) throw CraftFailure("shift_lost", "Shift was released unexpectedly. Crafting stopped.");
                 if (control && (!affinityCtrlHeld || !CraftKeyDown(0x11)) || shift && !affinityShiftHeld || copy && !control)
                     throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
-                var inputs = copy ? new[] { AffinityKeyInput(0, 0x43), AffinityKeyInput(2, 0x43) } :
+                var inputs = holdMouse ? new[] { AffinityMouseInput(0x0002) } :
+                    copy ? new[] { AffinityKeyInput(0, 0x43), AffinityKeyInput(2, 0x43) } :
                     new[] { AffinityMouseInput(right ? 0x0008u : 0x0002u), AffinityMouseInput(right ? 0x0010u : 0x0004u) };
-                if (CraftSendInputs(inputs) != 2)
+                if (CraftSendInputs(inputs) != inputs.Length)
                 {
                     CraftSendInputs(new[] { copy ? AffinityKeyInput(2, 0x43) : AffinityMouseInput(right ? 0x0010u : 0x0004u) });
                     throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
                 }
-                craftInputPhase = 2; affinityNextAction = DateTime.UtcNow.AddMilliseconds(affinityActionDelay); return true;
+                craftMouseHeld = holdMouse;
+                craftInputPhase = 2; affinityNextAction = DateTime.UtcNow.AddMilliseconds(holdMouse ? Math.Max(60, affinityActionDelay) : affinityActionDelay); return true;
             }
             throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
         }
