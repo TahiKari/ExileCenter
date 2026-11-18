@@ -1,11 +1,12 @@
-ExileCenter 1.22.9
+ExileCenter 1.23.0
 
-- Tablettes d'Expédition : correction de la notation absente pour le Boss supplémentaire piégé dans la glace. Le libellé français remplace la phrase anglaise encore utilisée pour reconnaître cette ligne.
-- Tablettes d'Expédition : correction de la notation absente sur les chances cumulatives de contenir un Vestige de Vérisium supplémentaire, y compris lorsque le texte occupe deux lignes. Le libellé actuel du jeu remplace « chances Surpassantes ».
-- Sur les deux configurations des captures, les notations manquantes sont D et S ; les compositions CD3 et SAC2 restent identiques. Les rangs personnalisés restent prioritaires.
+- Tablettes : nouvel onglet « Reforge des tablettes » dans Filtres > Tablettes. Établi vide et inventaire ouverts requis. Le premier groupe complet fixe le type et la rareté pour la session ; seules les tablettes à exactement 4 mods explicites sont consommées, par groupes de 3.
+- Les tablettes de départ sont parcourues depuis le haut à gauche, de haut en bas dans chaque colonne, puis vers la droite. Transfert vers l’établi par Ctrl + clic gauche, clic sur Reforger, attente du résultat, chargement du trio suivant, puis retour du résultat par Ctrl + clic gauche. Le dernier résultat est aussi récupéré lorsqu’il ne reste plus de trio complet.
+- Les résultats sont exclus de la liste de départ. Les autres objets, les cases protégées et les tablettes restantes sont conservés. Chaque opération doit être confirmée avant de continuer. Si le jeu renvoie un résultat hors de l’ordre par colonne, l’automatisation s’arrête sans déplacer à nouveau la tablette.
+- Échap, un mouvement de la souris, une perte de focus, un changement de fenêtre ou une opération non confirmée arrêtent le cycle. Aucun clic n’est répété après un délai dépassé. Aucune injection, aucun hook ni écriture dans la mémoire du jeu n’est ajouté.
 - Corrections des précédentes versions et icône EC conservées. Aucun changement des positions, tailles, ancrages ou réglages des fenêtres, barres et icônes. GameOffsets.dll reste strictement identique, sans recompilation.
 
-Validation : compilation du cœur et de StashUtility ; 5 132 contrôles isolés des infobulles réussis. Les tests incluent les deux nouvelles captures avec quatre notations chacune, textes séparés ou regroupés, texte sur deux lignes et conservation des priorités personnalisées. Aperçus hors jeu des deux nouvelles tablettes inspectés. Les contrôles basés sur les libellés du catalogue ne garantissent pas la reconnaissance de toutes les formulations réelles du jeu. Aucun arrêt d'application ni interaction avec le jeu. Rendu dans l'installation en cours à vérifier après mise à jour.
+Validation : compilation et contrôles isolés de sélection, d’ordre par colonne, de protection des cases, d’identification des libellés français/anglais et des événements Ctrl + clic. Régressions de l’auto-craft existant et de la position verrouillée de la barre du coffre vérifiées hors jeu. Aucun arrêt d’application ni interaction avec PoE. La reconnaissance réelle de l’établi, les transferts, le cycle complet et l’ordre de rangement automatique restent à vérifier en jeu : la compilation et les fixtures ne les confirment pas. L’absence d’injection ne constitue pas une validation par GGG ni une garantie contre une sanction.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

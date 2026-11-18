@@ -18,6 +18,122 @@ using Newtonsoft.Json;
 
 internal static class TabletRankingCheck
 {
+    private static void CheckTabletReforge(string root)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        var core = typeof(StashUtilityCore);
+        var plugin = new StashUtilityCore { DllDirectory = Path.Combine(root, "Plugins", "StashUtility") };
+        var itemType = core.GetNestedType("SortItem", flags);
+        var listType = typeof(List<>).MakeGenericType(itemType);
+        object Call(string name, params object[] args) => core.GetMethod(name, flags).Invoke(plugin, args);
+        void Set(string name, object value) => core.GetField(name, flags).SetValue(plugin, value);
+        object Field(object value, string name) => value.GetType().GetField(name, flags).GetValue(value);
+        void Put(object value, string name, object data) => value.GetType().GetField(name, flags).SetValue(value, data);
+        IList List(params object[] values) { var list = (IList)Activator.CreateInstance(listType); foreach (var value in values) list.Add(value); return list; }
+        object Item(int id, int x, int y, string path = "Breach", int mods = 4, bool tablet = true, int width = 1, int height = 1)
+        {
+            var item = Activator.CreateInstance(itemType);
+            Put(item, "Address", new IntPtr(id)); Put(item, "X", x); Put(item, "Y", y); Put(item, "Path", path);
+            Put(item, "Tier", mods); Put(item, "IsTablet", tablet); Put(item, "Width", width); Put(item, "Height", height);
+            Put(item, "Rarity", ExileCenter.RemoteEnums.Rarity.Rare); Put(item, "Identity", "tablet-" + id); return item;
+        }
+        var inventory = List(Item(1, 1, 0), Item(2, 0, 3), Item(3, 0, 0), Item(4, 0, 1), Item(5, 0, 2),
+            Item(6, 0, 4), Item(7, 1, 1), Item(8, 2, 0, mods: 3), Item(9, 2, 1, mods: 5), Item(10, 2, 2, tablet: false));
+        var plan = (IList)Call("PlanTabletReforge", inventory, new HashSet<int>());
+        Check(plan.Cast<object>().Select(item => (IntPtr)Field(item, "Address")).SequenceEqual(new[] { 3, 4, 5, 2, 6, 1 }.Select(id => new IntPtr(id))),
+            "Reforge selects four-mod tablets top-to-bottom then right, leaving an incomplete trio and other items untouched");
+        Check(inventory.Count == 10, "Reforge planning preserves the original inventory");
+        var protectedPlan = (IList)Call("PlanTabletReforge", inventory, new HashSet<int> { 0, 12 });
+        Check(protectedPlan.Count == 3 && !protectedPlan.Cast<object>().Any(item => new[] { 3, 4 }.Contains(((IntPtr)Field(item, "Address")).ToInt32())),
+            "Protected cells are excluded before complete triples are selected");
+        var mixed = List(Item(11, 0, 0, "Ritual"), Item(12, 0, 1), Item(13, 0, 2), Item(14, 0, 3));
+        Check(((IList)Call("PlanTabletReforge", mixed, new HashSet<int>())).Cast<object>().All(item => (string)Field(item, "Path") == "Breach"),
+            "Different tablet types are never mixed to complete a triple");
+        Put(mixed[3], "Rarity", ExileCenter.RemoteEnums.Rarity.Magic);
+        Check(((IList)Call("PlanTabletReforge", mixed, new HashSet<int>())).Count == 0, "Different rarities cannot complete a triple");
+        Check((int)Call("TabletReforgeFreeCell", List()) == 0, "Return order begins in the top-left cell");
+        Check((int)Call("TabletReforgeFreeCell", List(Item(20, 0, 0, width: 2, height: 2))) == 24,
+            "Return order fills downward and respects every cell occupied by a larger item");
+        var column = List(Enumerable.Range(0, 5).Select(y => Item(30 + y, 0, y)).ToArray());
+        Check((int)Call("TabletReforgeFreeCell", column) == 1, "A full column advances to the top of the column on its right");
+        var full = List(Enumerable.Range(0, 60).Select(cell => Item(100 + cell, cell % 12, cell / 12)).ToArray());
+        Check((int)Call("TabletReforgeFreeCell", full) == -1, "A full inventory has no return target");
+
+        var nodeType = core.GetNestedType("StashUiNode", flags);
+        object Node(string id, string text, object parent = null)
+        {
+            var node = Activator.CreateInstance(nodeType); Put(node, "Id", id); Put(node, "Text", text); Put(node, "Parent", parent);
+            if (parent != null) ((IList)Field(parent, "Children")).Add(node); return node;
+        }
+        var panel = Node("panel", ""); var title = Node("label", "ÉTABLI DE REFORGEAGE", panel);
+        var button = Node("button", "", panel); Node("label", "REFORGER", button);
+        var controls = Call("FindTabletReforgeControls", panel);
+        Check(ReferenceEquals(Field(controls, "Item1"), panel) && ReferenceEquals(Field(controls, "Item2"), button),
+            "French bench title and reforge label resolve their common panel and actual button");
+        Put(title, "Text", "Reforging Bench"); Put(((IList)Field(button, "Children"))[0], "Text", "Reforge");
+        Check(ReferenceEquals(Field(Call("FindTabletReforgeControls", panel), "Item2"), button), "English bench labels resolve the same control");
+        Node("label", "Reforge", panel);
+        Check(Field(Call("FindTabletReforgeControls", panel), "Item1") == null, "Ambiguous reforge controls are rejected");
+        Put(title, "Text", "Salvage Bench");
+        Check(Field(Call("FindTabletReforgeControls", panel), "Item1") == null, "Another crafting bench cannot be used as a reforging bench");
+
+        var events = new List<string>(); var pressed = new HashSet<int>();
+        Set("craftKeyDown", (Func<int, bool>)(key => pressed.Contains(key)));
+        var dispatch = core.GetField("craftSendInputs", flags);
+        var parameter = Expression.Parameter(dispatch.FieldType.GetGenericArguments()[0], "inputs");
+        Func<Array, uint> record = inputs =>
+        {
+            foreach (var input in inputs)
+            {
+                var data = Field(input, "Data");
+                if ((uint)Field(input, "Type") == 1)
+                {
+                    var key = Field(data, "Key"); int code = (ushort)Field(key, "Key"); bool up = ((uint)Field(key, "Flags") & 2) != 0;
+                    if (up) pressed.Remove(code); else pressed.Add(code);
+                    events.Add(code.ToString("X") + (up ? "_UP" : "_DOWN"));
+                }
+                else events.Add(((uint)Field(Field(data, "Mouse"), "Flags")).ToString("X"));
+            }
+            return (uint)inputs.Length;
+        };
+        dispatch.SetValue(plugin, Expression.Lambda(dispatch.FieldType, Expression.Invoke(Expression.Constant(record), Expression.Convert(parameter, typeof(Array))), parameter).Compile());
+        foreach (string direction in new[] { "inventory to bench", "bench output to inventory" })
+        {
+            events.Clear();
+            Check(!(bool)Call("CraftInput", true, false, false, false) && (bool)Call("CraftInput", true, false, false, false), direction + " settles Ctrl before clicking");
+            Call("CraftReleaseInput", true);
+            Check(events.SequenceEqual(new[] { "11_DOWN", "2", "4", "11_UP" }), direction + " uses exactly one Ctrl+left-click and releases Ctrl");
+        }
+        events.Clear(); Check((bool)Call("CraftInput", false, false, false, false), "Reforge uses a plain left click"); Call("CraftReleaseInput", true);
+        Check(events.SequenceEqual(new[] { "2", "4" }), "The reforge button receives neither Ctrl nor an extra click");
+        events.Clear(); Call("CraftInput", true, false, false, false); pressed.Remove(0x11);
+        bool lostControl = false;
+        try { Call("CraftInput", true, false, false, false); }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException) { lostControl = true; }
+        Check(lostControl && events.SequenceEqual(new[] { "11_DOWN" }), "A lost Ctrl blocks the transfer before a plain left click can be sent");
+        Call("CraftReleaseInput", true);
+        var pointType = core.GetNestedType("NativePoint", flags);
+        var expectedCursor = Activator.CreateInstance(pointType); Put(expectedCursor, "X", 100); Put(expectedCursor, "Y", 200);
+        var movedCursor = Activator.CreateInstance(pointType); Put(movedCursor, "X", 110); Put(movedCursor, "Y", 200);
+        Set("affinityCursor", expectedCursor); int beforeMouseCheck = events.Count;
+        bool mouseStopped = false;
+        try { Call("CraftCheckCursor", true, movedCursor, DateTime.UtcNow); }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException) { mouseStopped = true; }
+        Check(mouseStopped && events.Count == beforeMouseCheck, "User mouse movement stops the shared reforge cursor guard without sending input");
+        Check(!(bool)Call("CraftCheckCursor", false, expectedCursor, DateTime.UtcNow) && events.Count == beforeMouseCheck,
+            "An unreadable cursor sends no reforge input");
+        var sessionType = core.GetNestedType("TabletReforgeSession", flags);
+        Set("tabletReforge", Activator.CreateInstance(sessionType));
+        events.Clear();
+        Call("BeginGridSort", false, false); Call("BeginAffinityTransfer"); Call("RequestWaystoneCraft", true); Call("BeginStashScan", false);
+        Check(events.Count == 0, "Other automation entry points are blocked during tablet reforging without any native input");
+        string settingsBefore = JsonConvert.SerializeObject(plugin.Settings);
+        Call("CraftInput", true, false, false, false); Call("StopTabletReforge", "Fixture stop: 100% · échec");
+        Check(events.SequenceEqual(new[] { "11_DOWN", "11_UP" }) && !pressed.Contains(0x11), "Stopping a pending transfer releases Ctrl without another click");
+        Check(JsonConvert.SerializeObject(plugin.Settings) == settingsBefore, "Stopping reforge preserves toolbar offsets, locks, protected cells and every saved setting");
+        Console.WriteLine(checks + " tablet reforge checks passed; no game process or OS input.");
+    }
+
     private static void CheckLootPeriods(string root, string previews)
     {
         const BindingFlags flags=BindingFlags.Instance|BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic;
@@ -2252,6 +2368,11 @@ internal static class TabletRankingCheck
             if (args.Length > 1 && args[1] == "--toolbar-only")
             {
                 CheckStashToolbarPosition(root);
+                return 0;
+            }
+            if (args.Length > 1 && args[1] == "--reforge-only")
+            {
+                CheckTabletReforge(root);
                 return 0;
             }
             if (args.Length > 1 && args[1] == "--overlay-recovery-only")

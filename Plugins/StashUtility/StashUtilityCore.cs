@@ -217,6 +217,7 @@ namespace StashUtility
 
         public override void OnDisable()
         {
+            if (tabletReforge != null) StopTabletReforge();
             CloseFilterDisplay();
             craftSelectionOpen = false;
             StopWaystoneCraft();
@@ -502,6 +503,7 @@ namespace StashUtility
 
         private void DrawFilterDisplay()
         {
+            if (tabletReforge != null) { filterDisplay?.Render(false); return; }
             if (!Settings.FilterWindowOpen || !Settings.FilterWindowSeparate)
             {
                 filterDisplay?.Render(false);
@@ -2997,7 +2999,7 @@ namespace StashUtility
 
         private void RequestWaystoneCraft(bool fromInventory = false)
         {
-            if (waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0) return;
+            if (tabletReforge != null || waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0) return;
             try
             {
                 if (!TryGetCraftInventory(out _, out var stash) || stash == IntPtr.Zero || Core.IsSettingsMenuOpen ||
@@ -4258,7 +4260,7 @@ namespace StashUtility
 
         private void BeginGridSort(bool stash, bool gemLevelsOnly = false)
         {
-            if (waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0) return;
+            if (tabletReforge != null || waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0) return;
             sortFromGemTransfer = gemLevelsOnly;
             try
             {
@@ -4723,7 +4725,7 @@ namespace StashUtility
 
         private void BeginAffinityTransfer()
         {
-            if (waystoneCraftRunning || sortRunning || affinityTransferRunning) return;
+            if (tabletReforge != null || waystoneCraftRunning || sortRunning || affinityTransferRunning) return;
             affinityCompletionSummary = string.Empty;
             affinityFeedbackUntil = DateTime.UtcNow.AddSeconds(10);
             try
@@ -4803,7 +4805,7 @@ namespace StashUtility
         {
             if (!affinityTransferRunning)
             {
-                if (!waystoneCraftRunning) ReleaseAffinityControl();
+                if (!waystoneCraftRunning && tabletReforge == null) ReleaseAffinityControl();
                 return;
             }
             try
@@ -6217,9 +6219,9 @@ namespace StashUtility
 
         private void DrawAffinityTransferFeedback()
         {
-            if (Core.IsSettingsMenuOpen || (!affinityTransferRunning && !sortRunning && DateTime.UtcNow > affinityFeedbackUntil) ||
-                !Core.Process.Foreground || string.IsNullOrEmpty(affinityTransferStatus)) return;
-            bool compact = !affinityTransferRunning && !sortRunning && !string.IsNullOrEmpty(affinityCompletionSummary) &&
+            if (Core.IsSettingsMenuOpen || (!affinityTransferRunning && !sortRunning && tabletReforge == null && DateTime.UtcNow > affinityFeedbackUntil) ||
+                !Core.Process.Foreground || tabletReforge == null && string.IsNullOrEmpty(affinityTransferStatus)) return;
+            bool compact = tabletReforge == null && !affinityTransferRunning && !sortRunning && !string.IsNullOrEmpty(affinityCompletionSummary) &&
                 affinityFailed == 0 && affinityUnrouted == 0 && string.IsNullOrEmpty(affinityRouteIssue);
             var viewport = ImGui.GetMainViewport();
             ImGui.SetNextWindowPos(viewport.Pos + new Vector2(viewport.Size.X / 2f, 25), ImGuiCond.Always, new Vector2(0.5f, 0));
@@ -6229,7 +6231,7 @@ namespace StashUtility
                 ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.AlwaysAutoResize))
             {
                 ImGui.SetWindowFontScale(compact ? 0.9f : 1f);
-                ImGui.TextWrapped(sortRunning ? sortStatus : affinityTransferRunning && !affinityTransferWaiting
+                ImGuiHelper.WrappedText(tabletReforge != null ? tabletReforgeStatus : sortRunning ? sortStatus : affinityTransferRunning && !affinityTransferWaiting
                     ? PluginText.F("stashutility.transfer.affinity_progress", "Transfer in progress: {0} stack(s) moved. Escape stops the transfer.", affinityTransferred)
                     : compact ? affinityCompletionSummary : affinityTransferStatus);
             }
@@ -6300,7 +6302,7 @@ namespace StashUtility
 
         private void BeginStashScan(bool craftOnly = false)
         {
-            if (waystoneCraftRunning && !craftOnly || sortRunning || affinityTransferRunning) return;
+            if (tabletReforge != null || waystoneCraftRunning && !craftOnly || sortRunning || affinityTransferRunning) return;
             stashScanForCraft = craftOnly;
             if (craftOnly) craftScanCompleted = false;
             stashScanQueue.Clear();
@@ -6952,6 +6954,7 @@ namespace StashUtility
             UpdateGridSort();
             UpdateAffinityTransfer();
             UpdateWaystoneCraft();
+            UpdateTabletReforge();
             DrawInventoryTransferButton();
             DrawStashSortButton();
             DrawWaystoneCraftSelection();
@@ -6960,7 +6963,7 @@ namespace StashUtility
             UpdateStashScan();
             // Transfers validate live item positions directly; decorative scans need not
             // compete with those checks. Resume highlighting as soon as the transfer ends.
-            if (affinityTransferRunning || waystoneCraftRunning) return;
+            if (affinityTransferRunning || waystoneCraftRunning || tabletReforge != null) return;
             if (!Settings.EnableWaystoneManager && !Settings.EnableTabletManager && !Settings.EnableJewelManager && !Settings.EnableDebugProbe && !Settings.EnableMerchantPurchasePanel) return;
 
             if (!Settings.ShowOverlayInBackground && !Core.Process.Foreground)

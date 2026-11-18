@@ -6,6 +6,9 @@ namespace StashUtility
     using System.Linq;
     using System.Numerics;
     using ExileCenter.RemoteObjects.Components;
+    using ExileCenter.RemoteEnums;
+    using ExileCenter;
+    using ExileCenter.Plugin;
     using ExileCenter.Utils;
     using ImGuiNET;
     using Models;
@@ -36,7 +39,299 @@ namespace StashUtility
             { DrawTabletFilterSettings(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem(PluginText.T("stashutility.tablet_search.title", "Stash search") + "###TabletStashSearch"))
             { DrawTabletStashSearch(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem(RT("title", "Tablet reforging") + "###TabletReforge"))
+            { DrawTabletReforge(); ImGui.EndTabItem(); }
             ImGui.EndTabBar();
+        }
+
+        private sealed class TabletReforgeBench
+        {
+            public IntPtr Panel, Button;
+            public Vector2 Position, Size;
+            public readonly List<SortItem> Inputs = new();
+            public SortItem Output;
+            public IntPtr OutputSlot;
+        }
+
+        private sealed class TabletReforgeSession
+        {
+            public readonly Queue<SortItem> Sources = new();
+            public readonly List<string> Inputs = new();
+            public List<SortItem> Inventory;
+            public TabletReforgeBench Bench;
+            public IntPtr InventoryRoot;
+            public SortItem Moving, Output;
+            public int Phase = 6, Done, ReturnCell;
+            public DateTime Deadline;
+        }
+
+        private TabletReforgeSession tabletReforge;
+        private string tabletReforgeStatus = "";
+        private string RT(string key, string fallback) => PluginText.T("stashutility.reforge." + key, fallback);
+        private InvalidOperationException ReforgeFailure(string key, string fallback) => new(RT(key, fallback));
+
+        private void DrawTabletReforge()
+        {
+            ImGuiHelper.WrappedText(RT("help", "Open an empty reforging bench and your inventory. Only tablets with exactly four explicit modifiers are used, in groups of three of the same type and rarity. Both transfers use Ctrl+Click. Sources and returned results follow columns from top to bottom, then right. Results are never reused. Escape or mouse movement stops reforging."));
+            ImGui.BeginDisabled(tabletReforge != null || waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0);
+            if (ImGui.Button(RT("start", "Start tablet reforging"))) StartTabletReforge();
+            ImGui.EndDisabled();
+            if (tabletReforge != null && ImGui.Button(RT("stop", "Stop reforging"))) StopTabletReforge();
+            ImGuiHelper.WrappedText(tabletReforgeStatus);
+        }
+
+        private static List<SortItem> PlanTabletReforge(List<SortItem> items, HashSet<int> protectedCells)
+        {
+            var groups = items.Where(item => item.IsTablet && item.Tier == 4 && item.Width == 1 && item.Height == 1 &&
+                    !protectedCells.Contains(item.Y * InventoryColumns + item.X))
+                .OrderBy(item => item.X).ThenBy(item => item.Y).GroupBy(item => (item.Path, item.Rarity));
+            // The first complete group fixes the type for this run. Leave other types and leftovers untouched.
+            var group = groups.FirstOrDefault(group => group.Count() >= 3);
+            return group?.Take(group.Count() / 3 * 3).ToList() ?? new();
+        }
+
+        private static int TabletReforgeFreeCell(List<SortItem> items)
+        {
+            var occupied = items.SelectMany(item => SortCells(item, item.X, item.Y, InventoryColumns)).ToHashSet();
+            for (int x = 0; x < InventoryColumns; x++)
+                for (int y = 0; y < InventoryRows; y++)
+                    if (!occupied.Contains(y * InventoryColumns + x)) return y * InventoryColumns + x;
+            return -1;
+        }
+
+        private static (StashUiNode Panel, StashUiNode Button, StashUiNode Title) FindTabletReforgeControls(StashUiNode root)
+        {
+            var nodes = StashUiNodes(root).ToList();
+            var titles = nodes.Where(node => NormalizeModSearch(node.Text) is "etabli de reforgeage" or "etabli de reforge" or "reforging bench").ToList();
+            var labels = nodes.Where(node => NormalizeModSearch(node.Text) is "reforger" or "reforge").ToList();
+            if (titles.Count != 1 || labels.Count != 1) return default;
+            var button = labels[0];
+            while (button != null && !button.Id.Contains("button", StringComparison.OrdinalIgnoreCase)) button = button.Parent;
+            if (button == null) return default;
+            for (var panel = titles[0].Parent; panel != null; panel = panel.Parent)
+                if (StashUiNodes(panel).Contains(button)) return (panel, button, titles[0]);
+            return default;
+        }
+
+        private TabletReforgeBench ReadTabletReforgeBench()
+        {
+            var ui = Core.States.InGameStateObject.GameUi;
+            if (ui == null || !IsElementVisible(ui.LeftPanel.Address) || !IsElementVisible(ui.RightPanel.Address))
+                throw ReforgeFailure("open", "Open the reforging bench and inventory in keyboard/mouse mode.");
+            var tree = ReadStashUiBranch(ui.LeftPanel.Address);
+            // Hidden panels may retain old labels and item references. They are never click targets.
+            foreach (var node in StashUiNodes(tree))
+                if (!IsElementVisible(node.Address)) node.Text = "";
+            var controls = FindTabletReforgeControls(tree);
+            if (controls.Panel == null || !IsElementVisible(controls.Button.Address) ||
+                !PluginUiElementReflection.TryGetAbsoluteRect(controls.Panel.Address, out var pos, out var size) ||
+                !PluginUiElementReflection.TryGetAbsoluteRect(controls.Title.Address, out var titlePos, out _) ||
+                !PluginUiElementReflection.TryGetAbsoluteRect(controls.Button.Address, out var buttonPos, out var buttonSize) ||
+                size.X < 150 || size.Y < 250 || buttonPos.Y <= titlePos.Y + size.Y / 2 ||
+                buttonPos.X < pos.X || buttonPos.Y < pos.Y || buttonPos.X + buttonSize.X > pos.X + size.X + 3 ||
+                buttonPos.Y + buttonSize.Y > pos.Y + size.Y + 3)
+                throw ReforgeFailure("unidentified", "The reforging bench could not be identified safely. No click was sent.");
+            var result = new TabletReforgeBench { Panel = controls.Panel.Address, Button = controls.Button.Address, Position = pos, Size = size };
+            var seen = new HashSet<IntPtr>();
+            foreach (var node in StashUiNodes(controls.Panel))
+            {
+                if (!IsElementVisible(node.Address)) continue;
+                var address = GetHighlightItemAddress(node.Address);
+                if (address == IntPtr.Zero || !seen.Add(address)) continue;
+                var item = ReadFreshItem(address);
+                string identity = SortItemIdentity(item);
+                if (identity == null || !IsTabletItem(item.Path) ||
+                    !PluginUiElementReflection.TryGetAbsoluteRect(node.Address, out var itemPos, out var itemSize) ||
+                    itemSize.X <= 0 || itemSize.Y <= 0 || itemPos.X < pos.X || itemPos.Y <= titlePos.Y ||
+                    itemPos.X + itemSize.X > pos.X + size.X + 3 || itemPos.Y + itemSize.Y > buttonPos.Y + 3)
+                    throw ReforgeFailure("contents", "The bench contents could not be verified. Reforging stopped.");
+                var observed = new SortItem { Address = address, Identity = identity, Path = item.Path };
+                if (itemPos.Y + itemSize.Y / 2 < (titlePos.Y + buttonPos.Y) / 2)
+                {
+                    if (result.Output != null) throw ReforgeFailure("contents", "The bench contents could not be verified. Reforging stopped.");
+                    result.Output = observed; result.OutputSlot = node.Address;
+                }
+                else result.Inputs.Add(observed);
+            }
+            if (result.Inputs.Count > 3) throw ReforgeFailure("contents", "The bench contents could not be verified. Reforging stopped.");
+            return result;
+        }
+
+        private static bool TabletReforgeInputsMatch(TabletReforgeBench bench, IEnumerable<string> expected) =>
+            bench.Inputs.Select(item => item.Identity).OrderBy(id => id, StringComparer.Ordinal)
+                .SequenceEqual(expected.OrderBy(id => id, StringComparer.Ordinal));
+
+        private void StartTabletReforge()
+        {
+            if (tabletReforge != null || waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0) return;
+            try
+            {
+                if (Core.States.GameCurrentState != GameStateTypes.InGameState || Core.GHSettings.EnableControllerMode ||
+                    (handleObj == null && !InitReflection()) || ReadSortCursorItem() != IntPtr.Zero)
+                    throw ReforgeFailure("open", "Open the reforging bench and inventory in keyboard/mouse mode.");
+                var bench = ReadTabletReforgeBench();
+                if (bench.Inputs.Count != 0 || bench.Output != null) throw ReforgeFailure("empty", "Empty the bench before starting.");
+                var inventory = CraftInventory();
+                foreach (var entry in inventory)
+                {
+                    var item = ReadFreshItem(entry.Address);
+                    entry.Path = item.Path; entry.IsTablet = IsTabletItem(item.Path);
+                    if (item.TryGetComponent<Mods>(out var mods)) { entry.Tier = mods.ExplicitMods.Count; entry.Rarity = mods.Rarity; }
+                }
+                var plan = PlanTabletReforge(inventory, Settings.ProtectedInventoryCells ?? new());
+                if (plan.Count == 0) throw ReforgeFailure("none", "No group of three unprotected tablets of the same type and rarity with exactly four modifiers was found.");
+                ReleaseAffinityControl();
+                if (affinityCtrlHeld || affinityShiftHeld || new[] { 0x10, 0x11, 0x12, 0x5B, 0x5C, 0x01, 0x02 }.Any(CraftKeyDown))
+                    throw ReforgeFailure("keys", "Release the mouse buttons and modifier keys before starting.");
+                tabletReforge = new() { Bench = bench, Inventory = inventory, Deadline = DateTime.UtcNow.AddSeconds(5),
+                    InventoryRoot = ResolvePath(Core.States.InGameStateObject.GameUi.RightPanel.Address, new[] { 5, 36 }) };
+                affinityInventoryRoot = tabletReforge.InventoryRoot;
+                foreach (var item in plan) tabletReforge.Sources.Enqueue(item);
+                affinityWindow = Core.Process.WindowArea;
+                affinityActionDelay = Math.Clamp(Settings.AffinityTransferDelayMs, 60, 250);
+                affinityNextAction = DateTime.UtcNow.AddMilliseconds(300);
+                craftInputPhase = 0;
+                tabletReforgeStatus = RT("preparing", "Preparing tablet reforging. Leave the mouse still. Escape stops reforging.");
+            }
+            catch (Exception ex) { StopTabletReforge(ex.GetBaseException().Message); }
+        }
+
+        private void StopTabletReforge(string reason = null)
+        {
+            int done = tabletReforge?.Done ?? 0;
+            bool running = tabletReforge != null;
+            tabletReforge = null;
+            if (running) CraftReleaseInput(endSession: true);
+            tabletReforgeStatus = string.Format(RT("summary", "Reforged and returned: {0}."), done) + "\n" +
+                (reason ?? RT("stopped", "Reforging stopped. Items still in the bench are left in place."));
+            affinityTransferStatus = tabletReforgeStatus;
+            affinityCompletionSummary = "";
+            affinityFeedbackUntil = DateTime.UtcNow.AddSeconds(10);
+        }
+
+        private bool PositionTabletReforgeControl(IntPtr control)
+        {
+            if (!IsElementVisible(control) || !PluginUiElementReflection.TryGetAbsoluteRect(control, out var pos, out var size) ||
+                pos.X < 0 || pos.Y < 0 || size.X <= 0 || size.Y <= 0 ||
+                pos.X + size.X > affinityWindow.Width || pos.Y + size.Y > affinityWindow.Height)
+                throw ReforgeFailure("changed", "The bench or inventory changed. Reforging stopped.");
+            var point = new NativePoint { X = affinityWindow.X + (int)(pos.X + size.X / 2), Y = affinityWindow.Y + (int)(pos.Y + size.Y / 2) };
+            if (CraftCursorAt(point, affinityCursor)) return true;
+            MoveTransferCursor(point);
+            affinityNextAction = DateTime.UtcNow.AddMilliseconds(affinityActionDelay);
+            return false;
+        }
+
+        private void UpdateTabletReforge()
+        {
+            if (tabletReforge == null) return;
+            try
+            {
+                var session = tabletReforge;
+                var now = DateTime.UtcNow;
+                if (CraftKeyDown(0x1B)) { StopTabletReforge(); return; }
+                if (Core.States.GameCurrentState != GameStateTypes.InGameState || Core.Process.WindowArea != affinityWindow ||
+                    Core.GHSettings.EnableControllerMode || waystoneCraftRunning || sortRunning || affinityTransferRunning || stashScanQueue.Count > 0)
+                    throw ReforgeFailure("changed", "The bench or inventory changed. Reforging stopped.");
+                if (now >= session.Deadline) throw ReforgeFailure("timeout", "The game did not confirm the operation. Reforging stopped without retrying the click.");
+                if (session.Phase == 6)
+                {
+                    if (now < affinityNextAction) return;
+                    if (Core.IsSettingsMenuOpen)
+                    {
+                        var hide = typeof(Core).Assembly.GetType("ExileCenter.Settings.SettingsWindow")?.GetMethod("HideSettingsWindow", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+                        if (hide == null) throw ReforgeFailure("focus", "Close the settings and try again.");
+                        hide.Invoke(null, null);
+                    }
+                    using var process = System.Diagnostics.Process.GetProcessById((int)Core.Process.Pid);
+                    AffinitySetForegroundWindow(process.MainWindowHandle);
+                    if (!AffinityGetCursorPos(out affinityCursor)) throw ReforgeFailure("mouse", "The mouse moved or could not be read. Reforging stopped.");
+                    craftCursorUnavailableSince = DateTime.MinValue;
+                    session.Phase = 0; affinityNextAction = now.AddMilliseconds(150); return;
+                }
+                if (!AffinityGameIsForeground() || Core.IsSettingsMenuOpen ||
+                    new[] { 0x12, 0x5B, 0x5C, 0x01, 0x02, 0x10 }.Any(CraftKeyDown) || !affinityCtrlHeld && CraftKeyDown(0x11))
+                    throw ReforgeFailure("focus", "Focus or keyboard input changed. Reforging stopped.");
+                if (!CraftCheckCursor(AffinityGetCursorPos(out var cursor), cursor, now)) return;
+                if (ReadSortCursorItem() != IntPtr.Zero) throw ReforgeFailure("cursor", "An item is held by the cursor. Reforging stopped.");
+                if (now < affinityNextAction) return;
+                var inventory = CraftInventory();
+                var bench = ReadTabletReforgeBench();
+                if (bench.Panel != session.Bench.Panel || bench.Button != session.Bench.Button ||
+                    bench.Position != session.Bench.Position || bench.Size != session.Bench.Size ||
+                    ResolvePath(Core.States.InGameStateObject.GameUi.RightPanel.Address, new[] { 5, 36 }) != session.InventoryRoot)
+                    throw ReforgeFailure("changed", "The bench or inventory changed. Reforging stopped.");
+                bool sameInventory = CraftSameInventory(session.Inventory, inventory);
+                bool sameOutput = bench.Output?.Identity == session.Output?.Identity;
+                if (session.Phase == 1)
+                {
+                    var expected = session.Inventory.Where(item => item.Address != session.Moving.Address).ToList();
+                    if (CraftSameInventory(expected, inventory) && sameOutput && TabletReforgeInputsMatch(bench, session.Inputs.Append(session.Moving.Identity)))
+                    {
+                        session.Sources.Dequeue(); session.Inputs.Add(session.Moving.Identity);
+                        session.Inventory = inventory; session.Phase = 0; session.Deadline = now.AddSeconds(5); CraftReleaseInput();
+                    }
+                    return;
+                }
+                if (session.Phase == 5)
+                {
+                    var returned = inventory.Where(item => !session.Inventory.Any(old => old.Address == item.Address)).ToList();
+                    if (bench.Output == null && returned.Count == 1 && returned[0].Identity == session.Output.Identity &&
+                        CraftSameInventory(session.Inventory, inventory.Where(item => item.Address != returned[0].Address)) && TabletReforgeInputsMatch(bench, session.Inputs))
+                    {
+                        if (returned[0].Y * InventoryColumns + returned[0].X != session.ReturnCell)
+                            throw ReforgeFailure("order", "The game returned the tablet outside column order. Reforging stopped; the tablet remains in the inventory.");
+                        session.Inventory = inventory; session.Output = null; session.Done++;
+                        session.Phase = 0; session.Deadline = now.AddSeconds(5); CraftReleaseInput();
+                        tabletReforgeStatus = string.Format(RT("summary", "Reforged and returned: {0}."), session.Done);
+                    }
+                    return;
+                }
+                if (!sameInventory) throw ReforgeFailure("changed", "The bench or inventory changed. Reforging stopped.");
+                if (session.Phase == 3)
+                {
+                    if (bench.Inputs.Count == 0 && bench.Output != null && bench.Output.Path == session.Moving.Path)
+                    { session.Output = bench.Output; session.Inputs.Clear(); session.Phase = 0; session.Deadline = now.AddSeconds(5); }
+                    return;
+                }
+                if (!sameOutput || !TabletReforgeInputsMatch(bench, session.Inputs))
+                    throw ReforgeFailure("contents", "The bench contents could not be verified. Reforging stopped.");
+                if (session.Phase == 0)
+                {
+                    if (session.Inputs.Count < 3 && session.Sources.Count > 0)
+                    {
+                        session.Moving = session.Sources.Peek();
+                        var source = inventory.SingleOrDefault(item => item.Address == session.Moving.Address && item.Identity == session.Moving.Identity);
+                        if (source == null || !CraftSameCell(source, session.Moving) ||
+                            Settings.ProtectedInventoryCells?.Contains(source.Y * InventoryColumns + source.X) == true)
+                            throw ReforgeFailure("changed", "The bench or inventory changed. Reforging stopped.");
+                        var slots = CraftVisibleSlots(session.InventoryRoot);
+                        if (!slots.TryGetValue(source.Address, out var slot)) throw ReforgeFailure("changed", "The bench or inventory changed. Reforging stopped.");
+                        if (!CraftPosition(slot, source.Address) || !CraftInput(control: true)) return;
+                        session.Phase = 1; session.Deadline = now.AddSeconds(5); return;
+                    }
+                    if (session.Output != null) session.Phase = 4;
+                    else if (session.Inputs.Count == 3) session.Phase = 2;
+                    else if (session.Inputs.Count == 0 && session.Sources.Count == 0)
+                    { StopTabletReforge(RT("complete", "Complete. Leftover tablets and other items were left untouched.")); return; }
+                    else throw ReforgeFailure("contents", "The bench contents could not be verified. Reforging stopped.");
+                }
+                if (session.Phase == 2)
+                {
+                    if (affinityCtrlHeld || affinityShiftHeld) throw ReforgeFailure("keys", "Release the mouse buttons and modifier keys before starting.");
+                    if (!PositionTabletReforgeControl(bench.Button) || !CraftInput()) return;
+                    CraftReleaseInput(); session.Phase = 3; session.Deadline = now.AddSeconds(5);
+                }
+                else if (session.Phase == 4)
+                {
+                    session.ReturnCell = TabletReforgeFreeCell(inventory);
+                    if (session.ReturnCell < 0 || Settings.ProtectedInventoryCells?.Contains(session.ReturnCell) == true)
+                        throw ReforgeFailure("space", "No safe return cell is available. The result remains in the bench.");
+                    if (bench.Output == null || !CraftPosition(bench.OutputSlot, bench.Output.Address) || !CraftInput(control: true)) return;
+                    session.Phase = 5; session.Deadline = now.AddSeconds(5);
+                }
+            }
+            catch (Exception ex) { StopTabletReforge(ex.GetBaseException().Message); }
         }
 
         private ExileCenter.Localization.OverlayLanguage TabletStashSearchLanguage => Settings.TabletStashSearchLanguage switch
