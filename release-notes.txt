@@ -1,11 +1,11 @@
-ExileCenter 1.23.6
+ExileCenter 1.23.7
 
-- Reforge des tablettes : Ctrl est envoyé avec son code de touche et le scan code 1D, à l’appui comme au relâchement. Le relevé Windows de la version 1.23.5 montrait un scan code 00, alors que la touche du clavier était observée avec 1D. Cette version complète le champ manquant tout en conservant le code de touche virtuel.
-- Le format de Ctrl est conservé jusqu’à son relâchement accepté, y compris lors du nettoyage après un arrêt. Un relâchement refusé arrête la séquence sans répéter le clic.
-- La séquence de clic et la libération de Ctrl avant la vérification du transfert restent celles de la 1.23.5. Les autres opérations de craft conservent leur format de touche précédent.
+- Reforge des tablettes : l’appui et le relâchement du clic sont désormais envoyés séparément. Ctrl est stabilisé pendant au moins 150 ms, le clic est maintenu 100 ms, puis Ctrl reste maintenu 100 ms après le relâchement du bouton de souris. Le format complet de Ctrl, avec son scan code 1D, est conservé.
+- Cette séquence a permis un transfert réel vers l’établi lors d’un test isolé utilisant le module publié en 1.23.6 : une tablette a quitté la première case de l’inventaire et a été retrouvée dans le premier emplacement de l’établi. Aucune reforge n’a été lancée pendant ce test.
+- Le bouton de reforge utilise cette séquence pour charger les tablettes, cliquer sur Reforger et récupérer le résultat. La confirmation est vérifiée après la libération des touches. Échap, un mouvement de souris ou un échec arrêtent la séquence sans répéter le clic. Les autres opérations de craft conservent leur clic existant.
 - Journal conservé dans Plugins/StashUtility/config/reforge-journal.txt. Positions, ancrages, verrouillages et réglages personnels préservés. GameOffsets.dll reste identique, sans recompilation.
 
-Validation : 12 004 contrôles isolés réussis (54 reforge, 11 944 craft et navigation, 6 conservation de la barre du coffre), notamment le format natif des événements clavier et la libération à l’arrêt. La différence de scan code est mesurée ; son rôle dans le transfert ignoré et le cycle complet de reforge restent à confirmer en jeu après installation. Les tests isolés ne prouvent pas le fonctionnement en jeu.
+Validation : transfert unique confirmé en jeu avec la séquence ci-dessus. 12 015 contrôles isolés réussis : 65 reforge, 11 944 craft et navigation, 6 conservation de la barre du coffre. Ils couvrent notamment les délais entre appui et relâchement, l’absence de clic répété et la libération à l’arrêt. Le cycle complet depuis le bouton de l’application reste à confirmer après installation.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

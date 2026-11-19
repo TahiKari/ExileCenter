@@ -13,10 +13,10 @@
     <Product>ExileCenter</Product>
     <AssemblyTitle>ExileCenter</AssemblyTitle>
     <Description>Compagnon modulaire pour Path of Exile 2 : butin, dégâts, cartes et outils de jeu.</Description>
-    <Version>1.23.6</Version>
+    <Version>1.23.7</Version>
     <ExileCenterReleaseTag Condition="'$(ExileCenterReleaseTag)' == ''">v1.23.6</ExileCenterReleaseTag>
-    <AssemblyVersion>1.23.6.0</AssemblyVersion>
-    <FileVersion>1.23.6.0</FileVersion>
+    <AssemblyVersion>1.23.7.0</AssemblyVersion>
+    <FileVersion>1.23.7.0</FileVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>

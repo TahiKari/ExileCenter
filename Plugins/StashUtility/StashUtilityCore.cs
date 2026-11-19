@@ -3491,7 +3491,7 @@ namespace StashUtility
                     throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
                 }
                 craftMouseHeld = holdMouse;
-                craftInputPhase = 2; affinityNextAction = DateTime.UtcNow.AddMilliseconds(holdMouse ? Math.Max(60, affinityActionDelay) : affinityActionDelay); return true;
+                craftInputPhase = 2; affinityNextAction = DateTime.UtcNow.AddMilliseconds(holdMouse ? 100 : affinityActionDelay); return true;
             }
             throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
         }

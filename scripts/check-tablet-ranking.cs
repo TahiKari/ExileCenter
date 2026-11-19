@@ -129,12 +129,24 @@ internal static class TabletRankingCheck
         {
             var pending = Activator.CreateInstance(sessionType); Put(pending, "Phase", direction == "inventory to bench" ? 1 : 5);
             Set("tabletReforge", pending); events.Clear(); batches.Clear();
-            Check(!(bool)Call("CraftInput", true, false, false, false, false) && (bool)Call("CraftInput", true, false, false, false, false), direction + " settles Ctrl before clicking");
-            Call("CraftFinishInput", false);
+            Check(!(bool)Call("CraftInput", true, false, false, false, true) && (bool)Call("CraftInput", true, false, false, false, true), direction + " settles Ctrl before clicking");
+            var mouseUpAt = (DateTime)core.GetField("affinityNextAction", flags).GetValue(plugin);
+            Check(mouseUpAt > DateTime.UtcNow.AddMilliseconds(80) &&
+                !(bool)Call("FinishTabletReforgeInput", mouseUpAt.AddTicks(-1)) && events.SequenceEqual(new[] { "11_DOWN", "2" }),
+                direction + " keeps mouse-down separate for 100 ms and cannot release early");
+            Check(!(bool)Call("FinishTabletReforgeInput", mouseUpAt) && pressed.Contains(0x11) && !pressed.Contains(1) &&
+                events.SequenceEqual(new[] { "11_DOWN", "2", "4" }), direction + " releases mouse before Ctrl");
+            var controlUpAt = (DateTime)core.GetField("affinityNextAction", flags).GetValue(plugin);
+            Check(controlUpAt > DateTime.UtcNow.AddMilliseconds(80) &&
+                !(bool)Call("FinishTabletReforgeInput", controlUpAt.AddTicks(-1)) && events.Count == 3,
+                direction + " keeps Ctrl down for a further 100 ms after mouse-up");
+            Check(!(bool)Call("FinishTabletReforgeInput", controlUpAt) &&
+                (DateTime)core.GetField("affinityNextAction",flags).GetValue(plugin) > DateTime.UtcNow.AddMilliseconds(280),
+                direction + " releases Ctrl before the 300 ms receipt-settle delay");
             Check(events.SequenceEqual(new[] { "11_DOWN", "2", "4", "11_UP" }), direction + " uses exactly one Ctrl+left-click and releases Ctrl");
-            Check(batches.SequenceEqual(new[] { 1, 2, 1 }) && !pressed.Contains(0x11) && !pressed.Contains(1),
-                direction + " uses the common craft click batch and releases Ctrl before any server receipt");
-            Call("CraftFinishInput", false);
+            Check(batches.SequenceEqual(new[] { 1, 1, 1, 1 }) && !pressed.Contains(0x11) && !pressed.Contains(1),
+                direction + " sends each transition separately before any server receipt");
+            Check((bool)Call("FinishTabletReforgeInput", DateTime.UtcNow), "Completed input permits receipt processing without another event");
             Check(events.Count == 4 && (int)Field(pending, "Phase") == (direction == "inventory to bench" ? 1 : 5) && (int)Field(pending, "Done") == 0,
                 "Completing input never retries the click or counts an unconfirmed transfer");
         }
@@ -148,6 +160,7 @@ internal static class TabletRankingCheck
         keyEvents.Clear(); Call("CraftInput",true,false,false,false,false); Call("CraftInput",true,false,false,false,false); Call("CraftFinishInput",false);
         Check(keyEvents.All(key => key.Scan == 0 && key.Key == 0x11 && (key.Flags == 0 || key.Flags == 2)),
             "Default craft transfers retain their original virtual-key input format");
+        Check(batches.TakeLast(3).SequenceEqual(new[] { 1, 2, 1 }), "Waystone input retains its existing batched click");
         events.Clear(); keyEvents.Clear(); Set("tabletReforge", Activator.CreateInstance(sessionType));
         Call("CraftInput",true,false,false,false,false); Call("CraftInput",true,false,false,false,false);
         rejectControlUp = true; bool releaseStopped = false;
