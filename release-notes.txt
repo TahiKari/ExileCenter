@@ -1,11 +1,11 @@
-ExileCenter 1.23.5
+ExileCenter 1.23.6
 
-- Reforge des tablettes : retour à la séquence de clic commune avec le craft des maps, avec appui et relâchement envoyés ensemble. Ctrl utilise le même format de touche que les autres opérations de craft.
-- Après chaque clic, la reforge termine la séquence d’entrée et relâche Ctrl avant d’attendre la confirmation du transfert. Ctrl ne reste plus maintenu pendant les cinq secondes d’attente. Un état conservé d’un précédent craft de maps ne peut pas empêcher ce relâchement.
-- La confirmation du déplacement ou du résultat reste obligatoire avant de poursuivre. La fin du clic ne compte jamais comme une tablette transférée. Un délai dépassé ne répète pas le clic.
-- Le journal de reforge reste disponible dans Plugins/StashUtility/config/reforge-journal.txt. Les arrêts sur mouvement de souris, Échap et perte de focus sont conservés, ainsi que les réglages et positions des barres et icônes.
+- Reforge des tablettes : Ctrl est envoyé avec son code de touche et le scan code 1D, à l’appui comme au relâchement. Le relevé Windows de la version 1.23.5 montrait un scan code 00, alors que la touche du clavier était observée avec 1D. Cette version complète le champ manquant tout en conservant le code de touche virtuel.
+- Le format de Ctrl est conservé jusqu’à son relâchement accepté, y compris lors du nettoyage après un arrêt. Un relâchement refusé arrête la séquence sans répéter le clic.
+- La séquence de clic et la libération de Ctrl avant la vérification du transfert restent celles de la 1.23.5. Les autres opérations de craft conservent leur format de touche précédent.
+- Journal conservé dans Plugins/StashUtility/config/reforge-journal.txt. Positions, ancrages, verrouillages et réglages personnels préservés. GameOffsets.dll reste identique, sans recompilation.
 
-Validation : 12 000 contrôles isolés réussis (50 reforge, 11 944 craft et navigation, 6 conservation de la barre du coffre). Le fonctionnement complet de la reforge reste à confirmer en jeu après installation : ce changement corrige une divergence de séquence, mais la cause du transfert ignoré en 1.23.4 n’est pas démontrée. Aucun test isolé ne constitue une confirmation en jeu. GameOffsets.dll reste identique, sans recompilation.
+Validation : 12 004 contrôles isolés réussis (54 reforge, 11 944 craft et navigation, 6 conservation de la barre du coffre), notamment le format natif des événements clavier et la libération à l’arrêt. La différence de scan code est mesurée ; son rôle dans le transfert ignoré et le cycle complet de reforge restent à confirmer en jeu après installation. Les tests isolés ne prouvent pas le fonctionnement en jeu.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.

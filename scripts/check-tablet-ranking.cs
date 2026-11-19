@@ -81,7 +81,8 @@ internal static class TabletRankingCheck
         var events = new List<string>(); var pressed = new HashSet<int>();
         var batches = new List<int>();
         var keyEvents = new List<(ushort Key, ushort Scan, uint Flags)>();
-        bool rejectMouseUp = false;
+        var nativeKeyEvents = new List<byte[]>();
+        bool rejectMouseUp = false, rejectControlUp = false;
         Set("craftKeyDown", (Func<int, bool>)(key => pressed.Contains(key)));
         var dispatch = core.GetField("craftSendInputs", flags);
         var parameter = Expression.Parameter(dispatch.FieldType.GetGenericArguments()[0], "inputs");
@@ -94,8 +95,17 @@ internal static class TabletRankingCheck
                 if ((uint)Field(input, "Type") == 1)
                 {
                     var key = Field(data, "Key"); ushort virtualKey = (ushort)Field(key,"Key"), scan = (ushort)Field(key,"Scan");
-                    uint keyFlags = (uint)Field(key,"Flags"); keyEvents.Add((virtualKey,scan,keyFlags));
+                    uint keyFlags = (uint)Field(key,"Flags");
                     int code = (keyFlags & 8) != 0 && scan == 0x1D ? 0x11 : virtualKey; bool up = (keyFlags & 2) != 0;
+                    if (code == 0x11 && up && rejectControlUp) return 0;
+                    keyEvents.Add((virtualKey,scan,keyFlags));
+                    int nativeSize = Marshal.SizeOf(input); var native = Marshal.AllocHGlobal(nativeSize);
+                    try
+                    {
+                        Marshal.StructureToPtr(input, native, false);
+                        var bytes = new byte[nativeSize]; Marshal.Copy(native, bytes, 0, nativeSize); nativeKeyEvents.Add(bytes);
+                    }
+                    finally { Marshal.FreeHGlobal(native); }
                     if (up) pressed.Remove(code); else pressed.Add(code);
                     events.Add(code.ToString("X") + (up ? "_UP" : "_DOWN"));
                 }
@@ -130,8 +140,24 @@ internal static class TabletRankingCheck
         }
         previousQueue.GetType().GetMethod("Clear").Invoke(previousQueue, null);
         Set("tabletReforge", null); Set("craftPhase", 0); Set("craftSelectedCurrency", null);
+        Check(keyEvents.All(key => key.Scan == 0x1D && key.Key == 0x11 && (key.Flags == 0 || key.Flags == 2)),
+            "Reforge Ctrl includes both its virtual key and hardware scan code at press and release");
+        Check(nativeKeyEvents.Count == 4 && nativeKeyEvents.All(bytes => bytes.Length == 40 && BitConverter.ToUInt32(bytes,0) == 1 &&
+            BitConverter.ToUInt16(bytes,8) == 0x11 && BitConverter.ToUInt16(bytes,10) == 0x1D && (BitConverter.ToUInt32(bytes,12) is 0 or 2)),
+            "Native INPUT bytes retain the complete Ctrl key and scan code in the Windows keyboard fields");
+        keyEvents.Clear(); Call("CraftInput",true,false,false,false,false); Call("CraftInput",true,false,false,false,false); Call("CraftFinishInput",false);
         Check(keyEvents.All(key => key.Scan == 0 && key.Key == 0x11 && (key.Flags == 0 || key.Flags == 2)),
             "Default craft transfers retain their original virtual-key input format");
+        events.Clear(); keyEvents.Clear(); Set("tabletReforge", Activator.CreateInstance(sessionType));
+        Call("CraftInput",true,false,false,false,false); Call("CraftInput",true,false,false,false,false);
+        rejectControlUp = true; bool releaseStopped = false;
+        try { Call("CraftFinishInput",false); }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException) { releaseStopped = true; }
+        Check(releaseStopped && pressed.Contains(0x11) && (bool)core.GetField("craftControlScanCode",flags).GetValue(plugin) && events.Count(e => e == "2") == 1,
+            "A rejected Ctrl release stops completion and retains its scan code without another click");
+        rejectControlUp = false; Set("tabletReforge",null); Call("CraftReleaseInput",true);
+        Check(!pressed.Contains(0x11) && keyEvents.Last() == ((ushort)0x11,(ushort)0x1D,2u),
+            "Cleanup retains the matching hardware code even after the reforge session ends");
         events.Clear(); Check((bool)Call("CraftInput", false, false, false, false, false), "Default input uses a plain left click"); Call("CraftReleaseInput", true);
         Check(events.SequenceEqual(new[] { "2", "4" }), "The reforge button receives neither Ctrl nor an extra click");
         events.Clear(); Call("CraftInput", true, false, false, false, false); pressed.Remove(0x11);
@@ -145,7 +171,7 @@ internal static class TabletRankingCheck
             events.Clear(); keyEvents.Clear();
             Check(!(bool)Call("CraftInput", true, false, false, false, true) && (bool)Call("CraftInput", true, false, false, false, true),
                 "Optional held-click input settles Ctrl before its separate mouse-down");
-            Check(keyEvents.SequenceEqual(new[]{((ushort)0,(ushort)0x1D,8u)}), "Optional held-click input sends physical left-Ctrl with KEYEVENTF_SCANCODE");
+            Check(keyEvents.SequenceEqual(new[]{((ushort)0x11,(ushort)0x1D,0u)}), "Optional held-click input retains the complete left-Ctrl event");
             Check(events.SequenceEqual(new[] { "11_DOWN", "2" }) && pressed.Contains(1) && pressed.Contains(0x11) &&
                 (DateTime)core.GetField("affinityNextAction",flags).GetValue(plugin) > DateTime.UtcNow.AddMilliseconds(40),
                 direction + " leaves mouse-down visible for at least 60 ms with Ctrl held");
@@ -157,7 +183,7 @@ internal static class TabletRankingCheck
                 "Mouse-up occurs separately while Ctrl remains held until verification");
             Call("CraftReleaseInput", true);
             Check(events.SequenceEqual(new[] { "11_DOWN", "2", "4", "11_UP" }), direction + " finishes with one mouse-up before releasing Ctrl");
-            Check(keyEvents.SequenceEqual(new[]{((ushort)0,(ushort)0x1D,8u),((ushort)0,(ushort)0x1D,10u)}) &&
+            Check(keyEvents.SequenceEqual(new[]{((ushort)0x11,(ushort)0x1D,0u),((ushort)0x11,(ushort)0x1D,2u)}) &&
                 !(bool)core.GetField("craftControlScanCode",flags).GetValue(plugin), "Ctrl release uses the same physical scan code and clears the pending format");
         }
         events.Clear();
@@ -192,7 +218,7 @@ internal static class TabletRankingCheck
             "Stopping a held transfer releases mouse-up before Ctrl without another click");
         Check(JsonConvert.SerializeObject(plugin.Settings) == settingsBefore, "Stopping reforge preserves toolbar offsets, locks, protected cells and every saved setting");
         string reforgeLog = File.ReadAllText(Path.Combine(reforgeLogDirectory,"config","reforge-journal.txt"));
-        Check(reforgeLog.Contains("scan=1D flags=08") && reforgeLog.Contains("scan=1D flags=0A") &&
+        Check(reforgeLog.Contains("key 11 DOWN scan=1D flags=00") && reforgeLog.Contains("key 11 UP scan=1D flags=02") &&
             reforgeLog.Contains("mouse 0002") && reforgeLog.Contains("mouse 0004") && reforgeLog.Contains("100% · échec"),
             "The local journal retains accepted keyboard/mouse events, matching key-up and literal failure text");
         Check(File.ReadAllText(existingCraftLog) == "Previous waystone diagnostic", "Reforge diagnostics preserve the existing waystone journal");

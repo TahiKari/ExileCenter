@@ -3453,10 +3453,12 @@ namespace StashUtility
                 {
                     if (control && !affinityCtrlHeld)
                     {
-                        // The reforge transfer uses a physical left-Ctrl scan code.
-                        if (CraftSendInputs(new[] { AffinityKeyInput(0, scanCode: holdMouse) }) != 1)
+                        // Keep both Ctrl's virtual key and hardware scan code for reforge.
+                        // Windows reports scan=00 when the hardware code is omitted.
+                        bool includeControlScan = tabletReforge != null || holdMouse;
+                        if (CraftSendInputs(new[] { AffinityKeyInput(0, scanCode: includeControlScan) }) != 1)
                             throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
-                        craftControlScanCode = holdMouse;
+                        craftControlScanCode = includeControlScan;
                     }
                     affinityCtrlHeld = control;
                     if (shift && !affinityShiftHeld)
@@ -6288,8 +6290,8 @@ namespace StashUtility
         }
         [StructLayout(LayoutKind.Sequential)] private struct AffinityInput { public uint Type; public AffinityInputData Data; }
         private static AffinityInput AffinityKeyInput(uint flags, ushort key = 0x11, bool scanCode = false) => new() { Type = 1,
-            Data = new AffinityInputData { Key = new AffinityKey { Key = scanCode ? (ushort)0 : key,
-                Scan = scanCode ? (ushort)0x1D : (ushort)0, Flags = flags | (scanCode ? 0x0008u : 0) } } };
+            Data = new AffinityInputData { Key = new AffinityKey { Key = key,
+                Scan = scanCode ? (ushort)0x1D : (ushort)0, Flags = flags } } };
         private static AffinityInput AffinityMouseInput(uint flags) => new() {
             Data = new AffinityInputData { Mouse = new AffinityMouse { Flags = flags } } };
         [DllImport("user32.dll", EntryPoint = "SendInput")] private static extern uint AffinitySendInput(uint count, AffinityInput[] inputs, int size);
