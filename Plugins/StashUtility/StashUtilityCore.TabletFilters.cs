@@ -346,17 +346,16 @@ namespace StashUtility
                     session.Phase = 0; affinityNextAction = now.AddMilliseconds(150); return;
                 }
                 if (!AffinityGameIsForeground() || Core.IsSettingsMenuOpen ||
-                    new[] { 0x12, 0x5B, 0x5C, 0x01, 0x02, 0x10 }.Any(key => !(key == 0x01 && craftMouseHeld) && CraftKeyDown(key)) || !affinityCtrlHeld && CraftKeyDown(0x11))
+                    new[] { 0x12, 0x5B, 0x5C, 0x01, 0x02, 0x10 }.Any(CraftKeyDown) || !affinityCtrlHeld && CraftKeyDown(0x11))
                     throw ReforgeFailure("focus", "Focus or keyboard input changed. Reforging stopped.");
                 if (!CraftCheckCursor(AffinityGetCursorPos(out var cursor), cursor, now)) return;
-                if (craftMouseHeld)
+                if (craftInputPhase == 2)
                 {
-                    if (!CraftKeyDown(0x01) || affinityCtrlHeld && !CraftKeyDown(0x11))
-                        throw ReforgeFailure("keys", "Release the mouse buttons and modifier keys before starting.");
                     if (now < affinityNextAction) return;
-                    if (!CraftReleaseHeldMouse()) throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
+                    // Complete the same input sequence as waystone crafting before waiting for its receipt.
+                    CraftFinishInput(false);
                     affinityNextAction = now.AddMilliseconds(affinityActionDelay);
-                    return; // Let the game observe mouse-up before checking the transfer receipt.
+                    return;
                 }
                 if (ReadSortCursorItem() != IntPtr.Zero) throw ReforgeFailure("cursor", "An item is held by the cursor. Reforging stopped.");
                 if (now < affinityNextAction) return;
@@ -414,7 +413,7 @@ namespace StashUtility
                         if (!slots.TryGetValue(source.Address, out var slot)) throw ReforgeFailure("changed", "The bench or inventory changed. Reforging stopped.");
                         if (!CraftPosition(slot, source.Address)) return;
                         if (craftInputPhase == 0) CraftLog($"REFORGE LOAD column={source.X + 1} row={source.Y + 1} cursor={affinityCursor.X},{affinityCursor.Y}");
-                        if (!CraftInput(control: true, holdMouse: true)) return;
+                        if (!CraftInput(control: true)) return;
                         session.Phase = 1; session.Deadline = now.AddSeconds(5); return;
                     }
                     if (session.Output != null) session.Phase = 4;
@@ -426,7 +425,7 @@ namespace StashUtility
                 if (session.Phase == 2)
                 {
                     if (affinityCtrlHeld || affinityShiftHeld) throw ReforgeFailure("keys", "Release the mouse buttons and modifier keys before starting.");
-                    if (!PositionTabletReforgeControl(bench.Button) || !CraftInput(holdMouse: true)) return;
+                    if (!PositionTabletReforgeControl(bench.Button) || !CraftInput()) return;
                     session.Phase = 3; session.Deadline = now.AddSeconds(5);
                 }
                 else if (session.Phase == 4)
@@ -434,7 +433,7 @@ namespace StashUtility
                     session.ReturnCell = TabletReforgeFreeCell(inventory);
                     if (session.ReturnCell < 0 || Settings.ProtectedInventoryCells?.Contains(session.ReturnCell) == true)
                         throw ReforgeFailure("space", "No safe return cell is available. The result remains in the bench.");
-                    if (bench.Output == null || !CraftPosition(bench.OutputSlot, bench.Output.Address) || !CraftInput(control: true, holdMouse: true)) return;
+                    if (bench.Output == null || !CraftPosition(bench.OutputSlot, bench.Output.Address) || !CraftInput(control: true)) return;
                     session.Phase = 5; session.Deadline = now.AddSeconds(5);
                 }
             }

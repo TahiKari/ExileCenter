@@ -23,6 +23,7 @@ internal static class TabletRankingCheck
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
         var core = typeof(StashUtilityCore);
         var plugin = new StashUtilityCore { DllDirectory = Path.Combine(root, "Plugins", "StashUtility") };
+        var sessionType = core.GetNestedType("TabletReforgeSession", flags);
         var itemType = core.GetNestedType("SortItem", flags);
         var listType = typeof(List<>).MakeGenericType(itemType);
         object Call(string name, params object[] args) => core.GetMethod(name, flags).Invoke(plugin, args);
@@ -78,6 +79,7 @@ internal static class TabletRankingCheck
         Check(Field(Call("FindTabletReforgeControls", panel), "Item1") == null, "Another crafting bench cannot be used as a reforging bench");
 
         var events = new List<string>(); var pressed = new HashSet<int>();
+        var batches = new List<int>();
         var keyEvents = new List<(ushort Key, ushort Scan, uint Flags)>();
         bool rejectMouseUp = false;
         Set("craftKeyDown", (Func<int, bool>)(key => pressed.Contains(key)));
@@ -85,6 +87,7 @@ internal static class TabletRankingCheck
         var parameter = Expression.Parameter(dispatch.FieldType.GetGenericArguments()[0], "inputs");
         Func<Array, uint> record = inputs =>
         {
+            batches.Add(inputs.Length);
             foreach (var input in inputs)
             {
                 var data = Field(input, "Data");
@@ -108,13 +111,25 @@ internal static class TabletRankingCheck
             return (uint)inputs.Length;
         };
         dispatch.SetValue(plugin, Expression.Lambda(dispatch.FieldType, Expression.Invoke(Expression.Constant(record), Expression.Convert(parameter, typeof(Array))), parameter).Compile());
+        // A previous waystone scan must not keep Ctrl held during a reforge receipt wait.
+        plugin.Settings.WaystoneCraftFastMode = true; Set("craftPhase", 2); Set("craftSelectedCurrency", "Alchemy");
+        var previousQueue = core.GetField("craftQueue", flags).GetValue(plugin);
+        previousQueue.GetType().GetMethod("Enqueue").Invoke(previousQueue, new object[] { new IntPtr(901) });
         foreach (string direction in new[] { "inventory to bench", "bench output to inventory" })
         {
-            events.Clear();
+            var pending = Activator.CreateInstance(sessionType); Put(pending, "Phase", direction == "inventory to bench" ? 1 : 5);
+            Set("tabletReforge", pending); events.Clear(); batches.Clear();
             Check(!(bool)Call("CraftInput", true, false, false, false, false) && (bool)Call("CraftInput", true, false, false, false, false), direction + " settles Ctrl before clicking");
-            Call("CraftReleaseInput", true);
+            Call("CraftFinishInput", false);
             Check(events.SequenceEqual(new[] { "11_DOWN", "2", "4", "11_UP" }), direction + " uses exactly one Ctrl+left-click and releases Ctrl");
+            Check(batches.SequenceEqual(new[] { 1, 2, 1 }) && !pressed.Contains(0x11) && !pressed.Contains(1),
+                direction + " uses the common craft click batch and releases Ctrl before any server receipt");
+            Call("CraftFinishInput", false);
+            Check(events.Count == 4 && (int)Field(pending, "Phase") == (direction == "inventory to bench" ? 1 : 5) && (int)Field(pending, "Done") == 0,
+                "Completing input never retries the click or counts an unconfirmed transfer");
         }
+        previousQueue.GetType().GetMethod("Clear").Invoke(previousQueue, null);
+        Set("tabletReforge", null); Set("craftPhase", 0); Set("craftSelectedCurrency", null);
         Check(keyEvents.All(key => key.Scan == 0 && key.Key == 0x11 && (key.Flags == 0 || key.Flags == 2)),
             "Default craft transfers retain their original virtual-key input format");
         events.Clear(); Check((bool)Call("CraftInput", false, false, false, false, false), "Default input uses a plain left click"); Call("CraftReleaseInput", true);
@@ -129,8 +144,8 @@ internal static class TabletRankingCheck
         {
             events.Clear(); keyEvents.Clear();
             Check(!(bool)Call("CraftInput", true, false, false, false, true) && (bool)Call("CraftInput", true, false, false, false, true),
-                direction + " settles Ctrl before its separate mouse-down");
-            Check(keyEvents.SequenceEqual(new[]{((ushort)0,(ushort)0x1D,8u)}), direction + " sends physical left-Ctrl with KEYEVENTF_SCANCODE");
+                "Optional held-click input settles Ctrl before its separate mouse-down");
+            Check(keyEvents.SequenceEqual(new[]{((ushort)0,(ushort)0x1D,8u)}), "Optional held-click input sends physical left-Ctrl with KEYEVENTF_SCANCODE");
             Check(events.SequenceEqual(new[] { "11_DOWN", "2" }) && pressed.Contains(1) && pressed.Contains(0x11) &&
                 (DateTime)core.GetField("affinityNextAction",flags).GetValue(plugin) > DateTime.UtcNow.AddMilliseconds(40),
                 direction + " leaves mouse-down visible for at least 60 ms with Ctrl held");
@@ -147,7 +162,7 @@ internal static class TabletRankingCheck
         }
         events.Clear();
         Check((bool)Call("CraftInput", false, false, false, false, true) && events.SequenceEqual(new[]{"2"}),
-            "The reforge button also uses a separate plain mouse-down");
+            "Optional held-click input supports a separate plain mouse-down");
         rejectMouseUp = true;
         Check(!(bool)Call("CraftReleaseHeldMouse") && pressed.Contains(1), "An unaccepted mouse-up remains pending instead of allowing another click");
         rejectMouseUp = false; Call("CraftReleaseInput", true);
@@ -162,7 +177,6 @@ internal static class TabletRankingCheck
         Check(mouseStopped && events.Count == beforeMouseCheck, "User mouse movement stops the shared reforge cursor guard without sending input");
         Check(!(bool)Call("CraftCheckCursor", false, expectedCursor, DateTime.UtcNow) && events.Count == beforeMouseCheck,
             "An unreadable cursor sends no reforge input");
-        var sessionType = core.GetNestedType("TabletReforgeSession", flags);
         Set("tabletReforge", Activator.CreateInstance(sessionType));
         events.Clear();
         Call("BeginGridSort", false, false); Call("BeginAffinityTransfer"); Call("RequestWaystoneCraft", true); Call("BeginStashScan", false);

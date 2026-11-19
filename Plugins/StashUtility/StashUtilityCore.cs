@@ -2157,13 +2157,14 @@ namespace StashUtility
 
         private bool CraftFinishInput(bool freshCopy)
         {
-            bool keepControl = Settings.WaystoneCraftFastMode && craftPhase == 2 && !craftRescanning && craftQueue.Count > 0;
+            bool keepControl = tabletReforge == null && Settings.WaystoneCraftFastMode && craftPhase == 2 && !craftRescanning && craftQueue.Count > 0;
+            bool endSession = tabletReforge != null || craftSelectedCurrency == null;
             if (keepControl && (!affinityCtrlHeld || !CraftKeyDown(0x11)))
                 throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
-            bool releasingModifiers = !keepControl && (affinityCtrlHeld || craftSelectedCurrency == null && affinityShiftHeld);
+            bool releasingModifiers = !keepControl && (affinityCtrlHeld || endSession && affinityShiftHeld);
             if (keepControl) craftInputPhase = 0; // Same-page initial scan: keep Ctrl between verified copies.
-            else CraftReleaseInput(endSession: craftSelectedCurrency == null);
-            if (affinityCtrlHeld && !keepControl || craftSelectedCurrency == null && affinityShiftHeld)
+            else CraftReleaseInput(endSession: endSession);
+            if (affinityCtrlHeld && !keepControl || endSession && affinityShiftHeld)
                 throw CraftFailure("input_failed", "Windows did not accept the input. Crafting stopped.");
             return freshCopy || craftPhase == 8 || Settings.WaystoneCraftFastMode && !releasingModifiers;
         }

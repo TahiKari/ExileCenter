@@ -1,26 +1,11 @@
-ExileCenter 1.23.4
+ExileCenter 1.23.5
 
-- Reforge : les transferts utilisent maintenant le scan code matériel de Ctrl gauche (1D, KEYEVENTF_SCANCODE), à l’appui comme au relâchement, au lieu du seul code de touche virtuel. Ce changement est limité à la reforge ; les autres automatisations gardent leur format précédent.
-- Un journal de reforge est enregistré dans Plugins/StashUtility/config/reforge-journal.txt : étape d’arrêt, case ciblée, état de Ctrl, processus sous la souris et événements acceptés par Windows. Il permet de distinguer un transfert non confirmé d’un clic intercepté. Le journal de l’auto-craft existant est conservé.
+- Reforge des tablettes : retour à la séquence de clic commune avec le craft des maps, avec appui et relâchement envoyés ensemble. Ctrl utilise le même format de touche que les autres opérations de craft.
+- Après chaque clic, la reforge termine la séquence d’entrée et relâche Ctrl avant d’attendre la confirmation du transfert. Ctrl ne reste plus maintenu pendant les cinq secondes d’attente. Un état conservé d’un précédent craft de maps ne peut pas empêcher ce relâchement.
+- La confirmation du déplacement ou du résultat reste obligatoire avant de poursuivre. La fin du clic ne compte jamais comme une tablette transférée. Un délai dépassé ne répète pas le clic.
+- Le journal de reforge reste disponible dans Plugins/StashUtility/config/reforge-journal.txt. Les arrêts sur mouvement de souris, Échap et perte de focus sont conservés, ainsi que les réglages et positions des barres et icônes.
 
-- Reforge : l’appui et le relâchement du clic gauche sont maintenant envoyés dans deux mises à jour distinctes, avec au moins 60 ms d’appui. Cela concerne le transfert Ctrl + clic vers l’établi, le bouton Reforger et le retour du résultat. Les autres automatisations conservent leur séquence de clic précédente.
-- Le bouton gauche est relâché avant Ctrl et avant la vérification du transfert. Échap, le déplacement de la souris, la perte de focus et les autres arrêts libèrent aussi le clic maintenu. Aucun second appui n’est envoyé tant que le premier n’est pas terminé.
-- Le message d’arrêt distingue maintenant la préparation, le transfert vers l’établi (avec colonne et ligne), l’apparition du résultat et le retour dans l’inventaire. Un délai dépassé ne relance jamais le clic.
-
-- Reforge : correction du message demandant d’ouvrir l’établi et l’inventaire alors qu’ils sont déjà ouverts. La détection cherche maintenant la fenêtre propre à l’établi et ne dépend plus du panneau du coffre, qui est masqué pendant la reforge.
-- Meilleure reconnaissance du titre de la fenêtre et du bouton Reforger, y compris lorsque le nom de l’établi est aussi affiché dans le monde. Le bouton situé sous le cadre est correctement repéré.
-- Les panneaux cachés ne saturent plus la limite de recherche avant l’établi visible. Le bouton direct et le lancement depuis les réglages utilisent la même détection corrigée.
-
-- Accès direct : un bouton « Reforge des tablettes » s’affiche au-dessus de l’établi de reforgeage lorsqu’il est ouvert avec l’inventaire. Il lance le même cycle que l’onglet des réglages, sans devoir ouvrir les menus. Le bouton est désactivé pendant une automatisation et disparaît lorsque l’établi est fermé ou qu’une autre fenêtre prend le focus.
-- Les barres et icônes existantes conservent leurs positions, dimensions, ancrages et verrouillages. Aucun nouveau réglage personnel n’est enregistré pour ce raccourci.
-
-- Tablettes : nouvel onglet « Reforge des tablettes » dans Filtres > Tablettes. Établi vide et inventaire ouverts requis. Le premier groupe complet fixe le type et la rareté pour la session ; seules les tablettes à exactement 4 mods explicites sont consommées, par groupes de 3.
-- Les tablettes de départ sont parcourues depuis le haut à gauche, de haut en bas dans chaque colonne, puis vers la droite. Transfert vers l’établi par Ctrl + clic gauche, clic sur Reforger, attente du résultat, chargement du trio suivant, puis retour du résultat par Ctrl + clic gauche. Le dernier résultat est aussi récupéré lorsqu’il ne reste plus de trio complet.
-- Les résultats sont exclus de la liste de départ. Les autres objets, les cases protégées et les tablettes restantes sont conservés. Chaque opération doit être confirmée avant de continuer. Si le jeu renvoie un résultat hors de l’ordre par colonne, l’automatisation s’arrête sans déplacer à nouveau la tablette.
-- Échap, un mouvement de la souris, une perte de focus, un changement de fenêtre ou une opération non confirmée arrêtent le cycle. Aucun clic n’est répété après un délai dépassé. Aucune injection, aucun hook ni écriture dans la mémoire du jeu n’est ajouté.
-- Corrections des précédentes versions et icône EC conservées. Aucun changement des positions, tailles, ancrages ou réglages des fenêtres, barres et icônes. GameOffsets.dll reste strictement identique, sans recompilation.
-
-Validation : 11 996 contrôles isolés réussis (46 reforge, 11 944 auto-craft et navigation, 6 conservation de la barre du coffre). Ils vérifient notamment les scan codes identiques à l’appui et au relâchement de Ctrl, le maintien du format précédent pour les autres automatisations, les libérations à l’arrêt et le journal local sans écraser celui de l’auto-craft. Lecture seule sur l’établi réel avec la DLL publiée : une tablette placée en bas est reconnue, le résultat est vide et l’inventaire contient 59 objets. L’échec du premier Ctrl + clic en 1.23.3 est confirmé ; l’origine exacte n’est pas encore démontrée. Le nouveau format de Ctrl et le cycle complet restent à confirmer en jeu après installation ; les fixtures ne constituent pas une validation par GGG ni une garantie contre une sanction. GameOffsets.dll reste identique.
+Validation : 12 000 contrôles isolés réussis (50 reforge, 11 944 craft et navigation, 6 conservation de la barre du coffre). Le fonctionnement complet de la reforge reste à confirmer en jeu après installation : ce changement corrige une divergence de séquence, mais la cause du transfert ignoré en 1.23.4 n’est pas démontrée. Aucun test isolé ne constitue une confirmation en jeu. GameOffsets.dll reste identique, sans recompilation.
 
 Téléchargement Windows x64 : ExileCenter-Complete-win-x64.zip.
 Les mises à jour conservent les réglages personnels.
